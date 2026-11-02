@@ -3,7 +3,7 @@
 - 문서 상태: 인터뷰 합의에 따른 제품·기술 설계 초안
 - 작성일: 2026-11-01 (Asia/Seoul)
 - 개정: 통합 그래프 화면·분석 재사용·단계별 코드 작성 계획 반영
-- 제품명: Skein (확정). 코드·확장 식별자·README의 기존 표기 `Structure Graph`/`structure-graph`는 아직 바꾸지 않았다. 14장 참조.
+- 제품명: Skein (확정). 코드·확장 식별자·README·레포·작업 폴더 이름까지 반영했다. 남은 외부 작업은 [HANDOFF](HANDOFF.md)에 있다.
 - 구현 상태: 13.2의 단계 0~3 완료, 단계 4~8 미착수. 포크 기반 확정과 제거 후보 prune은 실행했고 나머지 prune은 단계 8에서 한다.
 - 문서 해석: ‘확정’은 요구사항 합의이며 구현 완료를 뜻하지 않는다. ‘제안’과 ‘미검증’은 구현 전에 확인할 선택이다.
 
@@ -182,7 +182,7 @@ flowchart LR
 
 ### 5.2 로컬 파일 배치
 
-폴더 이름은 제품명 Skein을 따라 `.skein/`로 한다. 코드에 반영하기 전까지는 예시 표기다.
+폴더 이름은 제품명 Skein을 따라 `.skein/`로 한다. 아직 코드에는 구현하지 않았다.
 
 ```text
 <workspace>/
@@ -589,7 +589,7 @@ flowchart LR
 
 | 항목 | 확인할 내용 |
 |---|---|
-| 제품명 반영 | 이름은 Skein으로 확정했다. 남은 일: `package.json`의 `name`·`displayName`, 커맨드 ID·설정 키·MCP 서버·도구 이름의 `structure-graph`/`graph-it-live` 표기, 로그·상태바 문구, README, 레포 이름. 레포 이름은 `sjh354/skein`, npm 이름은 `skein` 대신 `skein-vscode`(npm의 `skein`은 다른 패키지가 사용 중). Marketplace 확장 ID는 `sjh354.skein`을 후보로 하며 게시 전에 확인한다. 외부 설정에 박힌 MCP 도구 이름 변경은 호환 영향을 확인한 뒤 진행한다 |
+| 제품명 반영 | 이름 변경은 코드·문서·레포에 반영했다. 남은 일은 Marketplace 등록(`sjh354.skein`)·npm 이름(`skein-vscode`)·GitHub fork 표시 해제로, 계정 작업이라 [HANDOFF](HANDOFF.md)로 넘겼다. 변경 전 이름으로 저장된 사용자 설정과 에이전트의 MCP 설정은 이전되지 않는다 |
 | 언어별 변경 | Dart·TypeScript에서 노출 가능한 API, 이동·추출·인라인 제약 |
 | 식별자 | 이동·이름 변경 이후 재연결과 오래된 MCP 참조 처리 |
 | 내부 Git | 저장소 배치·Git 실행 의존성·임시 작업 공간·충돌 적용·중단 복구 |
