@@ -13,6 +13,7 @@ import { CommandCoordinator } from './services/CommandCoordinator';
 import { CommandRegistrationService } from './services/CommandRegistrationService';
 import { EditorEventsService } from './services/EditorEventsService';
 import { LmToolsService } from './services/LmToolsService';
+import { ViewStateService } from './services/ViewStateService';
 
 // Keep track of MCP server provider for cleanup
 let mcpServerProvider: McpServerProvider | null = null;
@@ -124,6 +125,30 @@ export function activate(context: vscode.ExtensionContext) {
         provider.notifyMcpServerOfConfigChange = () => mcpServerProvider?.notifyChange();
     } else {
         log.info('No workspace folder open, MCP server not registered');
+    }
+
+    // Publish the graph tab state for the MCP server and apply its commands (DESIGN 10).
+    if (workspaceFolder) {
+        const viewStateService = new ViewStateService({
+            root: workspaceFolder.uri.fsPath,
+            logger: log,
+            host: {
+                read: () => provider.getViewStateSnapshot(),
+                select: async (nodeId) => callGraphViewService.selectNode(nodeId),
+                focus: async (nodeId) => callGraphViewService.focusNode(nodeId),
+                setDepth: async (depth) => callGraphViewService.setDepth(depth),
+                openFile: (filePath, line, character) => provider.openFileAt(filePath, line, character),
+                setFilter: async (filterType, value, visible) =>
+                    callGraphViewService.setFilter(filterType, value, visible),
+                setExpandAll: (expandAll) => provider.setExpandAllState(expandAll),
+            },
+            onRestore: (snapshot) => callGraphViewService.restoreView(snapshot),
+        });
+        provider.setViewStateObserver((message) => viewStateService.observeWebviewCommand(message));
+        disposables.push(viewStateService);
+        void viewStateService.start().catch((err: unknown) => {
+            log.warn('View state publishing failed to start:', err);
+        });
     }
 
     // Command: switch the workspace root the graph and MCP server analyze

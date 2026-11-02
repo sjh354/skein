@@ -34,7 +34,10 @@ type LmOnlyToolName =
   | "expand_node"
   | "analyze_file_logic";
 
-export type DescribedToolName = McpToolName | "get_session_stats" | LmOnlyToolName;
+/** MCP-only tools for the shared graph view (no LM or CLI counterpart). */
+type McpViewToolName = "get_view_state" | "control_view";
+
+export type DescribedToolName = McpToolName | "get_session_stats" | McpViewToolName | LmOnlyToolName;
 
 const OPEN_ENDED_HINT =
   "For an open-ended question, start with skein_graph_context and come here when you need this specific cut.";
@@ -355,6 +358,25 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "WHY: encoding sizes are estimated (characters / 4); provider-reported LLM usage is reported separately and never mixed into that estimate.",
       "RETURNS: per-tool and total encoding sizes for this session, llmUsage as its own section, and per-source history.",
       "LIMITS: compares two encodings of the same data - not a saving attributable to the tools themselves.",
+    ],
+  },
+  get_view_state: {
+    summary:
+      "Returns the graph tab the user is looking at: view mode, file, selection, call graph root and depth, filters, and the graph version.",
+    lines: [
+      "WHEN: before answering a question about what is on screen, or before controlling the view, so commands can be pinned to the graph the user sees.",
+      "RETURNS: available=false with reason state-file-missing when the VS Code extension has not published a view for this workspace yet - this tool never reads the index as a substitute for the screen.",
+      "LIMITS: reflects the last published state (sub-second polling); it is not a live stream.",
+    ],
+  },
+  control_view: {
+    summary:
+      "Drives the user's graph tab: select or focus a call graph node, change depth, open a file, toggle a filter, or expand/collapse the dependency graph.",
+    lines: [
+      "WHEN: the user asked to move or highlight something in the graph they are looking at.",
+      "WHY: the same command queue the UI uses, so a human interaction always wins: a command queued before the user's last action is rejected with reason user-action-superseded.",
+      "RETURNS: applied, status, reason and the resulting state. Pass graphVersion from get_view_state to have stale commands rejected after a re-analysis.",
+      "LIMITS: requires the VS Code window with the graph tab to be open; without it the call fails with extension-not-responding.",
     ],
   },
 };

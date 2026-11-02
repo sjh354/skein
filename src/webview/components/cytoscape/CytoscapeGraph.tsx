@@ -22,6 +22,7 @@ import type {
   CallGraphMountedCommand,
   CallGraphOpenFileCommand,
   CallGraphReadyCommand,
+  CallGraphSelectionChangedCommand,
   CallGraphSymbolFocusCommand,
   SerializedCallEdge,
   SerializedCallNode,
@@ -334,6 +335,24 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
   const nodesRef = useRef<SerializedCallNode[]>([]);
   nodesRef.current = graphNodes;
 
+  /** Tell the extension what is selected so agents see the same view. */
+  const reportSelection = useCallback((nodeId: string | undefined, userInitiated: boolean): void => {
+    const node = nodeId ? nodesRef.current.find((candidate) => candidate.id === nodeId) : undefined;
+    const command: CallGraphSelectionChangedCommand = {
+      command: "callGraphSelectionChanged",
+      nodeId,
+      path: node?.path,
+      name: node?.name,
+      startLine: node?.startLine,
+      userInitiated,
+    };
+    try {
+      postMessageRef.current(command);
+    } catch {
+      // postMessage not available outside webview (e.g., unit tests)
+    }
+  }, []);
+
   // Keep latest onReady in a ref to avoid stale closure in the effect
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
@@ -396,6 +415,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       selectNode(cy, nodeId);
       setSelectedNodeId(nodeId);
       setSelectedEdgeId(undefined);
+      reportSelection(nodeId, true);
     });
 
     cy.on("dbltap", "node[type != 'compound']", (event) => {
@@ -418,6 +438,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       selectEdge(cy, edge.id());
       setSelectedEdgeId(edge.id());
       setSelectedNodeId(undefined);
+      reportSelection(undefined, true);
     });
 
     cy.on("dbltap", "edge", (event) => {
@@ -440,6 +461,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       clearSelection(cy);
       setSelectedNodeId(undefined);
       setSelectedEdgeId(undefined);
+      reportSelection(undefined, true);
     });
 
     // File-compound click → open file (no graph recenter)
@@ -578,6 +600,28 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
 
       if (msg.type === "showCallGraph") {
         handleShowCallGraph(msg);
+        return;
+      }
+
+      if (msg.type === "callGraphSelectNode") {
+        const cy = cyRef.current;
+        if (!cy) return;
+        const node = cy.getElementById(msg.nodeId);
+        if (node.empty() || !node.isNode()) return;
+        selectNode(cy, msg.nodeId);
+        setSelectedNodeId(msg.nodeId);
+        setSelectedEdgeId(undefined);
+        reportSelection(msg.nodeId, false);
+        return;
+      }
+
+      if (msg.type === "callGraphSetFilter") {
+        applyRemoteFilter(msg.filterType, msg.value, msg.visible);
+        return;
+      }
+
+      if (msg.type === "callGraphSetDepth") {
+        setCurrentDepth(msg.depth);
       }
     }
 
@@ -839,8 +883,48 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
   }
 
   // ---------------------------------------------------------------------------
-  // T027 — filter toggle handler
+  // T027 — filter toggle handler (local legend + remote MCP commands)
   // ---------------------------------------------------------------------------
+
+  const applyFilterSet = useCallback((next: Set<string>): void => {
+    hiddenFiltersRef.current = next;
+    setHiddenFilters(new Set(next)); // trigger re-render
+
+    // Apply visibility to Cytoscape elements (no layout recalculation — FR-014)
+    const cy = cyRef.current;
+    if (!cy) return;
+
+    // Restore all elements first, then re-hide filtered ones
+    cy.elements().removeStyle("display");
+    for (const filterKey of next) {
+      const colonIdx = filterKey.indexOf(":");
+      const filterType = filterKey.slice(0, colonIdx);
+      const filterValue = filterKey.slice(colonIdx + 1);
+      if (filterType === "nodeType") {
+        cy.nodes(`[type="${filterValue}"]`).style("display", "none");
+      } else if (filterType === "folder") {
+        const folderNode = cy.getElementById(filterValue);
+        // Hide the folder compound and ALL nested elements (file compounds + symbol nodes)
+        folderNode.style("display", "none");
+        folderNode.descendants().style("display", "none");
+      } else if (filterType === "edgeType") {
+        // Map edge filter keys to Cytoscape selectors
+        const edgeSelectors: Record<string, string> = {
+          outgoing: 'edge[typeRelation="CALLS"][direction="outgoing"]',
+          incoming: 'edge[typeRelation="CALLS"][direction="incoming"]',
+          lateral: 'edge[direction="lateral"]',
+          inherits: 'edge[typeRelation="INHERITS"]',
+          implements: 'edge[typeRelation="IMPLEMENTS"]',
+          uses: 'edge[typeRelation="USES"]',
+          cycle: "edge[isCyclic=1]",
+        };
+        const selector = edgeSelectors[filterValue];
+        if (selector) {
+          cy.elements(selector).style("display", "none");
+        }
+      }
+    }
+  }, []);
 
   const handleFilterToggle = useCallback(
     (filterType: "nodeType" | "folder" | "edgeType", value: string, visible: boolean): void => {
@@ -851,45 +935,24 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       } else {
         next.add(key);
       }
-      hiddenFiltersRef.current = next;
-      setHiddenFilters(new Set(next)); // trigger re-render
-
-      // Apply visibility to Cytoscape elements (no layout recalculation — FR-014)
-      const cy = cyRef.current;
-      if (!cy) return;
-
-      // Restore all elements first, then re-hide filtered ones
-      cy.elements().removeStyle("display");
-      for (const filterKey of next) {
-        const colonIdx = filterKey.indexOf(":");
-        const filterType = filterKey.slice(0, colonIdx);
-        const filterValue = filterKey.slice(colonIdx + 1);
-        if (filterType === "nodeType") {
-          cy.nodes(`[type="${filterValue}"]`).style("display", "none");
-        } else if (filterType === "folder") {
-          const folderNode = cy.getElementById(filterValue);
-          // Hide the folder compound and ALL nested elements (file compounds + symbol nodes)
-          folderNode.style("display", "none");
-          folderNode.descendants().style("display", "none");
-        } else if (filterType === "edgeType") {
-          // Map edge filter keys to Cytoscape selectors
-          const edgeSelectors: Record<string, string> = {
-            outgoing: 'edge[typeRelation="CALLS"][direction="outgoing"]',
-            incoming: 'edge[typeRelation="CALLS"][direction="incoming"]',
-            lateral: 'edge[direction="lateral"]',
-            inherits: 'edge[typeRelation="INHERITS"]',
-            implements: 'edge[typeRelation="IMPLEMENTS"]',
-            uses: 'edge[typeRelation="USES"]',
-            cycle: "edge[isCyclic=1]",
-          };
-          const selector = edgeSelectors[filterValue];
-          if (selector) {
-            cy.elements(selector).style("display", "none");
-          }
-        }
-      }
+      applyFilterSet(next);
     },
-    [],
+    [applyFilterSet],
+  );
+
+  /** Applies a filter sent by the extension for an MCP command (no echo back). */
+  const applyRemoteFilter = useCallback(
+    (filterType: "nodeType" | "folder" | "edgeType", value: string, visible: boolean): void => {
+      const key = `${filterType}:${value}`;
+      const next = new Set(hiddenFiltersRef.current);
+      if (visible) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      applyFilterSet(next);
+    },
+    [applyFilterSet],
   );
 
   // ---------------------------------------------------------------------------

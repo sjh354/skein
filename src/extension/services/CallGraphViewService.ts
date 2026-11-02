@@ -26,6 +26,7 @@ import type {
   SupportedLang,
 } from "@/shared/callgraph-types";
 import { normalizePath } from "@/shared/path";
+import type { SkeinFilter, SkeinSelection, SkeinViewSnapshot } from "@/shared/viewState";
 import crypto from "node:crypto";
 import path from "node:path";
 import * as vscode from "vscode";
@@ -128,6 +129,11 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   private callGraphNodeCount = 0;
   private callGraphEdgeCount = 0;
   private callGraphCycleCount = 0;
+  /** Incremented whenever a new graph is pushed; MCP commands pin to it. */
+  private graphVersion = 0;
+  /** Filters and selection survive graph refreshes and session restarts. */
+  private hiddenFilters: SkeinFilter[] = [];
+  private lastSelection: SkeinSelection | undefined;
   private disposed = false;
   private disposePromise: Promise<void> | null = null;
   private readonly activeOperations = new Set<Promise<unknown>>();
@@ -211,6 +217,99 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   public getCallGraphCycleCount(): number { return this.callGraphCycleCount; }
   /** Expose the indexer for LM Tools (query_call_graph). Returns null if not yet initialized. */
   public getCallGraphIndexerForLmTools(): CallGraphIndexer | null { return this.indexer; }
+
+  // ---------------------------------------------------------------------------
+  // Shared view state (DESIGN 10) — queried and driven by the MCP server
+  // ---------------------------------------------------------------------------
+
+  /** Current graph root and depth, for `.skein/state.json`. */
+  public getViewSnapshot(): NonNullable<SkeinViewSnapshot["callGraph"]> {
+    return {
+      rootSymbolId: this.currentRootSymbolId ?? undefined,
+      depth: this.currentDepth,
+    };
+  }
+
+  /** File the call graph was opened from. */
+  public getViewedFilePath(): string | undefined {
+    return this.currentFilePath ?? undefined;
+  }
+
+  /** Node the user or an agent last selected, if any. */
+  public getSelectedNode(): SkeinSelection | undefined {
+    return this.lastSelection;
+  }
+
+  /** Filters currently hidden in the webview. */
+  public getHiddenFilters(): SkeinFilter[] {
+    return [...this.hiddenFilters];
+  }
+
+  /** Pins MCP commands to the graph the agent saw. */
+  public getCurrentGraphVersion(): number {
+    return this.graphVersion;
+  }
+
+  /** Applies the previous session's depth, filters and selection. */
+  public restoreView(snapshot: SkeinViewSnapshot): void {
+    if (snapshot.callGraph?.depth !== undefined) {
+      this.currentDepth = Math.max(1, Math.min(MAX_DEPTH, Math.round(snapshot.callGraph.depth)));
+    }
+    this.hiddenFilters = [...snapshot.hiddenFilters];
+    this.lastSelection = snapshot.selection;
+  }
+
+  /** Selects a node in the webview; false when the graph view is not mounted. */
+  public selectNode(nodeId: string): boolean {
+    if (!this.sidebarWebview) return false;
+    this.postMessage({ type: "callGraphSelectNode", nodeId });
+    return true;
+  }
+
+  /** Updates the depth slider and re-queries the neighbourhood. */
+  public setDepth(depth: number): boolean {
+    if (!this.sidebarWebview) return false;
+    this.handleDepthChanged(depth);
+    return true;
+  }
+
+  /** Hides or shows a node type or folder in the webview. */
+  public setFilter(
+    filterType: SkeinFilter["filterType"],
+    value: string,
+    visible: boolean,
+  ): boolean {
+    if (!this.sidebarWebview) return false;
+    this.hiddenFilters = this.hiddenFilters.filter(
+      (filter) => !(filter.filterType === filterType && filter.value === value),
+    );
+    if (!visible) this.hiddenFilters.push({ filterType, value });
+    this.postMessage({ type: "callGraphSetFilter", filterType, value, visible });
+    return true;
+  }
+
+  /** Re-centres the graph on a node; false when it is not in the index. */
+  public focusNode(nodeId: string): boolean {
+    if (!this.sidebarWebview || !this.indexer) return false;
+    const rows = this.indexer.getDb().exec(
+      "SELECT path, start_line, start_col FROM nodes WHERE id = ? LIMIT 1",
+      [nodeId],
+    );
+    const row = rows[0]?.values?.[0];
+    if (!row) return false;
+    const [nodePath, startLine, startCol] = row as [string, number, number];
+    this.trackOperation(
+      this.handleSymbolFocus({
+        command: "callGraphSymbolFocus",
+        nodeId,
+        path: nodePath,
+        startLine,
+        startCol,
+      }),
+    ).catch((err: unknown) => this.log(`[CallGraph] focus error: ${errorMessage(err)}`));
+    return true;
+  }
+
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
@@ -548,6 +647,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   }
 
   private sendGraphToWebview(result: ReturnType<typeof queryNeighbourhood>): void {
+    this.graphVersion += 1;
     // Buffer so we can replay if callGraphMounted fires after the initial postMessage
     // (race on first open: React may not have mounted its listener yet).
     this.pendingGraph = result;
@@ -577,6 +677,19 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       projectName: this.projectName,
       timestamp: result.timestamp,
     });
+    // A new graph resets the webview's filters, so restore the shared ones now
+    // (they also survive a window reload via .skein/state.json).
+    for (const filter of this.hiddenFilters) {
+      this.postMessage({
+        type: "callGraphSetFilter",
+        filterType: filter.filterType,
+        value: filter.value,
+        visible: false,
+      });
+    }
+    if (this.lastSelection) {
+      this.postMessage({ type: "callGraphSelectNode", nodeId: this.lastSelection.nodeId });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -855,10 +968,24 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     } else if (msg.command === "callGraphDepthChanged") {
       this.handleDepthChanged(msg.depth);
     } else if (msg.command === "callGraphFilterChanged") {
-      // T028: log for now; persistence is a future enhancement
+      this.hiddenFilters = this.hiddenFilters.filter(
+        (filter) => !(filter.filterType === msg.filterType && filter.value === msg.value),
+      );
+      if (!msg.visible) {
+        this.hiddenFilters.push({ filterType: msg.filterType, value: msg.value });
+      }
       this.log(
         `[CallGraph] Filter changed: ${msg.filterType}=${msg.value} visible=${String(msg.visible)}`,
       );
+    } else if (msg.command === "callGraphSelectionChanged") {
+      this.lastSelection = msg.nodeId
+        ? {
+            nodeId: msg.nodeId,
+            path: msg.path,
+            name: msg.name,
+            startLine: msg.startLine,
+          }
+        : undefined;
     }
   }
 
