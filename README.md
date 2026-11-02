@@ -1,8 +1,8 @@
-# Structure Graph
+# Skein
 
 **See your codebase as a graph — in VS Code and your AI assistant.**
 
-Structure Graph analyzes imports, symbols, calls, cycles, unused exports, and change impact. Use it as a VS Code extension or an MCP/native tool provider for GitHub Copilot and other AI clients. Analysis runs locally and returns evidence from your codebase.
+Skein analyzes imports, symbols, calls, cycles, unused exports, and change impact. Use it as a VS Code extension or an MCP/native tool provider for GitHub Copilot and other AI clients. Analysis runs locally and returns evidence from your codebase.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ Structure Graph analyzes imports, symbols, calls, cycles, unused exports, and ch
 
 ## What it does
 
-Structure Graph provides three views of a codebase:
+Skein provides three views of a codebase:
 
 | View | Answers | Analysis layer |
 | --- | --- | --- |
@@ -32,10 +32,10 @@ Use the same graph data to navigate code, review refactors, generate codemaps, a
 
 ### VS Code extension
 
-**Requirements:** VS Code 1.96 or later. This is a local fork: run `npm install && npm run build`, then press **F5** to launch the Extension Development Host, or run `npm run package` and install the generated VSIX.
+**Requirements:** VS Code 1.96 or later. Not yet published to the Marketplace: run `npm install && npm run build`, then press **F5** to launch the Extension Development Host, or run `npm run package` and install the generated VSIX.
 
 1. Open a project.
-2. Run **Structure Graph: Show Dependency Graph** from the Command Palette; the view opens in the bottom panel.
+2. Run **Skein: Show Dependency Graph** from the Command Palette; the view opens in the bottom panel.
 3. Click a file to open it, double-click it for the Symbol View, or use **Show Call Graph** for cross-file calls.
 
 Supported projects include TypeScript, JavaScript, Python, Rust, C#, Go, Java, Dart, Vue, Svelte, and GraphQL.
@@ -49,7 +49,7 @@ Supported projects include TypeScript, JavaScript, Python, Rust, C#, Go, Java, D
 | Find callers | Open **Show Call Graph** with a symbol selected |
 | Find reverse dependencies | Use **Show Reverse Dependencies** |
 | Hide unused imports | Enable **Filter Unused Dependencies** |
-| Refresh analysis | Run **Refresh Graph** or **Force Structure Graph re-index** |
+| Refresh analysis | Run **Refresh Graph** or **Force Skein re-index** |
 
 ## Features
 
@@ -94,7 +94,7 @@ The Architecture view and the MCP tool `explore_architecture` report the same co
 
 ### Architecture rules
 
-Declare your intended architecture in `graphit.architecture.json` at the workspace root: `elements` name sets of files, `rules` say what each may import, and `roles` declare what each unit is. The view lists each rule with its violations; the `check_architecture` MCP tool reports new `error` violations, supports a baseline for existing code, and can gate CI. See [the config file](docs/architecture.md#the-config-file) for a complete example.
+Declare your intended architecture in `skein.architecture.json` at the workspace root: `elements` name sets of files, `rules` say what each may import, and `roles` declare what each unit is. The view lists each rule with its violations; the `check_architecture` MCP tool reports new `error` violations, supports a baseline for existing code, and can gate CI. See [the config file](docs/architecture.md#the-config-file) for a complete example.
 
 ### Unused dependencies and impact analysis
 
@@ -106,7 +106,7 @@ Declare your intended architecture in `graphit.architecture.json` at the workspa
 
 ## AI integrations
 
-Structure Graph exposes local graph analysis to GitHub Copilot, Claude, Cursor, Windsurf, Antigravity, and other MCP-compatible clients.
+Skein exposes local graph analysis to GitHub Copilot, Claude, Cursor, Windsurf, Antigravity, and other MCP-compatible clients.
 
 ### Native Copilot tools
 
@@ -124,14 +124,14 @@ The graph-context tool is available as `#graphContext`. Other native references 
 
 ### MCP server
 
-The MCP server exposes 22 graph-analysis tools. Enable it in VS Code with `graph-it-live.enableMcpServer`, or point a client at the built bundle with `node <extension>/dist/mcpServer.mjs`.
+The MCP server exposes 22 graph-analysis tools. Enable it in VS Code with `skein.enableMcpServer`, or point a client at the built bundle with `node <extension>/dist/mcpServer.mjs`.
 
 For VS Code, add `.vscode/mcp.json`:
 
 ```json
 {
   "servers": {
-    "graph-it-live": {
+    "skein": {
       "type": "stdio",
       "command": "node",
       "args": ["<extension>/dist/mcpServer.mjs"],
@@ -148,7 +148,7 @@ For Cursor, use `.cursor/mcp.json` with the same server definition under `mcpSer
 For Codex CLI:
 
 ```bash
-codex mcp add graph-it-live --env WORKSPACE_ROOT=/path/to/project -- node /path/to/graph-it-live/dist/mcpServer.mjs
+codex mcp add skein --env WORKSPACE_ROOT=/path/to/project -- node /path/to/skein/dist/mcpServer.mjs
 ```
 
 ### Other MCP clients
@@ -157,7 +157,7 @@ Clients without a native integration use the same server entry in their MCP conf
 
 ```json
 {
-  "graph-it-live": {
+  "skein": {
     "type": "stdio",
     "command": "node",
     "args": ["<extension>/dist/mcpServer.mjs"]
@@ -173,19 +173,19 @@ Set these options in VS Code settings:
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `graph-it-live.performanceProfile` | `default` | Select `default`, `low-memory`, `high-performance`, or `custom` |
-| `graph-it-live.enableMcpServer` | `false` | Enable the built-in MCP server |
-| `graph-it-live.maxDepth` | `50` | Limit dependency traversal depth |
-| `graph-it-live.excludeNodeModules` | `true` | Exclude dependencies from `node_modules` |
-| `graph-it-live.enableBackgroundIndexing` | `true` | Build reverse-dependency indexes in the background |
-| `graph-it-live.unusedDependencyMode` | `hide` | Hide or dim unused dependencies |
-| `graph-it-live.communityMode` | `path` | Group graph communities by folder (`path`) or by import structure (`louvain`); same as CLI `--communities` |
-| `graph-it-live.preIndexCallGraph` | `true` | Pre-index the Live Call Graph |
-| `graph-it-live.symbolViewLayout` | `hierarchical` | Select `hierarchical`, `force-directed`, or `radial` |
+| `skein.performanceProfile` | `default` | Select `default`, `low-memory`, `high-performance`, or `custom` |
+| `skein.enableMcpServer` | `false` | Enable the built-in MCP server |
+| `skein.maxDepth` | `50` | Limit dependency traversal depth |
+| `skein.excludeNodeModules` | `true` | Exclude dependencies from `node_modules` |
+| `skein.enableBackgroundIndexing` | `true` | Build reverse-dependency indexes in the background |
+| `skein.unusedDependencyMode` | `hide` | Hide or dim unused dependencies |
+| `skein.communityMode` | `path` | Group graph communities by folder (`path`) or by import structure (`louvain`); same as CLI `--communities` |
+| `skein.preIndexCallGraph` | `true` | Pre-index the Live Call Graph |
+| `skein.symbolViewLayout` | `hierarchical` | Select `hierarchical`, `force-directed`, or `radial` |
 
-Workspace indexing (extension and MCP) skips paths listed in the root `.gitignore`, plus `tests/fixtures/` and `out-*/` by default. Add a root `.graphitignore` with gitignore syntax to exclude more paths, or negate a rule to include it again, for example `!tests/fixtures/`.
+Workspace indexing (extension and MCP) skips paths listed in the root `.gitignore`, plus `tests/fixtures/` and `out-*/` by default. Add a root `.skeinignore` with gitignore syntax to exclude more paths, or negate a rule to include it again, for example `!tests/fixtures/`.
 
-`performanceProfile` sets indexing concurrency, cache sizes, and unused-analysis limits. To tune them by hand, select `custom` and edit the **Advanced: Performance overrides** section (search `@tag:advanced graph-it-live` in the Settings editor). The other profiles ignore these overrides.
+`performanceProfile` sets indexing concurrency, cache sizes, and unused-analysis limits. To tune them by hand, select `custom` and edit the **Advanced: Performance overrides** section (search `@tag:advanced skein` in the Settings editor). The other profiles ignore these overrides.
 
 ## Supported languages
 
@@ -203,15 +203,16 @@ Workspace indexing (extension and MCP) skips paths listed in the root `.gitignor
 
 - [Design decisions](docs/DESIGN.md) — product scope, responsibilities, and why
 - [Development guide](docs/DEVELOPMENT.md) — setup, builds, tests, and WASM architecture
-- [Architecture guide](docs/architecture.md) — Architecture view, `graphit.architecture.json` rules, and `check-architecture`
+- [Architecture guide](docs/architecture.md) — Architecture view, `skein.architecture.json` rules, and `check-architecture`
+- [Handoff](docs/HANDOFF.md) — Marketplace·npm 등록과 GitHub 계정 쪽 남은 작업
 
 ## Development
 
 Requirements: Node.js 22 or later and npm.
 
 ```bash
-git clone https://github.com/sjh354/Graph-It-Live.git
-cd graph-it-live
+git clone https://github.com/sjh354/skein.git
+cd skein
 npm install
 npm run build
 ```

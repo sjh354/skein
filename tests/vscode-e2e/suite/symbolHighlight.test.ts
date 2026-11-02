@@ -15,7 +15,7 @@ suite('Symbol Double-Click Highlight E2E Tests', () => {
     this.timeout(60000);
 
     // Activate extension
-    extension = vscode.extensions.getExtension('sjh354.structure-graph');
+    extension = vscode.extensions.getExtension('sjh354.skein');
     if (!extension) {
       throw new Error('Extension not found');
     }
@@ -31,7 +31,7 @@ suite('Symbol Double-Click Highlight E2E Tests', () => {
     this.timeout(10000);
     // Reset to file view before each test to ensure clean state
     try {
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await new Promise((resolve) => setTimeout(resolve, 500));
     } catch (error) {
       console.warn('beforeEach: Failed to reset to file view:', error);
@@ -56,13 +56,13 @@ suite('Symbol Double-Click Highlight E2E Tests', () => {
     await vscode.window.showTextDocument(document);
 
     // Show graph in symbol mode
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Switch to symbol mode if not already
-    const contextValue = await vscode.commands.executeCommand('getContext', 'graph-it-live.viewMode');
+    const contextValue = await vscode.commands.executeCommand('getContext', 'skein.viewMode');
     if (contextValue !== 'symbol') {
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
@@ -88,13 +88,13 @@ suite('Symbol Double-Click Highlight E2E Tests', () => {
     const document = await vscode.workspace.openTextDocument(testFile);
     await vscode.window.showTextDocument(document);
 
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Ensure symbol mode
-    const contextValue = await vscode.commands.executeCommand('getContext', 'graph-it-live.viewMode');
+    const contextValue = await vscode.commands.executeCommand('getContext', 'skein.viewMode');
     if (contextValue !== 'symbol') {
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
@@ -114,13 +114,13 @@ suite('Symbol Double-Click Highlight E2E Tests', () => {
     const document = await vscode.workspace.openTextDocument(testFile);
     await vscode.window.showTextDocument(document);
 
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Ensure symbol mode
-    const contextValue = await vscode.commands.executeCommand('getContext', 'graph-it-live.viewMode');
+    const contextValue = await vscode.commands.executeCommand('getContext', 'skein.viewMode');
     if (contextValue !== 'symbol') {
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 

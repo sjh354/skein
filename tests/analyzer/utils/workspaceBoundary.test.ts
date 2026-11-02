@@ -141,7 +141,7 @@ describe("workspaceBoundary", () => {
 
       expect(report).toMatchObject({ outOfRootImports: 1, outOfRootImportExamples: ["@core/x"], monorepoRoot: "../.." });
       expect(report.warning).toContain("Monorepo root detected (../..).");
-      expect(report.warning).toContain("CLI --workspace, MCP graphitlive_set_workspace, VS Code");
+      expect(report.warning).toContain("CLI --workspace, MCP skein_set_workspace, VS Code");
       expect(JSON.stringify(report)).not.toContain(tmp);
     });
 

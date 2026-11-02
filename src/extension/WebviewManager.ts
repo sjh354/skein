@@ -15,7 +15,7 @@ export class WebviewManager {
   constructor(private readonly extensionUri: vscode.Uri) {}
 
   /**
-   * Configure webview options for the Structure Graph webview
+   * Configure webview options for the Skein webview
    */
   public getWebviewOptions(): vscode.WebviewOptions {
     return {
@@ -45,7 +45,7 @@ export class WebviewManager {
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:; worker-src blob:;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Structure Graph</title>
+    <title>Skein</title>
     <style>
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
         body { font-family: var(--vscode-font-family); }
@@ -75,7 +75,7 @@ export class WebviewManager {
         .react-flow__attribution { display: none; }
     </style>
 </head>
-<body data-structure-graph-host="${host}">
+<body data-skein-host="${host}">
     <div id="root"></div>
     <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>

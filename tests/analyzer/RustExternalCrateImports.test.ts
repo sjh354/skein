@@ -5,7 +5,7 @@ import { RustParser } from "../../src/analyzer/languages/RustParser";
 /**
  * Test Suite: Rust External Crate Imports
  *
- * Regression test for issue where Graph-It-Live confused external crate imports
+ * Regression test for issue where Skein confused external crate imports
  * (like `use vm::Settings;`) with local modules, creating false cycles.
  *
  * Problem: RustParser used to treat `Settings` (external crate) as if it were

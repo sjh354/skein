@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 
 const packagePath = 'package.json';
-const lmPrefix = 'graph-it-live_';
+const lmPrefix = 'skein_';
 
 const bundle = await build({
   entryPoints: ['src/mcp/toolDescriptions.ts'],

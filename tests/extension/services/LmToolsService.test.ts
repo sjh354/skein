@@ -209,12 +209,12 @@ describe('LmToolsService', () => {
     });
 
     it.each([
-      'graph-it-live_resolve_module_path',
-      'graph-it-live_analyze_breaking_changes',
-      'graph-it-live_query_call_graph',
-      'graph-it-live_scan_dead_code',
-      'graph-it-live_graph_context',
-      'graph-it-live_query_natural_language',
+      'skein_resolve_module_path',
+      'skein_analyze_breaking_changes',
+      'skein_query_call_graph',
+      'skein_scan_dead_code',
+      'skein_graph_context',
+      'skein_query_natural_language',
     ])('registers %s', (toolName) => {
       const provider = createProvider();
       const service = new LmToolsService({ provider, logger });
@@ -225,7 +225,7 @@ describe('LmToolsService', () => {
     it('rejects a pre-cancelled invocation before running the tool', async () => {
       const provider = createProvider();
       new LmToolsService({ provider, logger }).registerAll();
-      const handler = registeredTools.get('graph-it-live_get_index_status');
+      const handler = registeredTools.get('skein_get_index_status');
       const cancelledToken = {
         isCancellationRequested: true,
         onCancellationRequested: vi.fn(),
@@ -248,7 +248,7 @@ describe('LmToolsService', () => {
     };
     new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-    const result = await invokeTool('graph-it-live_get_index_status', {});
+    const result = await invokeTool('skein_get_index_status', {});
 
     expect(result).toMatchObject({
       state: 'complete',
@@ -273,7 +273,7 @@ describe('LmToolsService', () => {
       };
       new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_get_index_status', {});
+      const result = await invokeTool('skein_get_index_status', {});
 
       expect(result).toMatchObject({ cacheFiles: { reverseIndexBytes: 0, callGraphBytes: 3 } });
     } finally {
@@ -291,7 +291,7 @@ describe('LmToolsService', () => {
     };
     new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-    const result = await invokeTool('graph-it-live_get_index_status', {});
+    const result = await invokeTool('skein_get_index_status', {});
 
     expect(result).not.toHaveProperty('outOfRootImports');
     expect((result as { warning: string }).warning).toContain('enableBackgroundIndexing');
@@ -303,7 +303,7 @@ describe('LmToolsService', () => {
     const callGraphService = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue({ getDb: vi.fn() }) };
     const provider = createProvider({ spider, callGraphService });
     new LmToolsService({ provider, logger }).registerAll();
-    const result = await invokeTool('graph-it-live_graph_context', { question: 'where is auth?' });
+    const result = await invokeTool('skein_graph_context', { question: 'where is auth?' });
     expect(result).toEqual({ mode: 'search', nodes: [], edges: [] });
     expect(executeGraphContextWithIndexes).toHaveBeenCalledWith(
       { question: 'where is auth?' },
@@ -336,7 +336,7 @@ describe('LmToolsService', () => {
       provider: createProvider({ callGraphService }),
       logger,
     }).registerAll();
-    const handler = registeredTools.get('graph-it-live_graph_context');
+    const handler = registeredTools.get('skein_graph_context');
 
     const invocation = handler?.invoke(makeOptions({ question: 'where is auth?' }), token);
     await vi.waitFor(() => expect(executeGraphContextWithIndexes).toHaveBeenCalled());
@@ -364,7 +364,7 @@ describe('LmToolsService', () => {
       };
     };
     const tool = manifest.contributes.languageModelTools.find(
-      ({ name }) => name === 'graph-it-live_graph_context',
+      ({ name }) => name === 'skein_graph_context',
     );
 
     expect(Object.keys(tool?.inputSchema.properties ?? {})).toEqual(expect.arrayContaining([
@@ -399,7 +399,7 @@ describe('LmToolsService', () => {
   // ─── query_natural_language ───────────────────────────────────────────────
 
   describe('query_natural_language', () => {
-    const TOOL = 'graph-it-live_query_natural_language';
+    const TOOL = 'skein_query_natural_language';
     const db = { exec: vi.fn() };
     const callGraphService = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue({ getDb: () => db }) };
 
@@ -460,7 +460,7 @@ describe('LmToolsService', () => {
   // ─── resolve_module_path ──────────────────────────────────────────────────
 
   describe('resolve_module_path', () => {
-    const TOOL = 'graph-it-live_resolve_module_path';
+    const TOOL = 'skein_resolve_module_path';
 
     beforeEach(() => {
       const provider = createProvider();
@@ -543,7 +543,7 @@ describe('LmToolsService', () => {
   // ─── analyze_breaking_changes ─────────────────────────────────────────────
 
   describe('analyze_breaking_changes', () => {
-    const TOOL = 'graph-it-live_analyze_breaking_changes';
+    const TOOL = 'skein_analyze_breaking_changes';
 
     beforeEach(() => {
       const provider = createProvider();
@@ -632,7 +632,7 @@ describe('LmToolsService', () => {
 
   // LM tool results are redacted to workspace-relative paths before reaching the model.
   describe('get_symbol_callers', () => {
-    const TOOL = 'graph-it-live_get_symbol_callers';
+    const TOOL = 'skein_get_symbol_callers';
     const edgeRow = (relation: string, line: number, name: string, file: string) =>
       ['src', 'sym1', relation, 0, line, name, file, 'helper', '/workspace/src/a.ts'];
 
@@ -769,7 +769,7 @@ describe('LmToolsService', () => {
   });
 
   describe('get_symbol_dependents', () => {
-    const TOOL = 'graph-it-live_get_symbol_dependents';
+    const TOOL = 'skein_get_symbol_dependents';
     const target = { targetSymbolId: '/workspace/src/a.ts:helper', targetFilePath: '/workspace/src/a.ts' };
 
     it('lists each dependent symbol and its own file, not the queried symbol', async () => {
@@ -817,7 +817,7 @@ describe('LmToolsService', () => {
   });
 
   describe('get_impact_analysis', () => {
-    const TOOL = 'graph-it-live_get_impact_analysis';
+    const TOOL = 'skein_get_impact_analysis';
 
     it('reports caller files, not the changed file, for direct and transitive dependents', async () => {
       const dep = (source: string, targetFilePath: string, isTypeOnly = false) => ({
@@ -901,7 +901,7 @@ describe('LmToolsService', () => {
   });
 
   describe('query_call_graph', () => {
-    const TOOL = 'graph-it-live_query_call_graph';
+    const TOOL = 'skein_query_call_graph';
 
     it('returns error when call graph index is not available', async () => {
       const provider = createProvider({ callGraphService: null });
@@ -1065,23 +1065,23 @@ describe('LmToolsService', () => {
 
   // Every spider-backed tool with an input that passes path validation.
   const spiderTools: Array<[string, Record<string, unknown>]> = [
-    ['graph-it-live_find_referencing_files', { targetPath: A }],
-    ['graph-it-live_analyze_dependencies', { filePath: A }],
-    ['graph-it-live_crawl_dependency_graph', { entryFile: A }],
-    ['graph-it-live_get_symbol_graph', { filePath: A }],
-    ['graph-it-live_find_unused_symbols', { filePath: A }],
-    ['graph-it-live_get_symbol_callers', { filePath: A, symbolName: 'helper' }],
-    ['graph-it-live_get_impact_analysis', { filePath: A, symbolName: 'helper' }],
-    ['graph-it-live_parse_imports', { filePath: A }],
-    ['graph-it-live_generate_codemap', { filePath: A }],
-    ['graph-it-live_expand_node', { filePath: A }],
-    ['graph-it-live_verify_dependency_usage', { sourceFile: A, targetFile: B }],
-    ['graph-it-live_invalidate_files', { filePaths: [A] }],
-    ['graph-it-live_rebuild_index', {}],
-    ['graph-it-live_get_symbol_dependents', { filePath: A, symbolName: 'helper' }],
-    ['graph-it-live_trace_function_execution', { filePath: A, symbolName: 'helper' }],
-    ['graph-it-live_analyze_file_logic', { filePath: A }],
-    ['graph-it-live_scan_dead_code', {}],
+    ['skein_find_referencing_files', { targetPath: A }],
+    ['skein_analyze_dependencies', { filePath: A }],
+    ['skein_crawl_dependency_graph', { entryFile: A }],
+    ['skein_get_symbol_graph', { filePath: A }],
+    ['skein_find_unused_symbols', { filePath: A }],
+    ['skein_get_symbol_callers', { filePath: A, symbolName: 'helper' }],
+    ['skein_get_impact_analysis', { filePath: A, symbolName: 'helper' }],
+    ['skein_parse_imports', { filePath: A }],
+    ['skein_generate_codemap', { filePath: A }],
+    ['skein_expand_node', { filePath: A }],
+    ['skein_verify_dependency_usage', { sourceFile: A, targetFile: B }],
+    ['skein_invalidate_files', { filePaths: [A] }],
+    ['skein_rebuild_index', {}],
+    ['skein_get_symbol_dependents', { filePath: A, symbolName: 'helper' }],
+    ['skein_trace_function_execution', { filePath: A, symbolName: 'helper' }],
+    ['skein_analyze_file_logic', { filePath: A }],
+    ['skein_scan_dead_code', {}],
   ];
 
   it.each(spiderTools)('%s returns an error when the dependency index is not initialized', async (tool, input) => {
@@ -1117,13 +1117,13 @@ describe('LmToolsService', () => {
     const spider = { findReferencingFilesThroughBarrels: vi.fn().mockRejectedValue('plain failure') };
     new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-    expect(await invokeTool('graph-it-live_find_referencing_files', { targetPath: A })).toEqual({ error: 'plain failure' });
+    expect(await invokeTool('skein_find_referencing_files', { targetPath: A })).toEqual({ error: 'plain failure' });
   });
 
   it('rejects a relative input path before calling the analyzer', async () => {
     const spider = { analyze: vi.fn() };
     new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
-    const handler = registeredTools.get('graph-it-live_analyze_dependencies');
+    const handler = registeredTools.get('skein_analyze_dependencies');
 
     await expect(handler?.invoke(makeOptions({ filePath: 'src/a.ts' }), fakeToken)).rejects.toThrow('absolute path');
     expect(spider.analyze).not.toHaveBeenCalled();
@@ -1134,20 +1134,20 @@ describe('LmToolsService', () => {
     vi.mocked(provider.getSpiderForLmTools).mockReturnValue(undefined);
     new LmToolsService({ provider, logger }).registerAll();
 
-    expect(await invokeTool('graph-it-live_get_index_status', {})).toMatchObject({ state: 'uninitialized', isReady: false });
+    expect(await invokeTool('skein_get_index_status', {})).toMatchObject({ state: 'uninitialized', isReady: false });
   });
 
   it('returns the index status failure as a tool error', async () => {
     const spider = { getIndexStatus: () => { throw new Error('status failed'); } };
     new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-    expect(await invokeTool('graph-it-live_get_index_status', {})).toEqual({ error: 'status failed' });
+    expect(await invokeTool('skein_get_index_status', {})).toEqual({ error: 'status failed' });
   });
 
   it('returns an error from graph_context when no call graph index exists', async () => {
     new LmToolsService({ provider: createProvider(), logger }).registerAll();
 
-    expect(await invokeTool('graph-it-live_graph_context', { question: 'auth' })).toEqual({
+    expect(await invokeTool('skein_graph_context', { question: 'auth' })).toEqual({
       error: 'No workspace or graph index is available.',
     });
   });
@@ -1157,7 +1157,7 @@ describe('LmToolsService', () => {
     const callGraphService = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue({ getDb: vi.fn() }) };
     new LmToolsService({ provider: createProvider({ callGraphService }), logger }).registerAll();
 
-    expect(await invokeTool('graph-it-live_graph_context', { question: 'auth' })).toEqual({ error: 'bad seed' });
+    expect(await invokeTool('skein_graph_context', { question: 'auth' })).toEqual({ error: 'bad seed' });
   });
 
   // ─── Spider-backed handlers ───────────────────────────────────────────────
@@ -1173,7 +1173,7 @@ describe('LmToolsService', () => {
       };
       new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_find_referencing_files', { targetPath: A });
+      const result = await invokeTool('skein_find_referencing_files', { targetPath: A });
 
       expect(result).toEqual({
         targetPath: 'src/a.ts',
@@ -1196,7 +1196,7 @@ describe('LmToolsService', () => {
     it('analyze_dependencies maps resolved and unresolved imports', async () => {
       new LmToolsService({ provider: createProvider({ spider: { analyze: vi.fn().mockResolvedValue(deps) } }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_analyze_dependencies', { filePath: A });
+      const result = await invokeTool('skein_analyze_dependencies', { filePath: A });
 
       expect(result).toEqual({
         filePath: 'src/a.ts',
@@ -1211,7 +1211,7 @@ describe('LmToolsService', () => {
     it('parse_imports returns raw module specifiers only', async () => {
       new LmToolsService({ provider: createProvider({ spider: { analyze: vi.fn().mockResolvedValue(deps) } }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_parse_imports', { filePath: A });
+      const result = await invokeTool('skein_parse_imports', { filePath: A });
 
       expect(result).toEqual({
         filePath: 'src/a.ts',
@@ -1225,7 +1225,7 @@ describe('LmToolsService', () => {
   });
 
   describe('crawl_dependency_graph', () => {
-    const TOOL = 'graph-it-live_crawl_dependency_graph';
+    const TOOL = 'skein_crawl_dependency_graph';
 
     it('returns nodes and edges with relative paths and forwards maxDepth', async () => {
       const crawl = vi.fn().mockResolvedValue({ nodes: [A, B], edges: [{ source: A, target: B }] });
@@ -1262,7 +1262,7 @@ describe('LmToolsService', () => {
       });
       new LmToolsService({ provider: createProvider({ spider: { crawl } }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_expand_node', { filePath: A, knownPaths: [A] });
+      const result = await invokeTool('skein_expand_node', { filePath: A, knownPaths: [A] });
 
       expect(result).toMatchObject({
         filePath: 'src/a.ts',
@@ -1289,7 +1289,7 @@ describe('LmToolsService', () => {
       });
       new LmToolsService({ provider: createProvider({ spider: { getSymbolGraph } }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_get_symbol_graph', { filePath: A }) as Record<string, unknown>;
+      const result = await invokeTool('skein_get_symbol_graph', { filePath: A }) as Record<string, unknown>;
 
       expect(result).toMatchObject({ relativePath: 'src/a.ts', symbolCount: 3, dependencyCount: 1, symbols });
       expect(result.dependencies).toEqual([
@@ -1307,7 +1307,7 @@ describe('LmToolsService', () => {
       };
       new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_find_unused_symbols', { filePath: A });
+      const result = await invokeTool('skein_find_unused_symbols', { filePath: A });
 
       expect(result).toEqual({
         filePath: 'src/a.ts',
@@ -1344,7 +1344,7 @@ describe('LmToolsService', () => {
       };
       new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_generate_codemap', { filePath: A }) as Record<string, unknown>;
+      const result = await invokeTool('skein_generate_codemap', { filePath: A }) as Record<string, unknown>;
 
       expect(result).toMatchObject({
         relativePath: 'src/a.ts',
@@ -1374,7 +1374,7 @@ describe('LmToolsService', () => {
       };
       new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_generate_codemap', { filePath: A });
+      const result = await invokeTool('skein_generate_codemap', { filePath: A });
 
       expect(result).toMatchObject({ lineCount: 1, exports: [], dependents: [], callFlow: [], hasCycle: false });
     });
@@ -1385,7 +1385,7 @@ describe('LmToolsService', () => {
         logger,
       }).registerAll();
 
-      const result = await invokeTool('graph-it-live_analyze_file_logic', { filePath: A }) as {
+      const result = await invokeTool('skein_analyze_file_logic', { filePath: A }) as {
         filePath: string; graph: { nodes: unknown[]; edges: unknown[]; hasCycle: boolean; cycleNodes: string[] };
       };
 
@@ -1402,14 +1402,14 @@ describe('LmToolsService', () => {
       const verifyDependencyUsage = vi.fn().mockResolvedValue(isUsed);
       new LmToolsService({ provider: createProvider({ spider: { verifyDependencyUsage } }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_verify_dependency_usage', { sourceFile: A, targetFile: B });
+      const result = await invokeTool('skein_verify_dependency_usage', { sourceFile: A, targetFile: B });
 
       expect(result).toEqual({ sourceFile: 'src/a.ts', targetFile: 'src/b.ts', isUsed });
     });
   });
 
   describe('invalidate_files', () => {
-    const TOOL = 'graph-it-live_invalidate_files';
+    const TOOL = 'skein_invalidate_files';
 
     it('splits invalidated files from files that were not cached', async () => {
       const invalidateFile = vi.fn((file: string) => file.endsWith('a.ts'));
@@ -1441,7 +1441,7 @@ describe('LmToolsService', () => {
       };
       new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_rebuild_index', {}) as Record<string, unknown>;
+      const result = await invokeTool('skein_rebuild_index', {}) as Record<string, unknown>;
 
       expect(calls).toEqual(['clear', 'build']);
       expect(result.newCacheSize).toBe(7);
@@ -1462,7 +1462,7 @@ describe('LmToolsService', () => {
       });
       new LmToolsService({ provider: createProvider({ spider: { traceFunctionExecution } }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_trace_function_execution', { filePath: A, symbolName: 'main' }) as Record<string, unknown>;
+      const result = await invokeTool('skein_trace_function_execution', { filePath: A, symbolName: 'main' }) as Record<string, unknown>;
 
       expect(traceFunctionExecution).toHaveBeenCalledWith(path.resolve(A), 'main', 10);
       expect(result).toMatchObject({
@@ -1487,7 +1487,7 @@ describe('LmToolsService', () => {
       });
       new LmToolsService({ provider: createProvider({ spider: { scanDeadCode } }), logger }).registerAll();
 
-      const result = await invokeTool('graph-it-live_scan_dead_code', { scopePath: '/workspace/src', maxFiles: 50 });
+      const result = await invokeTool('skein_scan_dead_code', { scopePath: '/workspace/src', maxFiles: 50 });
 
       expect(scanDeadCode).toHaveBeenCalledWith(path.resolve('/workspace/src'), expect.objectContaining({ maxFiles: 50 }));
       expect(result).toMatchObject({

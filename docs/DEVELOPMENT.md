@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide provides comprehensive instructions for developing, building, testing, and packaging Graph-It-Live.
+This guide provides comprehensive instructions for developing, building, testing, and packaging Skein.
 
 ## Table of Contents
 
@@ -26,8 +26,8 @@ This guide provides comprehensive instructions for developing, building, testing
 1. **Clone the repository**:
 
 ```bash
-git clone https://github.com/sjh354/Graph-It-Live.git
-cd Graph-It-Live
+git clone https://github.com/sjh354/skein.git
+cd Skein
 ```
 
 2. **Install dependencies**:
@@ -110,7 +110,7 @@ The `esbuild.js` configuration:
 
 ### Test Categories
 
-Graph-It-Live uses multiple testing strategies:
+Skein uses multiple testing strategies:
 
 #### Unit Tests (Vitest)
 
@@ -246,7 +246,7 @@ test('Python import extraction completeness', async () => {
 
 ### Overview
 
-Graph-It-Live uses WebAssembly (WASM) versions of tree-sitter parsers for improved installation reliability, security, and cross-platform compatibility.
+Skein uses WebAssembly (WASM) versions of tree-sitter parsers for improved installation reliability, security, and cross-platform compatibility.
 
 ### Benefits
 
@@ -447,7 +447,7 @@ npm test
 npm run test:coverage
 npm run test:vscode:vsix  # tests the packaged extension
 npm run build -- --production && npm run package && npm run package:verify
-code --install-extension graph-it-live-*.vsix  # check install in a clean VS Code instance
+code --install-extension skein-*.vsix  # check install in a clean VS Code instance
 ```
 
 ### Cross-Platform Development

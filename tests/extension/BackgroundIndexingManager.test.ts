@@ -128,7 +128,7 @@ describe('BackgroundIndexingManager', () => {
         expect(cachedIndex()).toBe('SERIALIZED');
         expect(fs.readFileSync(path.join(workspaceRoot, '.graph-it', '.gitignore'), 'utf-8')).toBe('*\n');
         // The copy older versions kept in workspaceState is dropped.
-        expect(context.workspaceState.update).toHaveBeenCalledWith('graph-it-live.reverseIndex', undefined);
+        expect(context.workspaceState.update).toHaveBeenCalledWith('skein.reverseIndex', undefined);
     });
 
     // Regression test for #264: a sub-package folder must say it misses sibling packages.

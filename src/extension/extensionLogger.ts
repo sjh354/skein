@@ -107,7 +107,7 @@ export class VsCodeLogger implements ILogger {
  * Extension Logger Manager
  * Singleton that manages the VS Code output channel and logger instances
  */
-const OUTPUT_CHANNEL_NAME = 'Structure Graph';
+const OUTPUT_CHANNEL_NAME = 'Skein';
 
 class ExtensionLoggerManager {
   private outputChannel: vscode.OutputChannel | undefined;
@@ -200,7 +200,7 @@ export function getExtensionLogger(prefix: string): VsCodeLogger {
  * Read log level from VS Code configuration
  */
 export function getLogLevelFromConfig(): LogLevel {
-  const config = vscode.workspace.getConfiguration('graph-it-live');
+  const config = vscode.workspace.getConfiguration('skein');
   const level = config.get<string>('logLevel', 'info');
   if (level && ['debug', 'info', 'warn', 'error', 'none'].includes(level)) {
     return level as LogLevel;
@@ -214,7 +214,7 @@ export function getLogLevelFromConfig(): LogLevel {
 export function watchLogLevelConfig(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration('graph-it-live.logLevel')) {
+      if (e.affectsConfiguration('skein.logLevel')) {
         const newLevel = getLogLevelFromConfig();
         extensionLoggerManager.setLevel(newLevel);
         extensionLoggerManager.getLogger('Extension').info('Log level changed to', newLevel);

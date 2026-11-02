@@ -1,12 +1,12 @@
 # Architecture view, rules and check-architecture
 
-Graph-It-Live draws the architecture of a workspace from its static imports, checks it against rules you write, and exposes the same data in VS Code and the MCP server.
+Skein draws the architecture of a workspace from its static imports, checks it against rules you write, and exposes the same data in VS Code and the MCP server.
 
 ## What it answers
 
 - **What are my layers?** Packages (or top-level folders), ordered so that each one imports only those below it, with the loops between them.
 - **Who depends on this?** Every package or folder that imports a package, a folder or a file, directly or not.
-- **Does the code follow my architecture?** Every import checked against the rules of `graphit.architecture.json`, locally or in CI.
+- **Does the code follow my architecture?** Every import checked against the rules of `skein.architecture.json`, locally or in CI.
 
 
 ## Concepts
@@ -24,11 +24,11 @@ Each term has one meaning in this page and the README.
 | **Cycle** | Groups that import each other, directly or not. They share a layer. |
 | **Upward edge** | An edge to a group of the same or a higher layer. Drawn red, like the edges of a cycle. |
 | **Role** | What a unit is (`function`, `frontend`, `library`…), inferred from its manifest and files, or declared. See [Roles](#roles). |
-| **Element** | A named set of files in `graphit.architecture.json`, selected by path, unit or role. |
+| **Element** | A named set of files in `skein.architecture.json`, selected by path, unit or role. |
 | **Rule** | What the files of an element may or may not import. |
-| **Baseline** | The violations you accept for now, in `graphit.architecture.baseline.json`. Only new violations fail. |
+| **Baseline** | The violations you accept for now, in `skein.architecture.baseline.json`. Only new violations fail. |
 
-Groups follow the `graph-it-live.communityMode` setting (CLI `--communities`, MCP `communityMode`):
+Groups follow the `skein.communityMode` setting (CLI `--communities`, MCP `communityMode`):
 
 - `path` (default): units, then folders. Units and folder levels exist only in this mode.
 - `louvain`: communities of files that import each other, one flat level.
@@ -83,7 +83,7 @@ Each part of the view below answers three questions: what it is for, how to read
 
   Inside a unit, the header reads *Groups based on folders* (or *Groups based on imports (Louvain)*). *X of Y groups shown (largest first)* means the level holds more groups than drawn; totals include them, and *Show more groups* draws more.
 - **Navigate.** Double-click a unit to enter its folders; double-click a folder holding sub-folders (double border) to go one level deeper; double-click another group to expand its files. Go back with the breadcrumb or *Escape*.
-- **`path` or `louvain`.** `graph-it-live.communityMode` decides the groups. `path` (default) answers "how do my packages and folders depend on each other?": it gives units, folder levels, layers and upward edges. `louvain` answers "which files really work together, whatever their folder?": one flat level of communities, without units or layers. Switch to `louvain` when the folders no longer match the coupling, for example a folder whose files all import another folder.
+- **`path` or `louvain`.** `skein.communityMode` decides the groups. `path` (default) answers "how do my packages and folders depend on each other?": it gives units, folder levels, layers and upward edges. `louvain` answers "which files really work together, whatever their folder?": one flat level of communities, without units or layers. Switch to `louvain` when the folders no longer match the coupling, for example a folder whose files all import another folder.
 
 
 **How to fix what it shows.** Red block or solid red edges: [a cycle](#a-cycle); see also [an upward edge](#an-upward-edge-outside-a-cycle). Dashed red edge: [a rule violation](#a-rule-violation). A group in the wrong band, or a thick edge between groups meant to be independent: [an unexpected layer or a heavy dependency](#an-unexpected-layer-or-a-heavy-dependency).
@@ -161,13 +161,13 @@ Rows 1–2 are outlined. The red cell, `core` → `shared`, has 6 pairs; its mir
 
 ### Rules panel
 
-**What it is for.** Check every import against the rules of `graphit.architecture.json`, without leaving the editor. It appears once that file exists at the workspace root (see [The config file](#the-config-file)).
+**What it is for.** Check every import against the rules of `skein.architecture.json`, without leaving the editor. It appears once that file exists at the workspace root (see [The config file](#the-config-file)).
 
 **How to read it.**
 
 - The summary reads *N violations of M rules (K new)*, M being the rules with at least one violation, or *All N rules pass*, N being every rule; then the config file. It turns red when an `error` rule has a new violation.
   - *violations*: file pairs breaking a rule.
-  - *new*: violations missing from `graphit.architecture.baseline.json`; only new violations of `error` rules fail `check-architecture`. The others are baselined: accepted for now.
+  - *new*: violations missing from `skein.architecture.baseline.json`; only new violations of `error` rules fail `check-architecture`. The others are baselined: accepted for now.
   - *N files in no element*: unmatched files. No element selects them, so no rule checks them.
 - One line per rule: its name (underlined and coloured by severity when it has violations), its kind, severity and count. Hover the name for its `reason`; click it to list its file pairs in the evidence panel.
 - Config warnings, such as a pattern matching no file, follow in the warning colour.
@@ -179,7 +179,7 @@ Rows 1–2 are outlined. The red cell, `core` → `shared`, has 6 pairs; its mir
 
 **What it is for.** Tell what each unit is (`function`, `frontend`, `library`…), so that rules can target units by role (`{ "role": "function" }` in an element) and the graph can show one kind of unit. A role says nothing about what the code does: it comes from manifests and file names only (see [Roles](#roles)).
 
-**How to read it.** The legend, top left at the units level, lists the role counts, then each unit with its colour and badge. `[role?]` is inferred; `[role]` is declared under `roles` in `graphit.architecture.json`. Hover a unit for its key, layer, role and confidence, and the unit on the graph for the evidence. Click a role to show only its units; click it again to show every unit. Click a unit to select it.
+**How to read it.** The legend, top left at the units level, lists the role counts, then each unit with its colour and badge. `[role?]` is inferred; `[role]` is declared under `roles` in `skein.architecture.json`. Hover a unit for its key, layer, role and confidence, and the unit on the graph for the evidence. Click a role to show only its units; click it again to show every unit. Click a unit to select it.
 
 **How to fix it.** A wrong or `[unknown?]` role: declare the right one under [`roles`](#roles-key).
 
@@ -187,9 +187,9 @@ Rows 1–2 are outlined. The red cell, `core` → `shared`, has 6 pairs; its mir
 
 **What it is for.** Tell you the drawn view no longer matches the files.
 
-**How to read it.** *Files or architecture rules changed since this view was built.* appears when a file of the graph, `graphit.architecture.json`, its baseline, a `package.json` or a `tsconfig*.json` changes. The view does not rebuild by itself: a build reads every file of the workspace, and rebuilding on each save would redraw the graph while you read it.
+**How to read it.** *Files or architecture rules changed since this view was built.* appears when a file of the graph, `skein.architecture.json`, its baseline, a `package.json` or a `tsconfig*.json` changes. The view does not rebuild by itself: a build reads every file of the workspace, and rebuilding on each save would redraw the graph while you read it.
 
-**What to do.** Click **Refresh** when you want the new state, for example after a fix, to check the edge or the violation is gone. The view is also built when it opens and when `graph-it-live.communityMode` changes.
+**What to do.** Click **Refresh** when you want the new state, for example after a fix, to check the edge or the violation is gone. The view is also built when it opens and when `skein.communityMode` changes.
 
 ## Every mark at a glance
 
@@ -216,7 +216,7 @@ Colours follow the VS Code theme: *red* is the theme's error colour, *focus* its
 | --- | --- |
 | Grey, no label | A normal edge, going down a layer |
 | **Solid red**, with its count | An upward edge (to the same or a higher layer) or an edge inside a cycle |
-| **Dashed red** | Breaks a rule of `graphit.architecture.json` (it may also be upward); never hidden by the 3 × N cap, only by *Min. imports* |
+| **Dashed red** | Breaks a rule of `skein.architecture.json` (it may also be upward); never hidden by the 3 × N cap, only by *Min. imports* |
 | Focus colour, with its count | Highlighted: you hover or selected it, or one of its ends |
 | Not drawn | Hidden: a down edge past the strongest 3 × N (header *weaker edges hidden*), or any edge below *Min. imports* when it is above 1 |
 | Faded | Not linked to the hovered or selected group or edge |
@@ -282,7 +282,7 @@ A dashed red edge, a red-framed matrix cell, a red rule in the Rules panel.
 3. Fix the import, not the rule: import the code through an allowed element, or move it where the rule allows it.
 4. Refresh the view, or call `check_architecture`: the rule shows 0 violations.
 
-Change the rule only when the architecture itself changed. Record a violation in `graphit.architecture.baseline.json` only for accepted legacy debt, never to let new code pass: see [Adopt rules on existing code](#adopt-rules-on-existing-code).
+Change the rule only when the architecture itself changed. Record a violation in `skein.architecture.baseline.json` only for accepted legacy debt, never to let new code pass: see [Adopt rules on existing code](#adopt-rules-on-existing-code).
 
 ### Unmatched files
 
@@ -306,7 +306,7 @@ A unit higher than expected, or a thick edge or heavy cell between two units mea
 
 ### Check rules locally
 
-1. Write `graphit.architecture.json` at the workspace root (see [The config file](#the-config-file)).
+1. Write `skein.architecture.json` at the workspace root (see [The config file](#the-config-file)).
 2. Click **Refresh** in the Architecture view. The Rules panel shows "N violations of M rules (K new)", or "All N rules pass".
 3. Click a rule to list its violating file pairs; click a file to open it at the import.
 4. Or call the `check_architecture` MCP tool.
@@ -317,7 +317,7 @@ Violating edges are dashed red; violating matrix cells are framed red. To fix th
 ### Adopt rules on existing code
 
 1. Write the rules you want, even if the code breaks them today.
-2. Add the accepted violations to `graphit.architecture.baseline.json` (rule name plus workspace-relative file pair).
+2. Add the accepted violations to `skein.architecture.baseline.json` (rule name plus workspace-relative file pair).
 3. Commit the baseline. From now on, new violations are reported as new, and baselined ones are listed as accepted.
 4. Fix violations over time and remove their entries.
 
@@ -330,7 +330,7 @@ The view and the MCP server build the same graph: for the same community mode an
 | Task | VS Code Architecture view | MCP tool |
 | --- | --- | --- |
 | Units, layers, roles | Opens on units (`path` mode) | `explore_architecture` with `level: "units"` |
-| Groups | `graph-it-live.communityMode` setting | `explore_architecture` (summary) |
+| Groups | `skein.communityMode` setting | `explore_architecture` (summary) |
 | One level down | Double-click a unit or folder | `folder` |
 | One group's files and edges | Double-click a group without sub-folders | `group` |
 | File pairs behind an edge | Click the edge | `from` and `to` |
@@ -362,7 +362,7 @@ The view and the MCP server build the same graph: for the same community mode an
 
 A screen reader announces the selected group's name, layer, edges and cycle.
 
-After it opens, the view rebuilds on **Refresh** and when `graph-it-live.communityMode` changes, never on a file change: see [*Files changed* banner](#files-changed-banner).
+After it opens, the view rebuilds on **Refresh** and when `skein.communityMode` changes, never on a file change: see [*Files changed* banner](#files-changed-banner).
 
 ## Roles
 
@@ -383,7 +383,7 @@ A unit matching several roles takes the first in the table; the other matches st
 
 ## The config file
 
-`graphit.architecture.json` sits at the workspace root. It has three optional top-level keys. Do not mix up `rules` and `roles`:
+`skein.architecture.json` sits at the workspace root. It has three optional top-level keys. Do not mix up `rules` and `roles`:
 
 | Key | Answers | Effect |
 | --- | --- | --- |
@@ -399,7 +399,7 @@ A monorepo with serverless functions, a frontend, micro-frontends, a backend and
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/sjh354/Graph-It-Live/main/schemas/architecture.schema.json",
+  "$schema": "https://raw.githubusercontent.com/sjh354/skein/main/schemas/architecture.schema.json",
   "elements": {
     "functions": { "path": "functions/*", "each": true },
     "frontend": { "path": "frontend/" },
@@ -425,7 +425,7 @@ A monorepo with serverless functions, a frontend, micro-frontends, a backend and
 
 An element selects files by any of:
 
-- `path`: workspace-relative gitignore-style patterns, as in `.graphitignore`.
+- `path`: workspace-relative gitignore-style patterns, as in `.skeinignore`.
 - `unit`: unit keys or package names from `explore_architecture` with `level: "units"`; `*` matches any characters.
 - `role`: unit roles, for example `{ "role": "function" }`.
 
@@ -455,7 +455,7 @@ A rule that could never report is refused: `noCycles` on an element without `eac
 4. Optionally, under `roles`, fix every role the view infers wrongly or marks `[unknown?]`.
 5. Call `check_architecture`: it should report 0 violations, no unmatched file and no config warning.
 
-A single-package repository has its top-level folders as units. Graph-It-Live's own [`graphit.architecture.json`](../graphit.architecture.json) is one: its elements split `src/` into layers, and `roles` declares the units:
+A single-package repository has its top-level folders as units. Skein's own [`skein.architecture.json`](../skein.architecture.json) is one: its elements split `src/` into layers, and `roles` declares the units:
 
 ```json
 "roles": {
@@ -477,8 +477,8 @@ The config is validated before anything runs; each error names its JSON path. A 
 - **Edges drawn**: at most 3 × N down edges per level (N = groups of the level), the strongest; upward, cycle and rule-breaking edges always. *Min. imports per edge* above 1 shows edges by weight instead, and then hides every edge below it.
 - **Files in an entered group**: 200 at a time, most imported first; at most 500 files drawn at once.
 - **Lists**: evidence and dependents files, 50 at a time; MCP pages default to 50 items, 500 at most.
-- **Config size**: `graphit.architecture.json` up to 256 KB, baseline up to 32 MB; the MCP `config` and `baseline` paths must stay inside the workspace.
-- **Workspace**: the view analyses the configured workspace folder. Of the rules files, it reads only `graphit.architecture.json` and `graphit.architecture.baseline.json` at its root; the MCP tools accept `config` and `baseline` to name others.
+- **Config size**: `skein.architecture.json` up to 256 KB, baseline up to 32 MB; the MCP `config` and `baseline` paths must stay inside the workspace.
+- **Workspace**: the view analyses the configured workspace folder. Of the rules files, it reads only `skein.architecture.json` and `skein.architecture.baseline.json` at its root; the MCP tools accept `config` and `baseline` to name others.
 
 ## How it is built
 
@@ -516,7 +516,7 @@ flowchart LR
   end
 
   shared["src/shared<br/>types, messages, path utils"]
-  config[("graphit.architecture.json<br/>graphit.architecture.baseline.json")]
+  config[("skein.architecture.json<br/>skein.architecture.baseline.json")]
 
   developer --> extension
   assistant --> mcpExplore

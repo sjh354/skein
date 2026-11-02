@@ -94,7 +94,7 @@ describe('EditorEventsService', () => {
     service.register();
 
     expect(configListeners).toHaveLength(1);
-    configListeners[0]({ affectsConfiguration: (s) => s === 'graph-it-live' });
+    configListeners[0]({ affectsConfiguration: (s) => s === 'skein' });
 
     expect(target.updateConfig as ReturnType<typeof vi.fn>).toHaveBeenCalled();
     expect(target.notifyMcpServerOfConfigChange as ReturnType<typeof vi.fn>).toHaveBeenCalled();

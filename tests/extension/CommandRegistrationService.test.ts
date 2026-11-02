@@ -109,7 +109,7 @@ describe('CommandRegistrationService', () => {
     registerCommand.mockClear();
   });
 
-  it('registers all Graph-it-Live commands', () => {
+  it('registers all Skein commands', () => {
     const provider = createProviderMock();
     const commandCoordinator = createCommandCoordinatorMock();
     const logger = createLoggerMock();
@@ -119,21 +119,21 @@ describe('CommandRegistrationService', () => {
 
     expect(disposables).toHaveLength(15); // getContext is shared; filter commands share one disposable
     expect(registerCommand).toHaveBeenCalledTimes(16);
-    expect(registeredHandlers.has('graph-it-live.showGraph')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.forceReindex')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.expandAllNodes')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.refreshGraph')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.toggleViewMode')).toBe(true); // Backward compat
-    expect(registeredHandlers.has('graph-it-live.setViewModeFile')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.setViewModeList')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.setViewModeSymbol')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.setViewModeArchitecture')).toBe(true);
+    expect(registeredHandlers.has('skein.showGraph')).toBe(true);
+    expect(registeredHandlers.has('skein.forceReindex')).toBe(true);
+    expect(registeredHandlers.has('skein.expandAllNodes')).toBe(true);
+    expect(registeredHandlers.has('skein.refreshGraph')).toBe(true);
+    expect(registeredHandlers.has('skein.toggleViewMode')).toBe(true); // Backward compat
+    expect(registeredHandlers.has('skein.setViewModeFile')).toBe(true);
+    expect(registeredHandlers.has('skein.setViewModeList')).toBe(true);
+    expect(registeredHandlers.has('skein.setViewModeSymbol')).toBe(true);
+    expect(registeredHandlers.has('skein.setViewModeArchitecture')).toBe(true);
     expect(registeredHandlers.has('getContext')).toBe(true); // E2E test helper
-    expect(registeredHandlers.has('graph-it-live.showReverseDependencies')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.hideReverseDependencies')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.enableUnusedFilter')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.disableUnusedFilter')).toBe(true);
-    expect(registeredHandlers.has('graph-it-live.showIndexStatus')).toBe(true);
+    expect(registeredHandlers.has('skein.showReverseDependencies')).toBe(true);
+    expect(registeredHandlers.has('skein.hideReverseDependencies')).toBe(true);
+    expect(registeredHandlers.has('skein.enableUnusedFilter')).toBe(true);
+    expect(registeredHandlers.has('skein.disableUnusedFilter')).toBe(true);
+    expect(registeredHandlers.has('skein.showIndexStatus')).toBe(true);
   });
 
   it('switches to the architecture view and exposes its E2E state through getContext', async () => {
@@ -142,72 +142,72 @@ describe('CommandRegistrationService', () => {
     const service = new CommandRegistrationService({ provider, commandCoordinator, logger: createLoggerMock() });
     service.registerAll();
 
-    await registeredHandlers.get('graph-it-live.setViewModeArchitecture')?.();
+    await registeredHandlers.get('skein.setViewModeArchitecture')?.();
     expect(commandCoordinator.handleSetViewModeArchitecture).toHaveBeenCalled();
 
     const getContext = registeredHandlers.get('getContext')!;
-    expect(await getContext('graph-it-live.viewMode')).toBe('file');
-    expect(await getContext('graph-it-live.architectureRenderCount')).toBe(3);
-    expect(await getContext('graph-it-live.architectureGroupCount')).toBe(20);
-    expect(await getContext('graph-it-live.architectureGroupEdgeCount')).toBe(6);
-    expect(await getContext('graph-it-live.architectureRevision')).toBe('r1');
-    expect(await getContext('graph-it-live.architectureBuildCount')).toBe(2);
-    expect(await getContext('graph-it-live.architectureCommunityMode')).toBe('path');
-    expect(await getContext('graph-it-live.architectureStale')).toBe(true);
-    expect(await getContext('graph-it-live.architectureOverlappingGroups')).toBe(1);
-    expect(await getContext('graph-it-live.architectureOverflowingLabels')).toBe(2);
-    expect(await getContext('graph-it-live.architecturePositions')).toBe('path:ui@0,0');
-    expect(await getContext('graph-it-live.architectureResizeCount')).toBe(4);
-    expect(await getContext('graph-it-live.architectureViewSize')).toEqual({ width: 320, height: 200 });
-    expect(await getContext('graph-it-live.architectureInteractionCount')).toBe(5);
-    expect(await getContext('graph-it-live.architectureInteraction')).toEqual({ highlightedGroups: 2 });
-    expect(await getContext('graph-it-live.architectureMatrixCount')).toBe(6);
-    expect(await getContext('graph-it-live.architectureMatrix')).toEqual({ rows: 11 });
-    expect(await getContext('graph-it-live.architectureRendered')).toEqual({ headerHeightPx: 90 });
+    expect(await getContext('skein.viewMode')).toBe('file');
+    expect(await getContext('skein.architectureRenderCount')).toBe(3);
+    expect(await getContext('skein.architectureGroupCount')).toBe(20);
+    expect(await getContext('skein.architectureGroupEdgeCount')).toBe(6);
+    expect(await getContext('skein.architectureRevision')).toBe('r1');
+    expect(await getContext('skein.architectureBuildCount')).toBe(2);
+    expect(await getContext('skein.architectureCommunityMode')).toBe('path');
+    expect(await getContext('skein.architectureStale')).toBe(true);
+    expect(await getContext('skein.architectureOverlappingGroups')).toBe(1);
+    expect(await getContext('skein.architectureOverflowingLabels')).toBe(2);
+    expect(await getContext('skein.architecturePositions')).toBe('path:ui@0,0');
+    expect(await getContext('skein.architectureResizeCount')).toBe(4);
+    expect(await getContext('skein.architectureViewSize')).toEqual({ width: 320, height: 200 });
+    expect(await getContext('skein.architectureInteractionCount')).toBe(5);
+    expect(await getContext('skein.architectureInteraction')).toEqual({ highlightedGroups: 2 });
+    expect(await getContext('skein.architectureMatrixCount')).toBe(6);
+    expect(await getContext('skein.architectureMatrix')).toEqual({ rows: 11 });
+    expect(await getContext('skein.architectureRendered')).toEqual({ headerHeightPx: 90 });
 
-    await registeredHandlers.get('graph-it-live.e2eArchitectureControls')?.({ find: 'ui', minImports: 2 });
+    await registeredHandlers.get('skein.e2eArchitectureControls')?.({ find: 'ui', minImports: 2 });
     expect(provider.setArchitectureControls).toHaveBeenCalledWith({ find: 'ui', minImports: 2 });
-    expect(await getContext('graph-it-live.unknown')).toBeUndefined();
-    expect(await getContext('graph-it-live.reverseDependenciesVisible')).toBe(false);
+    expect(await getContext('skein.unknown')).toBeUndefined();
+    expect(await getContext('skein.reverseDependenciesVisible')).toBe(false);
     expect([
-      await getContext('graph-it-live.callGraphRenderCount'),
-      await getContext('graph-it-live.callGraphNodeCount'),
-      await getContext('graph-it-live.callGraphEdgeCount'),
-      await getContext('graph-it-live.callGraphCycleCount'),
-      await getContext('graph-it-live.fileGraphNodeMetadata'),
+      await getContext('skein.callGraphRenderCount'),
+      await getContext('skein.callGraphNodeCount'),
+      await getContext('skein.callGraphEdgeCount'),
+      await getContext('skein.callGraphCycleCount'),
+      await getContext('skein.fileGraphNodeMetadata'),
     ]).toEqual([1, 2, 3, 4, {}]);
 
     (provider.getArchitectureE2EState as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
-    expect(await getContext('graph-it-live.architectureRenderCount')).toBe(0);
-    expect(await getContext('graph-it-live.architectureGroupCount')).toBe(0);
-    expect(await getContext('graph-it-live.architectureGroupEdgeCount')).toBe(0);
-    expect(await getContext('graph-it-live.architectureBuildCount')).toBe(0);
-    expect(await getContext('graph-it-live.architectureStale')).toBe(false);
-    expect(await getContext('graph-it-live.architectureResizeCount')).toBe(0);
-    expect(await getContext('graph-it-live.architectureOverlappingGroups')).toBe(0);
-    expect(await getContext('graph-it-live.architectureOverflowingLabels')).toBe(0);
-    expect(await getContext('graph-it-live.architecturePositions')).toBeUndefined();
-    expect(await getContext('graph-it-live.architectureViewSize')).toBeUndefined();
-    expect(await getContext('graph-it-live.architectureInteractionCount')).toBe(0);
-    expect(await getContext('graph-it-live.architectureInteraction')).toBeUndefined();
-    expect(await getContext('graph-it-live.architectureMatrixCount')).toBe(0);
-    expect(await getContext('graph-it-live.architectureMatrix')).toBeUndefined();
-    expect(await getContext('graph-it-live.architectureRendered')).toBeUndefined();
+    expect(await getContext('skein.architectureRenderCount')).toBe(0);
+    expect(await getContext('skein.architectureGroupCount')).toBe(0);
+    expect(await getContext('skein.architectureGroupEdgeCount')).toBe(0);
+    expect(await getContext('skein.architectureBuildCount')).toBe(0);
+    expect(await getContext('skein.architectureStale')).toBe(false);
+    expect(await getContext('skein.architectureResizeCount')).toBe(0);
+    expect(await getContext('skein.architectureOverlappingGroups')).toBe(0);
+    expect(await getContext('skein.architectureOverflowingLabels')).toBe(0);
+    expect(await getContext('skein.architecturePositions')).toBeUndefined();
+    expect(await getContext('skein.architectureViewSize')).toBeUndefined();
+    expect(await getContext('skein.architectureInteractionCount')).toBe(0);
+    expect(await getContext('skein.architectureInteraction')).toBeUndefined();
+    expect(await getContext('skein.architectureMatrixCount')).toBe(0);
+    expect(await getContext('skein.architectureMatrix')).toBeUndefined();
+    expect(await getContext('skein.architectureRendered')).toBeUndefined();
   });
 
   it.each([
-    ['graph-it-live.forceReindex', 'handleForceReindex'],
-    ['graph-it-live.expandAllNodes', 'handleExpandAll'],
-    ['graph-it-live.refreshGraph', 'handleRefreshGraph'],
-    ['graph-it-live.toggleViewMode', 'handleToggleViewMode'],
-    ['graph-it-live.setViewModeFile', 'handleSetViewModeFile'],
-    ['graph-it-live.setViewModeList', 'handleSetViewModeList'],
-    ['graph-it-live.setViewModeSymbol', 'handleSetViewModeSymbol'],
-    ['graph-it-live.showReverseDependencies', 'handleShowReverseDependencies'],
-    ['graph-it-live.hideReverseDependencies', 'handleHideReverseDependencies'],
-    ['graph-it-live.enableUnusedFilter', 'handleEnableUnusedFilter'],
-    ['graph-it-live.disableUnusedFilter', 'handleDisableUnusedFilter'],
-    ['graph-it-live.showIndexStatus', 'handleShowIndexStatus'],
+    ['skein.forceReindex', 'handleForceReindex'],
+    ['skein.expandAllNodes', 'handleExpandAll'],
+    ['skein.refreshGraph', 'handleRefreshGraph'],
+    ['skein.toggleViewMode', 'handleToggleViewMode'],
+    ['skein.setViewModeFile', 'handleSetViewModeFile'],
+    ['skein.setViewModeList', 'handleSetViewModeList'],
+    ['skein.setViewModeSymbol', 'handleSetViewModeSymbol'],
+    ['skein.showReverseDependencies', 'handleShowReverseDependencies'],
+    ['skein.hideReverseDependencies', 'handleHideReverseDependencies'],
+    ['skein.enableUnusedFilter', 'handleEnableUnusedFilter'],
+    ['skein.disableUnusedFilter', 'handleDisableUnusedFilter'],
+    ['skein.showIndexStatus', 'handleShowIndexStatus'],
   ] as const)('%s runs CommandCoordinator.%s', async (commandId, handler) => {
     const commandCoordinator = createCommandCoordinatorMock();
     new CommandRegistrationService({ provider: createProviderMock(), commandCoordinator, logger: createLoggerMock() }).registerAll();
@@ -224,23 +224,23 @@ describe('CommandRegistrationService', () => {
     const service = new CommandRegistrationService({ provider, commandCoordinator, logger });
 
     service.registerAll();
-    const handler = registeredHandlers.get('graph-it-live.showGraph');
+    const handler = registeredHandlers.get('skein.showGraph');
     expect(handler).toBeDefined();
 
     await handler?.();
-    expect(executeCommand).toHaveBeenCalledWith('graph-it-live.graphView.focus');
+    expect(executeCommand).toHaveBeenCalledWith('skein.graphView.focus');
   });
 
   it('opens the graph in an editor tab on the file the title button came from', async () => {
     const provider = createProviderMock();
     new CommandRegistrationService({ provider, commandCoordinator: createCommandCoordinatorMock(), logger: createLoggerMock() }).registerAll();
-    const handler = registeredHandlers.get('graph-it-live.showGraph');
+    const handler = registeredHandlers.get('skein.showGraph');
     const resource = { scheme: 'file', fsPath: '/workspace/src/api.ts' };
 
     await handler?.(resource);
 
     expect(provider.showEditorGraph).toHaveBeenCalledWith(resource);
-    expect(executeCommand).not.toHaveBeenCalledWith('graph-it-live.graphView.focus');
+    expect(executeCommand).not.toHaveBeenCalledWith('skein.graphView.focus');
   });
 
   it('executes provider commands and reports success', async () => {
@@ -250,7 +250,7 @@ describe('CommandRegistrationService', () => {
     const service = new CommandRegistrationService({ provider, commandCoordinator, logger });
 
     service.registerAll();
-    const forceReindexHandler = registeredHandlers.get('graph-it-live.forceReindex');
+    const forceReindexHandler = registeredHandlers.get('skein.forceReindex');
     expect(forceReindexHandler).toBeDefined();
 
     await forceReindexHandler?.();
@@ -265,15 +265,15 @@ describe('CommandRegistrationService', () => {
     const service = new CommandRegistrationService({ provider, commandCoordinator, logger });
 
     service.registerAll();
-    const refreshHandler = registeredHandlers.get('graph-it-live.refreshGraph');
+    const refreshHandler = registeredHandlers.get('skein.refreshGraph');
     expect(refreshHandler).toBeDefined();
 
     await refreshHandler?.();
     expect(logger.error).toHaveBeenCalledWith(
-      'graph-it-live.refreshGraph failed:',
+      'skein.refreshGraph failed:',
       expect.any(Error)
     );
-    expect(showErrorMessage).toHaveBeenCalledWith('Graph-It-Live: Refresh failed');
+    expect(showErrorMessage).toHaveBeenCalledWith('Skein: Refresh failed');
   });
 
   it('shows indexer information when available', async () => {
@@ -283,7 +283,7 @@ describe('CommandRegistrationService', () => {
     const service = new CommandRegistrationService({ provider, commandCoordinator, logger });
 
     service.registerAll();
-    const handler = registeredHandlers.get('graph-it-live.showIndexStatus');
+    const handler = registeredHandlers.get('skein.showIndexStatus');
     expect(handler).toBeDefined();
 
     await handler?.();

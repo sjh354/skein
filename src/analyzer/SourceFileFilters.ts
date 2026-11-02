@@ -6,13 +6,13 @@ import { SUPPORTED_FILE_EXTENSIONS, IGNORED_DIRECTORIES } from '../shared/consta
 const ALWAYS_SKIPPED_DIRECTORIES = new Set(IGNORED_DIRECTORIES.filter(dir => dir !== 'node_modules'));
 
 /**
- * Paths skipped by default on top of `.gitignore`. A `.graphitignore` negation
+ * Paths skipped by default on top of `.gitignore`. A `.skeinignore` negation
  * (for example `!tests/fixtures/`) opts back in.
  */
 export const DEFAULT_IGNORE_PATTERNS = ['tests/fixtures/', 'out-*/'];
 
 /** Ignore files read from the workspace root, in precedence order. */
-const IGNORE_FILES = ['.gitignore', '.graphitignore'];
+const IGNORE_FILES = ['.gitignore', '.skeinignore'];
 
 export type IgnoreMatcher = (relativePath: string, isDirectory: boolean) => boolean;
 
@@ -32,7 +32,7 @@ export function shouldSkipDirectory(entryName: string, excludeNodeModules: boole
 
 /**
  * Build a matcher from the default patterns, then the root `.gitignore` and
- * `.graphitignore`. Paths are relative to `rootDir`; paths outside it never match.
+ * `.skeinignore`. Paths are relative to `rootDir`; paths outside it never match.
  */
 // ponytail: root-level ignore files only; add nested .gitignore support when monorepos need it
 export function createIgnoreMatcher(rootDir: string): IgnoreMatcher {

@@ -228,7 +228,7 @@ export async function buildArchitectureGraph(
     revision: architectureRevision(communityMode, nodes, edges),
     graphKind: "imports",
     scope: "workspace",
-    exclusions: [...IGNORED_DIRECTORIES, ".*/", ".gitignore", ".graphitignore", ...DEFAULT_IGNORE_PATTERNS].join(", "),
+    exclusions: [...IGNORED_DIRECTORIES, ".*/", ".gitignore", ".skeinignore", ...DEFAULT_IGNORE_PATTERNS].join(", "),
     indexedAt: options.indexedAt,
     maxFiles: Number.isFinite(maxFiles) ? maxFiles : undefined,
     truncated: files.length < allFiles.length,

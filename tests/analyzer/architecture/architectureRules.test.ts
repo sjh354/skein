@@ -311,13 +311,13 @@ describe("rule files in the workspace", () => {
 
   it("loads the config, and the default baseline only when it exists", async () => {
     expect(await loadArchitectureRules(rootDir)).not.toHaveProperty("baselineFile");
-    fs.writeFileSync(path.join(rootDir, "graphit.architecture.baseline.json"), formatBaseline([{ rule: "a", source: "x.ts", target: "y.ts" }]));
-    expect(await loadArchitectureRules(rootDir)).toMatchObject({ baselineFile: "graphit.architecture.baseline.json", baseline: [{ rule: "a" }] });
-    fs.rmSync(path.join(rootDir, "graphit.architecture.baseline.json"));
+    fs.writeFileSync(path.join(rootDir, "skein.architecture.baseline.json"), formatBaseline([{ rule: "a", source: "x.ts", target: "y.ts" }]));
+    expect(await loadArchitectureRules(rootDir)).toMatchObject({ baselineFile: "skein.architecture.baseline.json", baseline: [{ rule: "a" }] });
+    fs.rmSync(path.join(rootDir, "skein.architecture.baseline.json"));
   });
 
   it("loads the declared roles, none without a config, and applies them to role elements", async () => {
-    const configFile = path.join(rootDir, "graphit.architecture.json");
+    const configFile = path.join(rootDir, "skein.architecture.json");
     const original = fs.readFileSync(configFile, "utf8");
     try {
       expect(await loadDeclaredRoles(rootDir)).toBeUndefined();
@@ -353,7 +353,7 @@ describe("rule files in the workspace", () => {
 
   it("refuses files outside the workspace and oversized ones without reading them", async () => {
     await expect(readWorkspaceFile(rootDir, "../outside.json", 10)).rejects.toThrow("outside workspace");
-    await expect(readWorkspaceFile(rootDir, "graphit.architecture.json", 10)).rejects.toThrow("larger than 10 bytes");
+    await expect(readWorkspaceFile(rootDir, "skein.architecture.json", 10)).rejects.toThrow("larger than 10 bytes");
     expect(await readWorkspaceFile(rootDir, "absent.json", 10)).toBeUndefined();
     await expect(readWorkspaceFile(rootDir, "frontend", 10 ** 6)).rejects.toThrow();
   });

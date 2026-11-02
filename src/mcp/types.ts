@@ -745,9 +745,9 @@ const RulesFileSchema = z
   .refine((value) => !nodePath.isAbsolute(value) && !nodePath.win32.isAbsolute(value), "Must be relative to the workspace");
 
 export const CheckArchitectureParamsSchema = z.object({
-  config: RulesFileSchema.optional().describe("Rules file, relative to the workspace (default: graphit.architecture.json)"),
+  config: RulesFileSchema.optional().describe("Rules file, relative to the workspace (default: skein.architecture.json)"),
   baseline: RulesFileSchema.optional()
-    .describe("Accepted violations, relative to the workspace (default: graphit.architecture.baseline.json when it exists)"),
+    .describe("Accepted violations, relative to the workspace (default: skein.architecture.baseline.json when it exists)"),
   rule: z.string().min(1).max(128).optional().describe("Return only the violations of this rule"),
   limit: z.number().int().min(1).max(500).optional()
     .describe("Violations per page; also caps unmatchedFiles and resolved (default: 50)"),

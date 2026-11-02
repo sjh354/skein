@@ -1,5 +1,5 @@
 /**
- * LmToolsService — registers Graph-It-Live analyzer tools as native VS Code
+ * LmToolsService — registers Skein analyzer tools as native VS Code
  * Language Model Tools (`vscode.lm.registerTool`).
  *
  * This is separate from the MCP server:
@@ -196,7 +196,7 @@ export class LmToolsService {
       this.logger.warn('vscode.lm.registerTool not available — Native LM Tools disabled.');
       return [];
     }
-    this.logger.info('Registering Structure Graph native Language Model Tools');
+    this.logger.info('Registering Skein native Language Model Tools');
     return [
       this.registerFindReferencingFiles(),
       this.registerAnalyzeDependencies(),
@@ -307,7 +307,7 @@ export class LmToolsService {
 
   private registerFindReferencingFiles(): vscode.Disposable {
     return this.registerTool<FindReferencingFilesInput>(
-      'graph-it-live_find_referencing_files',
+      'skein_find_referencing_files',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<FindReferencingFilesInput>,
@@ -350,7 +350,7 @@ export class LmToolsService {
 
   private registerAnalyzeDependencies(): vscode.Disposable {
     return this.registerTool<AnalyzeDependenciesInput>(
-      'graph-it-live_analyze_dependencies',
+      'skein_analyze_dependencies',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<AnalyzeDependenciesInput>,
@@ -391,7 +391,7 @@ export class LmToolsService {
 
   private registerCrawlDependencyGraph(): vscode.Disposable {
     return this.registerTool<CrawlDependencyGraphInput>(
-      'graph-it-live_crawl_dependency_graph',
+      'skein_crawl_dependency_graph',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<CrawlDependencyGraphInput>,
@@ -447,7 +447,7 @@ export class LmToolsService {
 
   private registerGetSymbolGraph(): vscode.Disposable {
     return this.registerTool<GetSymbolGraphInput>(
-      'graph-it-live_get_symbol_graph',
+      'skein_get_symbol_graph',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<GetSymbolGraphInput>,
@@ -490,7 +490,7 @@ export class LmToolsService {
 
   private registerFindUnusedSymbols(): vscode.Disposable {
     return this.registerTool<FindUnusedSymbolsInput>(
-      'graph-it-live_find_unused_symbols',
+      'skein_find_unused_symbols',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<FindUnusedSymbolsInput>,
@@ -535,7 +535,7 @@ export class LmToolsService {
 
   private registerGetSymbolCallers(): vscode.Disposable {
     return this.registerTool<GetSymbolCallersInput>(
-      'graph-it-live_get_symbol_callers',
+      'skein_get_symbol_callers',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<GetSymbolCallersInput>,
@@ -738,7 +738,7 @@ export class LmToolsService {
 
   private registerGetImpactAnalysis(): vscode.Disposable {
     return this.registerTool<GetImpactAnalysisInput>(
-      'graph-it-live_get_impact_analysis',
+      'skein_get_impact_analysis',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<GetImpactAnalysisInput>,
@@ -799,7 +799,7 @@ export class LmToolsService {
 
   private registerGetIndexStatus(): vscode.Disposable {
     return this.registerTool<Record<string, never>>(
-      'graph-it-live_get_index_status',
+      'skein_get_index_status',
       {
         invoke: async (
           _options: vscode.LanguageModelToolInvocationOptions<Record<string, never>>,
@@ -849,7 +849,7 @@ export class LmToolsService {
 
   private registerParseImports(): vscode.Disposable {
     return this.registerTool<ParseImportsInput>(
-      'graph-it-live_parse_imports',
+      'skein_parse_imports',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<ParseImportsInput>,
@@ -888,7 +888,7 @@ export class LmToolsService {
 
   private registerGenerateCodemap(): vscode.Disposable {
     return this.registerTool<GenerateCodemapInput>(
-      'graph-it-live_generate_codemap',
+      'skein_generate_codemap',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<GenerateCodemapInput>,
@@ -997,7 +997,7 @@ export class LmToolsService {
 
   private registerExpandNode(): vscode.Disposable {
     return this.registerTool<ExpandNodeInput>(
-      'graph-it-live_expand_node',
+      'skein_expand_node',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<ExpandNodeInput>,
@@ -1053,7 +1053,7 @@ export class LmToolsService {
 
   private registerVerifyDependencyUsage(): vscode.Disposable {
     return this.registerTool<VerifyDependencyUsageInput>(
-      'graph-it-live_verify_dependency_usage',
+      'skein_verify_dependency_usage',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<VerifyDependencyUsageInput>,
@@ -1084,7 +1084,7 @@ export class LmToolsService {
 
   private registerInvalidateFiles(): vscode.Disposable {
     return this.registerTool<InvalidateFilesInput>(
-      'graph-it-live_invalidate_files',
+      'skein_invalidate_files',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<InvalidateFilesInput>,
@@ -1132,7 +1132,7 @@ export class LmToolsService {
 
   private registerRebuildIndex(): vscode.Disposable {
     return this.registerTool<Record<string, never>>(
-      'graph-it-live_rebuild_index',
+      'skein_rebuild_index',
       {
         invoke: async (
           _options: vscode.LanguageModelToolInvocationOptions<Record<string, never>>,
@@ -1168,7 +1168,7 @@ export class LmToolsService {
 
   private registerGetSymbolDependents(): vscode.Disposable {
     return this.registerTool<GetSymbolDependentsInput>(
-      'graph-it-live_get_symbol_dependents',
+      'skein_get_symbol_dependents',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<GetSymbolDependentsInput>,
@@ -1213,7 +1213,7 @@ export class LmToolsService {
 
   private registerTraceFunctionExecution(): vscode.Disposable {
     return this.registerTool<TraceFunctionExecutionInput>(
-      'graph-it-live_trace_function_execution',
+      'skein_trace_function_execution',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<TraceFunctionExecutionInput>,
@@ -1268,7 +1268,7 @@ export class LmToolsService {
 
   private registerAnalyzeFileLogic(): vscode.Disposable {
     return this.registerTool<AnalyzeFileLogicInput>(
-      'graph-it-live_analyze_file_logic',
+      'skein_analyze_file_logic',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<AnalyzeFileLogicInput>,
@@ -1313,7 +1313,7 @@ export class LmToolsService {
 
   private registerResolveModulePath(): vscode.Disposable {
     return this.registerTool<ResolveModulePathInput>(
-      'graph-it-live_resolve_module_path',
+      'skein_resolve_module_path',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<ResolveModulePathInput>,
@@ -1353,7 +1353,7 @@ export class LmToolsService {
 
   private registerAnalyzeBreakingChanges(): vscode.Disposable {
     return this.registerTool<AnalyzeBreakingChangesInput>(
-      'graph-it-live_analyze_breaking_changes',
+      'skein_analyze_breaking_changes',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<AnalyzeBreakingChangesInput>,
@@ -1399,7 +1399,7 @@ export class LmToolsService {
 
   private registerGraphContext(): vscode.Disposable {
     return this.registerTool<GraphContextInput>(
-      'graph-it-live_graph_context',
+      'skein_graph_context',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<GraphContextInput>,
@@ -1442,7 +1442,7 @@ export class LmToolsService {
 
   private registerQueryCallGraph(): vscode.Disposable {
     return this.registerTool<QueryCallGraphInput>(
-      'graph-it-live_query_call_graph',
+      'skein_query_call_graph',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<QueryCallGraphInput>,
@@ -1452,7 +1452,7 @@ export class LmToolsService {
           const indexer = callGraphService?.getCallGraphIndexerForLmTools();
           if (!indexer) {
             return this.errorResult(
-              'Call graph index not available. Open the Call Graph panel (graph-it-live.showCallGraph) first to build the index.',
+              'Call graph index not available. Open the Call Graph panel (skein.showCallGraph) first to build the index.',
             );
           }
           const { direction = 'both', depth = 2, relationTypes } = options.input;
@@ -1551,7 +1551,7 @@ export class LmToolsService {
 
   private registerScanDeadCode(): vscode.Disposable {
     return this.registerTool<ScanDeadCodeInput>(
-      'graph-it-live_scan_dead_code',
+      'skein_scan_dead_code',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<ScanDeadCodeInput>,
@@ -1583,7 +1583,7 @@ export class LmToolsService {
 
   private registerQueryNaturalLanguage(): vscode.Disposable {
     return this.registerTool<QueryNaturalLanguageParams>(
-      'graph-it-live_query_natural_language',
+      'skein_query_natural_language',
       {
         invoke: async (
           options: vscode.LanguageModelToolInvocationOptions<QueryNaturalLanguageParams>,
@@ -1593,7 +1593,7 @@ export class LmToolsService {
           const rootDir = this.getWorkspaceRoot();
           if (!indexer || !rootDir) {
             return this.errorResult(
-              'Call graph index not available. Open the Call Graph panel (graph-it-live.showCallGraph) first to build the index.',
+              'Call graph index not available. Open the Call Graph panel (skein.showCallGraph) first to build the index.',
             );
           }
           try {

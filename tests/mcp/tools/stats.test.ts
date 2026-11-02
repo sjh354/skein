@@ -87,7 +87,7 @@ describe("get_session_stats tool", () => {
     try {
       sessionStats.setSource("mcp");
       sessionStats.record({
-        toolName: "graphitlive_analyze_dependencies",
+        toolName: "skein_analyze_dependencies",
         jsonTokens: 240,
         toonTokens: 140,
         savings: 100,
@@ -132,7 +132,7 @@ describe("get_session_stats tool", () => {
 
   it("reports current session totals as the sum of recorded entries", () => {
     sessionStats.record({
-      toolName: "graphitlive_generate_codemap",
+      toolName: "skein_generate_codemap",
       jsonTokens: 100,
       toonTokens: 60,
       savings: 40,
@@ -140,7 +140,7 @@ describe("get_session_stats tool", () => {
       timestamp: Date.now(),
     });
     sessionStats.record({
-      toolName: "graphitlive_query_call_graph",
+      toolName: "skein_query_call_graph",
       jsonTokens: 200,
       toonTokens: 120,
       savings: 80,
@@ -154,13 +154,13 @@ describe("get_session_stats tool", () => {
     expect(result.currentSession.totals.jsonTokens).toBe(300);
     expect(result.currentSession.totals.toonTokens).toBe(180);
     expect(result.currentSession.totals.savings).toBe(120);
-    expect(result.currentSession.byTool["graphitlive_generate_codemap"].savings).toBe(40);
-    expect(result.currentSession.byTool["graphitlive_query_call_graph"].savings).toBe(80);
+    expect(result.currentSession.byTool["skein_generate_codemap"].savings).toBe(40);
+    expect(result.currentSession.byTool["skein_query_call_graph"].savings).toBe(80);
   });
 
   it("keeps llmUsage separate — never summed into totals", () => {
     sessionStats.record({
-      toolName: "graphitlive_generate_codemap",
+      toolName: "skein_generate_codemap",
       jsonTokens: 100,
       toonTokens: 60,
       savings: 40,
@@ -195,9 +195,9 @@ describe("get_session_stats tool", () => {
   });
 
   it("aggregates persisted history by source, llm lane separate", () => {
-    flushSession(makeSnapshot("mcp", "graphitlive_generate_codemap"), tempDir);
-    flushSession(makeSnapshot("mcp", "graphitlive_query_call_graph"), tempDir);
-    flushSession(makeSnapshot("cli", "graphitlive_generate_codemap"), tempDir);
+    flushSession(makeSnapshot("mcp", "skein_generate_codemap"), tempDir);
+    flushSession(makeSnapshot("mcp", "skein_query_call_graph"), tempDir);
+    flushSession(makeSnapshot("cli", "skein_generate_codemap"), tempDir);
 
     const result = executeGetSessionStats(tempDir);
 
@@ -221,7 +221,7 @@ describe("get_session_stats tool", () => {
   });
 
   it("contains no absolute paths in the serialized result", () => {
-    flushSession(makeSnapshot("mcp", "graphitlive_generate_codemap"), tempDir);
+    flushSession(makeSnapshot("mcp", "skein_generate_codemap"), tempDir);
 
     const serialized = JSON.stringify(executeGetSessionStats(tempDir));
 

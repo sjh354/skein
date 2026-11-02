@@ -40,7 +40,7 @@ export function formatToolResponse<T>(
   // Paths become workspace-relative first, so duplicated path keys compare equal.
   const redactedResponse = compactOutput(redactAbsolutePaths(response, response.metadata.workspaceRoot));
   let publicResponse: McpToolResponse<T> = redactedResponse;
-  if (toolName === 'graphitlive_graph_context' && isGraphContextResponse(redactedResponse.data)) {
+  if (toolName === 'skein_graph_context' && isGraphContextResponse(redactedResponse.data)) {
     publicResponse = {
       ...redactedResponse,
       data: projectGraphContextOutput(redactedResponse.data, detail),
@@ -50,15 +50,15 @@ export function formatToolResponse<T>(
 
   if (responseFormat === 'toon') {
     let formatted: { content: string };
-    if (toolName === 'graphitlive_graph_context') {
+    if (toolName === 'skein_graph_context') {
       formatted = formatGraphContextAsToon(publicResponse, toolName);
-    } else if (toolName === 'graphitlive_query_natural_language' && isQueryToonResult(publicResponse.data)) {
+    } else if (toolName === 'skein_query_natural_language' && isQueryToonResult(publicResponse.data)) {
       formatted = { content: formatQueryAsToon(publicResponse.data) };
     } else {
       formatted = formatDataAsToon(publicResponse.data, inferObjectNameFromResponse(publicResponse), toolName);
     }
     // graph_context already reports its own errors and freshness.
-    text = toolName === 'graphitlive_graph_context'
+    text = toolName === 'skein_graph_context'
       ? formatted.content
       : formatToonEnvelope(publicResponse, formatted.content);
   } else if (responseFormat === 'markdown') {
@@ -247,7 +247,7 @@ function formatQueryAsToon(data: QueryToonResult): string {
   const content = `${header}\n${data.toon}`;
   const savings = estimateTokenSavings(JSON.stringify(data, null, 2), content);
   sessionStats.record({
-    toolName: 'graphitlive_query_natural_language',
+    toolName: 'skein_query_natural_language',
     jsonTokens: savings.jsonTokens,
     toonTokens: savings.toonTokens,
     savings: savings.savings,

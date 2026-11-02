@@ -1,7 +1,7 @@
 /**
  * MCP Server Provider
  *
- * Registers the Structure Graph MCP server with VS Code using the
+ * Registers the Skein MCP server with VS Code using the
  * vscode.lm.registerMcpServerDefinitionProvider API.
  *
  * The MCP server runs as a separate Node.js process (mcpServer.js) which
@@ -93,7 +93,7 @@ export class McpServerProvider implements vscode.Disposable {
       // Always register the provider, but return empty list if disabled
       // This allows dynamic enable/disable without restart
       this.registration = vscode.lm.registerMcpServerDefinitionProvider(
-        'graphItLiveMcp',
+        'skeinMcp',
         {
           onDidChangeMcpServerDefinitions: this.didChangeEmitter.event,
           provideMcpServerDefinitions: () => this.provideMcpServerDefinitions(),
@@ -104,11 +104,11 @@ export class McpServerProvider implements vscode.Disposable {
       // Listen for configuration changes
       context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((e) => {
-          if (e.affectsConfiguration('graph-it-live.enableMcpServer')) {
+          if (e.affectsConfiguration('skein.enableMcpServer')) {
             this.onConfigChanged();
           }
           // Also trigger when debug logging setting changes
-          if (e.affectsConfiguration('graph-it-live.enableMcpDebugLogging')) {
+          if (e.affectsConfiguration('skein.enableMcpDebugLogging')) {
             log.info('MCP debug logging setting changed, restarting server...');
             this.didChangeEmitter.fire();
           }
@@ -143,7 +143,7 @@ export class McpServerProvider implements vscode.Disposable {
    * Check if MCP server is enabled in settings
    */
   private isMcpEnabled(): boolean {
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     return config.get<boolean>('enableMcpServer', false);
   }
 
@@ -156,7 +156,7 @@ export class McpServerProvider implements vscode.Disposable {
     tsConfigPath: string | undefined;
     enableDebugLogging: boolean;
   } {
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     
     // Try to find tsconfig.json in the workspace
     const tsconfigPath = this.findTsConfig();
@@ -219,7 +219,7 @@ export class McpServerProvider implements vscode.Disposable {
       // Create stdio server definition
       // Constructor: (label, command, args?, env?, version?)
       const serverDefinition = new vscode.McpStdioServerDefinition(
-        'Structure Graph Dependency Analyzer',
+        'Skein Dependency Analyzer',
         'node',
         [serverPath],
         env

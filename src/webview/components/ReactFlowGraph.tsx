@@ -115,7 +115,7 @@ function stableGlobal<T>(key: string, factory: () => T): T {
   return value;
 }
 
-const PRO_OPTIONS = stableGlobal("__graphItLive_proOptions", () =>
+const PRO_OPTIONS = stableGlobal("__skein_proOptions", () =>
   Object.freeze({ hideAttribution: true } as const),
 );
 

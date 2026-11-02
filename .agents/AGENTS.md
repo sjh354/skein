@@ -1,4 +1,4 @@
-# Graph-It-Live Agent Guide
+# Skein Agent Guide
 
 VS Code extension and MCP server for dependency and call-graph analysis. Requires Node.js 22+ and npm.
 
@@ -19,7 +19,7 @@ Prefix shell commands with `rtk`; use `rtk proxy <command>` when no optimized wr
 
 ## Universal Rules
 - Keep `src/analyzer/**` and `src/mcp/**` Node.js-only: never import `vscode`.
-- Keep imports compliant with `graphit.architecture.json`: call the `check_architecture` MCP tool after source changes (0 violations, 0 unmatched files). New `src/` folder or layer relationship = update that config in the same change; never weaken a rule to pass.
+- Keep imports compliant with `skein.architecture.json`: call the `check_architecture` MCP tool after source changes (0 violations, 0 unmatched files). New `src/` folder or layer relationship = update that config in the same change; never weaken a rule to pass.
 - Define extension↔webview messages in `src/shared/types.ts`; update sender and receiver together.
 - Build paths with `node:path`; call `normalizePath()` before path keys enter Sets or Maps.
 - Keep TypeScript strict. Avoid `any`; ESLint decides style.
@@ -30,9 +30,9 @@ Prefix shell commands with `rtk`; use `rtk proxy <command>` when no optimized wr
 
 ## Working Method
 
-- For exploration of `.js`, `.jsx`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.cts`, or `.mts` code, use Graph-It-Live MCP tools first before `read_file`, `rg`, or other direct source inspection. Use direct inspection afterward to verify details and edit safely.
+- For exploration of `.js`, `.jsx`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.cts`, or `.mts` code, use Skein MCP tools first before `read_file`, `rg`, or other direct source inspection. Use direct inspection afterward to verify details and edit safely.
 - Understand full flow and callers before editing. Fix root cause once.
-- For architecture, impact, or relationship questions, use the available Graph-It-Live MCP tools first. Refresh the index with the `rebuild_index` MCP tool after large source changes.
+- For architecture, impact, or relationship questions, use the available Skein MCP tools first. Refresh the index with the `rebuild_index` MCP tool after large source changes.
 - Prefer deletion, existing helpers, standard library, platform features, and installed dependencies—in that order. Add no abstraction or dependency without need.
 - Make smallest complete diff; preserve unrelated code and APIs.
 
@@ -42,7 +42,7 @@ Before modifying matching paths—or when task topic matches—read correspondin
 
 | Scope or task | Rule |
 | --- | --- |
-| Any `src/**` architecture or code-style change, or `graphit.architecture.json` | `.agents/rules/architecture.md` |
+| Any `src/**` architecture or code-style change, or `skein.architecture.json` | `.agents/rules/architecture.md` |
 | Analyzer, MCP, shared security, paths | `.agents/rules/analyzer-mcp-security.md` |
 | React/webview | `.agents/rules/webview-react.md` |
 | Tests or coverage | `.agents/rules/testing.md` |

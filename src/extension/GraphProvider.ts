@@ -47,7 +47,7 @@ type GraphRefreshReason =
   | "unknown";
 
 export class GraphProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = "graph-it-live.graphView";
+  public static readonly viewType = "skein.graphView";
 
   private _view?: vscode.WebviewView | vscode.WebviewPanel;
   private _editorPanel?: vscode.WebviewPanel;
@@ -245,19 +245,19 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   private _initializeFilterContext(): void {
     void vscode.commands.executeCommand(
       "setContext",
-      "graph-it-live.unusedFilterActive",
+      "skein.unusedFilterActive",
       this._stateManager.getUnusedFilterActive(),
     );
     // Initialize viewMode context key
     void vscode.commands.executeCommand(
       "setContext",
-      "graph-it-live.viewMode",
+      "skein.viewMode",
       this._stateManager.viewMode,
     );
     // Initialize reverseDependenciesVisible context key
     void vscode.commands.executeCommand(
       "setContext",
-      "graph-it-live.reverseDependenciesVisible",
+      "skein.reverseDependenciesVisible",
       false,
     );
   }
@@ -269,7 +269,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     const mode = this._stateManager.viewMode;
     await vscode.commands.executeCommand(
       "setContext",
-      "graph-it-live.viewMode",
+      "skein.viewMode",
       mode,
     );
     log.debug(`Updated viewMode context to: ${mode}`);
@@ -885,8 +885,8 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     }
 
     const panel = vscode.window.createWebviewPanel(
-      "graph-it-live.editorGraph",
-      "Structure Graph",
+      "skein.editorGraph",
+      "Skein",
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       { ...this.webviewManager.getWebviewOptions(), retainContextWhenHidden: true },
     );
@@ -954,7 +954,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
 
     // Pre-index call graph in background, alongside the reverse-index lifecycle.
     // Both indexers are independent (different parsers, no shared resources).
-    const config = vscode.workspace.getConfiguration("graph-it-live");
+    const config = vscode.workspace.getConfiguration("skein");
     if (config.get<boolean>("preIndexCallGraph", true)) {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (workspaceRoot && this._callGraphViewService) {
@@ -1204,7 +1204,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     this._graphState.setReverseDependenciesVisible(true);
     await vscode.commands.executeCommand(
       "setContext",
-      "graph-it-live.reverseDependenciesVisible",
+      "skein.reverseDependenciesVisible",
       true,
     );
 
@@ -1233,7 +1233,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     this._graphState.setReverseDependenciesVisible(false);
     await vscode.commands.executeCommand(
       "setContext",
-      "graph-it-live.reverseDependenciesVisible",
+      "skein.reverseDependenciesVisible",
       false,
     );
   }
@@ -1348,11 +1348,11 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     await this._stateManager.setUnusedFilterActive(newState);
     await vscode.commands.executeCommand(
       "setContext",
-      "graph-it-live.unusedFilterActive",
+      "skein.unusedFilterActive",
       newState,
     );
 
-    log.info("Context key graph-it-live.unusedFilterActive set to", newState);
+    log.info("Context key skein.unusedFilterActive set to", newState);
 
     // When activating the filter, rebuild the graph to ensure unusedEdges data is available
     // When deactivating, just update the filter state (no rebuild needed)

@@ -15,11 +15,11 @@ import { normalizePath } from "../../src/shared/path";
 
 // Mock extension path for testing
 const mockExtensionPath = path.resolve(process.cwd());
-const windowsExtensionPath = String.raw`C:\Users\dev\extensions\graph-it-live`;
-const windowsVsCodeResourceExtensionPath = String.raw`C:\Users\dev\AppData\Local\Programs\Microsoft VS Code\resources\app\extensions\graph-it-live`;
-const windowsAltDriveExtensionPath = String.raw`D:\VSCode\extensions\graph-it-live`;
-const windowsMixedSeparatorExtensionPath = String.raw`C:\Users\dev/extensions/graph-it-live`;
-const linuxWithBackslashesExtensionPath = String.raw`/usr/local/vscode\extensions\graph-it-live`;
+const windowsExtensionPath = String.raw`C:\Users\dev\extensions\skein`;
+const windowsVsCodeResourceExtensionPath = String.raw`C:\Users\dev\AppData\Local\Programs\Microsoft VS Code\resources\app\extensions\skein`;
+const windowsAltDriveExtensionPath = String.raw`D:\VSCode\extensions\skein`;
+const windowsMixedSeparatorExtensionPath = String.raw`C:\Users\dev/extensions/skein`;
+const linuxWithBackslashesExtensionPath = String.raw`/usr/local/vscode\extensions\skein`;
 const windowsExtensionPathWithTrailingSeparator = `${windowsExtensionPath}${path.win32.sep}`;
 
 // Mock web-tree-sitter module
@@ -441,10 +441,10 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live", // Linux
-            "/Users/dev/.vscode/extensions/graph-it-live", // macOS
+            "/usr/local/vscode/extensions/skein", // Linux
+            "/Users/dev/.vscode/extensions/skein", // macOS
             windowsVsCodeResourceExtensionPath, // Windows
-            "/home/user/vscode-server/extensions/graph-it-live", // Linux (remote)
+            "/home/user/vscode-server/extensions/skein", // Linux (remote)
             windowsAltDriveExtensionPath // Windows (different drive)
           ),
           fc.constantFrom("python", "rust"), // Language to test
@@ -485,7 +485,7 @@ describe("WasmParserFactory Property-Based Tests", () => {
         fc.asyncProperty(
           fc.constantFrom(
             // Mixed separators (should be normalized by path.join)
-            "C:/Users/dev/extensions/graph-it-live", // Windows with forward slashes
+            "C:/Users/dev/extensions/skein", // Windows with forward slashes
             linuxWithBackslashesExtensionPath, // Linux with backslashes (unusual but possible)
             windowsMixedSeparatorExtensionPath // Windows with mixed separators
           ),
@@ -515,9 +515,9 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
+            "/usr/local/vscode/extensions/skein",
             windowsExtensionPath,
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/Users/dev/.vscode/extensions/skein"
           ),
           async (extensionPath) => {
             // Reset for each property test iteration
@@ -551,9 +551,9 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
+            "/usr/local/vscode/extensions/skein",
             windowsExtensionPath,
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/Users/dev/.vscode/extensions/skein"
           ),
           async (extensionPath) => {
             // Reset for each property test iteration
@@ -595,9 +595,9 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live/", // Trailing slash
+            "/usr/local/vscode/extensions/skein/", // Trailing slash
             windowsExtensionPathWithTrailingSeparator, // Trailing backslash
-            "/Users/dev/.vscode/extensions/graph-it-live/" // Trailing slash
+            "/Users/dev/.vscode/extensions/skein/" // Trailing slash
           ),
           async (extensionPath) => {
             // Reset for each property test iteration
@@ -625,9 +625,9 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
+            "/usr/local/vscode/extensions/skein",
             windowsExtensionPath,
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/Users/dev/.vscode/extensions/skein"
           ),
           async (extensionPath) => {
             // Reset for each property test iteration
@@ -670,9 +670,9 @@ describe("WasmParserFactory Property-Based Tests", () => {
         fc.asyncProperty(
           fc.shuffledSubarray(
             [
-              "/usr/local/vscode/extensions/graph-it-live",
+              "/usr/local/vscode/extensions/skein",
               windowsExtensionPath,
-              "/Users/dev/.vscode/extensions/graph-it-live",
+              "/Users/dev/.vscode/extensions/skein",
             ],
             { minLength: 2, maxLength: 3 }
           ),
@@ -727,8 +727,8 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/usr/local/vscode/extensions/skein",
+            "/Users/dev/.vscode/extensions/skein"
           ),
           fc.constantFrom("tree-sitter.wasm", "tree-sitter-python.wasm", "tree-sitter-rust.wasm"),
           async (extensionPath, wasmFileName) => {
@@ -756,8 +756,8 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/usr/local/vscode/extensions/skein",
+            "/Users/dev/.vscode/extensions/skein"
           ),
           fc.constantFrom("tree-sitter.wasm", "tree-sitter-python.wasm", "tree-sitter-rust.wasm"),
           async (extensionPath, wasmFileName) => {
@@ -783,8 +783,8 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/usr/local/vscode/extensions/skein",
+            "/Users/dev/.vscode/extensions/skein"
           ),
           async (extensionPath) => {
             const wasmFiles = ["tree-sitter.wasm", "tree-sitter-python.wasm", "tree-sitter-rust.wasm"];
@@ -813,8 +813,8 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/usr/local/vscode/extensions/skein",
+            "/Users/dev/.vscode/extensions/skein"
           ),
           fc.constantFrom("tree-sitter.wasm", "tree-sitter-python.wasm", "tree-sitter-rust.wasm"),
           fc.integer({ min: 2, max: 10 }), // Number of resolution calls
@@ -842,8 +842,8 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/usr/local/vscode/extensions/skein",
+            "/Users/dev/.vscode/extensions/skein"
           ),
           async (extensionPath) => {
             // Reset for each property test iteration
@@ -888,9 +888,9 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
+            "/usr/local/vscode/extensions/skein",
             windowsExtensionPath,
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/Users/dev/.vscode/extensions/skein"
           ),
           fc.constantFrom("tree-sitter.wasm", "tree-sitter-python.wasm", "tree-sitter-rust.wasm"),
           async (extensionPath, wasmFileName) => {
@@ -912,9 +912,9 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
+            "/usr/local/vscode/extensions/skein",
             windowsExtensionPath,
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/Users/dev/.vscode/extensions/skein"
           ),
           fc.constantFrom("tree-sitter.wasm", "tree-sitter-python.wasm", "tree-sitter-rust.wasm"),
           async (extensionPath, wasmFileName) => {
@@ -945,8 +945,8 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            { platform: "linux", path: "/usr/local/vscode/extensions/graph-it-live" },
-            { platform: "macos", path: "/Users/dev/.vscode/extensions/graph-it-live" }
+            { platform: "linux", path: "/usr/local/vscode/extensions/skein" },
+            { platform: "macos", path: "/Users/dev/.vscode/extensions/skein" }
           ),
           fc.constantFrom("tree-sitter.wasm", "tree-sitter-python.wasm", "tree-sitter-rust.wasm"),
           async (platformInfo, wasmFileName) => {
@@ -996,8 +996,8 @@ describe("WasmParserFactory Property-Based Tests", () => {
       await fc.assert(
         fc.asyncProperty(
           fc.constantFrom(
-            "/usr/local/vscode/extensions/graph-it-live",
-            "/Users/dev/.vscode/extensions/graph-it-live"
+            "/usr/local/vscode/extensions/skein",
+            "/Users/dev/.vscode/extensions/skein"
           ),
           async (extensionPath) => {
             // Simulate extension context providing extension path

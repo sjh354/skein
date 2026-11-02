@@ -37,7 +37,7 @@ const colors = { foreground: "#fff", background: "#000", border: "#888", edge: "
 const units: ArchitectureUnitLevel = {
   units: [
     { key: "apps/web", name: "@ws/web", fileCount: 3, internalEdgeCount: 1, layer: 2, role: "frontend", confidence: "inferred", evidence: [{ role: "frontend", detail: "`react` in dependencies" }, { role: "frontend", detail: "`index.html`" }] },
-    { key: "packages/ui", name: "@ws/ui", fileCount: 1, internalEdgeCount: 0, layer: 1, role: "library", confidence: "declared", evidence: [{ role: "library", detail: 'declared by roles["@ws/ui"] in graphit.architecture.json' }, { role: "library", detail: "imported by `@ws/web`" }] },
+    { key: "packages/ui", name: "@ws/ui", fileCount: 1, internalEdgeCount: 0, layer: 1, role: "library", confidence: "declared", evidence: [{ role: "library", detail: 'declared by roles["@ws/ui"] in skein.architecture.json' }, { role: "library", detail: "imported by `@ws/web`" }] },
     { key: "packages/core", name: "@ws/core", fileCount: 1, internalEdgeCount: 0, layer: 0, role: "library", confidence: "inferred", evidence: [{ role: "library", detail: "imported by `@ws/types`, `@ws/ui`, `@ws/web`" }] },
     { key: "packages/types", name: "@ws/types", fileCount: 1, internalEdgeCount: 0, layer: 0, role: "library", confidence: "inferred", evidence: [{ role: "library", detail: "imported by `@ws/core`" }] },
     { key: "tool", name: "tool", fileCount: 1, internalEdgeCount: 0, layer: 0, role: "unknown", confidence: "inferred", evidence: [] },
@@ -157,7 +157,7 @@ describe("toLevelElements", () => {
       ["frontend", "[frontend?]"], ["library", "[library]"], ["library", "[library?]"], ["library", "[library?]"], ["unknown", "[unknown?]"],
     ]);
     expect(nodes[0].tooltip).toBe("apps/web\n3 files\n1 internal edge\nRole: frontend (inferred)\n- `react` in dependencies\n- `index.html`");
-    expect(nodes[1].tooltip).toContain('Role: library (declared)\n- declared by roles["@ws/ui"] in graphit.architecture.json\n- imported by `@ws/web`');
+    expect(nodes[1].tooltip).toContain('Role: library (declared)\n- declared by roles["@ws/ui"] in skein.architecture.json\n- imported by `@ws/web`');
     expect(nodes[4].tooltip).toContain("Role: unknown (inferred)\n- no evidence");
     // Evidence for another role than the unit's says which.
     const mixed = { ...units.units[0], evidence: [...units.units[0].evidence, { role: "library" as const, detail: "imported by `x`" }] };
@@ -184,7 +184,7 @@ describe("toLevelElements", () => {
     const totals = { files: 7, unmatchedFiles: 0, rules: 1, brokenRules: 1, violations: 2, newViolations: 2, errors: 2, newErrors: 2, warnings: 0, resolved: 0 };
     const ruled: ArchitectureSummaryMessage = {
       ...summary,
-      rules: { configFile: "graphit.architecture.json", totals, rules: [], configWarnings: [], unitEdges: { "apps/web>packages/core": ["web-not-core"] }, groupEdges: { "1>2": ["inner"] } },
+      rules: { configFile: "skein.architecture.json", totals, rules: [], configWarnings: [], unitEdges: { "apps/web>packages/core": ["web-not-core"] }, groupEdges: { "1>2": ["inner"] } },
     };
     const cy = canvas(toLevelElements(ruled, null));
     const violating = cy.edges("[?violation]");
@@ -227,7 +227,7 @@ describe("cappedUnitEdges", () => {
       unitEdges: Array.from({ length: UNIT_EDGES_PER_UNIT + 1 }, (_, index) =>
         ({ from: "apps/web", to: `lib${index}`, fileEdgeCount: 9 - index, kind: "down" as const })),
     };
-    const rules = { configFile: "graphit.architecture.json", rules: [], configWarnings: [], groupEdges: {}, unitEdges: { [`apps/web>lib${UNIT_EDGES_PER_UNIT}`]: ["r"] } };
+    const rules = { configFile: "skein.architecture.json", rules: [], configWarnings: [], groupEdges: {}, unitEdges: { [`apps/web>lib${UNIT_EDGES_PER_UNIT}`]: ["r"] } };
     expect(cappedUnitEdges(many, rules).size).toBe(0);
   });
 

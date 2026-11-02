@@ -23,10 +23,10 @@ suite('Out-of-root imports (#264)', function () {
     if (!lmToolsSupported()) {
       this.skip();
     }
-    const extension = vscode.extensions.getExtension('sjh354.structure-graph');
+    const extension = vscode.extensions.getExtension('sjh354.skein');
     await extension?.activate();
     // Index from source rather than whatever .graph-it/cache an earlier run left behind.
-    await vscode.commands.executeCommand('graph-it-live.forceReindex');
+    await vscode.commands.executeCommand('skein.forceReindex');
 
     let status: IndexStatus = {};
     const deadline = Date.now() + 80000;

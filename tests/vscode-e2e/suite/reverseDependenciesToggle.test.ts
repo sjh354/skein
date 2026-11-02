@@ -15,7 +15,7 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
     vscode.window.showInformationMessage('Starting reverse dependencies toggle tests');
     
     // Ensure extension is activated
-    const ext = vscode.extensions.getExtension('sjh354.structure-graph');
+    const ext = vscode.extensions.getExtension('sjh354.skein');
     if (ext && !ext.isActive) {
       await ext.activate();
     }
@@ -32,12 +32,12 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
     this.timeout(10000);
     try {
       // Reset to file view and hide reverse dependencies
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
       
       // Try to hide reverse dependencies (may already be hidden)
       try {
-        await vscode.commands.executeCommand('graph-it-live.hideReverseDependencies');
+        await vscode.commands.executeCommand('skein.hideReverseDependencies');
       } catch {
         // Ignore if command not available (already hidden)
       }
@@ -55,7 +55,7 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
   test('Should register showReverseDependencies command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.showReverseDependencies'),
+      commands.includes('skein.showReverseDependencies'),
       'Should have showReverseDependencies command'
     );
   });
@@ -63,7 +63,7 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
   test('Should register hideReverseDependencies command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.hideReverseDependencies'),
+      commands.includes('skein.hideReverseDependencies'),
       'Should have hideReverseDependencies command'
     );
   });
@@ -82,7 +82,7 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
     // Wait a bit for context to stabilize
     await sleep(500);
     
-    const visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+    const visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
     assert.strictEqual(visible, false, 'reverseDependenciesVisible should default to false');
   });
 
@@ -95,11 +95,11 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
       await waitForViewMode('file');
       
       // Show reverse dependencies
-      await vscode.commands.executeCommand('graph-it-live.showReverseDependencies');
+      await vscode.commands.executeCommand('skein.showReverseDependencies');
       await sleep(1000);
       
       // Check context key
-      const visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      const visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, true, 'reverseDependenciesVisible should be true after show');
     } catch (error) {
       console.error('Error in context key update test:', error);
@@ -116,19 +116,19 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
       await waitForViewMode('file');
       
       // Show reverse dependencies
-      await vscode.commands.executeCommand('graph-it-live.showReverseDependencies');
+      await vscode.commands.executeCommand('skein.showReverseDependencies');
       await sleep(1000);
       
       // Verify it's shown
-      let visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      let visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, true, 'reverseDependenciesVisible should be true after show');
       
       // Hide reverse dependencies
-      await vscode.commands.executeCommand('graph-it-live.hideReverseDependencies');
+      await vscode.commands.executeCommand('skein.hideReverseDependencies');
       await sleep(1000);
       
       // Check context key is now false
-      visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, false, 'reverseDependenciesVisible should be false after hide');
     } catch (error) {
       console.error('Error in context key hide test:', error);
@@ -149,7 +149,7 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
       await waitForViewMode('file');
       
       // Execute command
-      await vscode.commands.executeCommand('graph-it-live.showReverseDependencies');
+      await vscode.commands.executeCommand('skein.showReverseDependencies');
       await sleep(1000);
       
       assert.ok(true, 'showReverseDependencies executed successfully');
@@ -168,11 +168,11 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
       await waitForViewMode('file');
       
       // Show first
-      await vscode.commands.executeCommand('graph-it-live.showReverseDependencies');
+      await vscode.commands.executeCommand('skein.showReverseDependencies');
       await sleep(1000);
       
       // Then hide
-      await vscode.commands.executeCommand('graph-it-live.hideReverseDependencies');
+      await vscode.commands.executeCommand('skein.hideReverseDependencies');
       await sleep(1000);
       
       assert.ok(true, 'hideReverseDependencies executed successfully');
@@ -195,25 +195,25 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
       await waitForViewMode('file');
       
       // Initial state: hidden
-      let visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      let visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, false, 'Should start hidden');
       
       // Show
-      await vscode.commands.executeCommand('graph-it-live.showReverseDependencies');
+      await vscode.commands.executeCommand('skein.showReverseDependencies');
       await sleep(1000);
-      visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, true, 'Should be visible after show');
       
       // Hide
-      await vscode.commands.executeCommand('graph-it-live.hideReverseDependencies');
+      await vscode.commands.executeCommand('skein.hideReverseDependencies');
       await sleep(1000);
-      visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, false, 'Should be hidden after hide');
       
       // Show again
-      await vscode.commands.executeCommand('graph-it-live.showReverseDependencies');
+      await vscode.commands.executeCommand('skein.showReverseDependencies');
       await sleep(1000);
-      visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, true, 'Should be visible after second show');
       
       assert.ok(true, 'Toggle behavior works correctly');
@@ -236,17 +236,17 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
       await waitForViewMode('file');
       
       // Should work in file mode
-      await vscode.commands.executeCommand('graph-it-live.showReverseDependencies');
+      await vscode.commands.executeCommand('skein.showReverseDependencies');
       await sleep(1000);
-      let visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      let visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, true, 'Should work in file mode');
       
       // Switch to list mode
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       
       // Context key should not change when switching modes
-      const visibleAfterModeSwitch = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      const visibleAfterModeSwitch = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       // Note: The command visibility is controlled by when clause, 
       // but the context key persists across mode changes
       assert.strictEqual(visibleAfterModeSwitch, true, 'Context key persists across mode changes');
@@ -267,22 +267,22 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
       await waitForViewMode('file');
       
       // Show reverse dependencies
-      await vscode.commands.executeCommand('graph-it-live.showReverseDependencies');
+      await vscode.commands.executeCommand('skein.showReverseDependencies');
       await sleep(1000);
-      let visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      let visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, true, 'Should be visible in file mode');
       
       // Switch to list mode and back
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       await sleep(500);
       
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
       await sleep(500);
       
       // State should persist
-      visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, true, 'State should persist when returning to file mode');
       
       assert.ok(true, 'State persistence works correctly');
@@ -304,10 +304,10 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       await waitForViewMode('file');
       
-      await vscode.commands.executeCommand('graph-it-live.showReverseDependencies');
+      await vscode.commands.executeCommand('skein.showReverseDependencies');
       await sleep(1000);
       
-      let visible = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      let visible = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visible, true, 'Should work with first file');
       
       // Test with second file
@@ -316,7 +316,7 @@ suite('Reverse Dependencies Toggle Test Suite', () => {
       await sleep(500);
       
       // State should still be visible (persists across file changes)
-      const visibleAfterFileChange = await getContextKey<boolean>('graph-it-live.reverseDependenciesVisible');
+      const visibleAfterFileChange = await getContextKey<boolean>('skein.reverseDependenciesVisible');
       assert.strictEqual(visibleAfterFileChange, true, 'State persists across file changes');
       
       assert.ok(true, 'Works with different project files');

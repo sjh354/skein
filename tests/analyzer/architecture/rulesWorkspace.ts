@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 /** The example of "Architecture rules" in the docs: what the generated workspace is checked against. */
 export const RULES_CONFIG = {
-  $schema: "https://raw.githubusercontent.com/sjh354/Graph-It-Live/main/schemas/architecture.schema.json",
+  $schema: "https://raw.githubusercontent.com/sjh354/skein/main/schemas/architecture.schema.json",
   elements: {
     functions: { path: "functions/*", each: true },
     frontend: { path: "frontend/" },
@@ -58,8 +58,8 @@ const FILES: Record<string, string> = {
 
 /** Writes the workspace (and the config, unless `withConfig` is false) into a new temporary folder. */
 export function createRulesWorkspace(withConfig = true): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "graphit-rules-"));
-  const files = withConfig ? { ...FILES, "graphit.architecture.json": JSON.stringify(RULES_CONFIG, null, 2) } : FILES;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skein-rules-"));
+  const files = withConfig ? { ...FILES, "skein.architecture.json": JSON.stringify(RULES_CONFIG, null, 2) } : FILES;
   for (const [file, content] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.writeFileSync(path.join(root, file), content);

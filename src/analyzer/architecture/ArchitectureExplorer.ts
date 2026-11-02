@@ -29,8 +29,8 @@ const PROVENANCE = {
 };
 
 const NEXT_STEPS =
-  "For the symbols and lines behind a file pair, call graphitlive_find_referencing_files on the target, " +
-  "then graphitlive_query_call_graph or graphitlive_get_impact_analysis on the symbols involved.";
+  "For the symbols and lines behind a file pair, call skein_find_referencing_files on the target, " +
+  "then skein_query_call_graph or skein_get_impact_analysis on the symbols involved.";
 
 /** Group id, folder key or label; `0` and `"unassigned"` name the unassigned files. */
 export type GroupRef = number | string;
@@ -203,7 +203,7 @@ export function exploreArchitecture(
 const UNIT_PROVENANCE = {
   ...PROVENANCE,
   grouping: "Units are package folders (package.json), else top-level folders; layer = rank in the unit graph after collapsing cycles, 0 = depends on no other unit.",
-  interpretation: "Roles only: each is inferred from the unit's manifest and files (confidence inferred, with its evidence) unless graphit.architecture.json declares it (confidence declared). Names are package names or folders.",
+  interpretation: "Roles only: each is inferred from the unit's manifest and files (confidence inferred, with its evidence) unless skein.architecture.json declares it (confidence declared). Names are package names or folders.",
 };
 
 /** The units, heaviest unit edges first, paged like the summary; counts come from every file pair. */

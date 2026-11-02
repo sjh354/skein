@@ -139,7 +139,7 @@ jobs:
           npm run package:vsix
           npm run package:verify
           echo "Verifying WASM files are present in VSIX"
-          vsce ls graph-it-live-*.vsix | grep "\.wasm$"
+          vsce ls skein-*.vsix | grep "\.wasm$"
 
   package:
     name: Package Extension
@@ -173,34 +173,34 @@ jobs:
 
       - name: Assert single VSIX
         run: |
-          count=$(ls graph-it-live-*.vsix 2>/dev/null | wc -l)
-          [ "$count" -eq 1 ] || { echo "❌ Expected exactly 1 VSIX, found $count:"; ls graph-it-live-*.vsix; exit 1; }
+          count=$(ls skein-*.vsix 2>/dev/null | wc -l)
+          [ "$count" -eq 1 ] || { echo "❌ Expected exactly 1 VSIX, found $count:"; ls skein-*.vsix; exit 1; }
 
       - name: Verify VSIX Content
         run: |
           echo "Checking VSIX content structure:"
-          vsce ls --tree graph-it-live-*.vsix
+          vsce ls --tree skein-*.vsix
 
       - name: Verify no source maps in VSIX
         run: |
-          if vsce ls graph-it-live-*.vsix | grep -q "\.map$"; then
+          if vsce ls skein-*.vsix | grep -q "\.map$"; then
             echo "❌ ERROR: .map files found in package!"
-            vsce ls graph-it-live-*.vsix | grep "\.map$"
+            vsce ls skein-*.vsix | grep "\.map$"
             exit 1
           fi
           echo "✅ No .map files in package"
 
       - name: Verify WASM files in VSIX
         run: |
-          WASM_COUNT=$(vsce ls graph-it-live-*.vsix | grep -c "\.wasm$")
+          WASM_COUNT=$(vsce ls skein-*.vsix | grep -c "\.wasm$")
           if [ "$WASM_COUNT" -lt 8 ]; then
             echo "❌ ERROR: Expected at least 8 WASM files, found $WASM_COUNT"
-            vsce ls graph-it-live-*.vsix | grep "\.wasm$" || true
+            vsce ls skein-*.vsix | grep "\.wasm$" || true
             exit 1
           fi
           echo "✅ WASM files detected: $WASM_COUNT"
 
       - name: Report VSIX package size
         run: |
-          SIZE=$(ls -lh graph-it-live-*.vsix | awk '{print $5}')
+          SIZE=$(ls -lh skein-*.vsix | awk '{print $5}')
           echo "VSIX package size: $SIZE"

@@ -82,7 +82,7 @@ export class ProviderStateManager {
   }
 
   loadConfiguration(): ProviderConfigSnapshot {
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const profile = config.get<PerformanceProfile>('performanceProfile', 'default');
     const profileValues = PROFILE_DEFAULTS[profile as keyof typeof PROFILE_DEFAULTS] ?? PROFILE_DEFAULTS.default;
     // Only the custom profile reads the advanced override settings

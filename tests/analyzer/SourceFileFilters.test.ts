@@ -43,8 +43,8 @@ describe('SourceFileFilters', () => {
       });
     });
 
-    it('honors .gitignore and lets .graphitignore re-include default paths', async () => {
-      await withRoot({ '.gitignore': '/wiki/\n*.gen.ts\n', '.graphitignore': '!tests/fixtures/\n' }, root => {
+    it('honors .gitignore and lets .skeinignore re-include default paths', async () => {
+      await withRoot({ '.gitignore': '/wiki/\n*.gen.ts\n', '.skeinignore': '!tests/fixtures/\n' }, root => {
         const isIgnored = createIgnoreMatcher(root);
         expect(isIgnored('wiki', true)).toBe(true);
         expect(isIgnored(path.join('src', 'wiki', 'a.ts'), false)).toBe(false);

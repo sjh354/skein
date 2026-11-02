@@ -1,5 +1,5 @@
 /**
- * Declared architecture rules: `graphit.architecture.json` names elements (files selected by
+ * Declared architecture rules: `skein.architecture.json` names elements (files selected by
  * path patterns or units) and rules on the imports between them. Shared by
  * `graph-it check-architecture`, the check_architecture MCP tool and the extension's view.
  * Rules are human annotation: the check only compares static import pairs with them (#300).
@@ -27,8 +27,8 @@ import { matchesWildcard, type DeclaredRoles } from "./unitRoles";
 
 export { matchesWildcard } from "./unitRoles";
 
-export const ARCHITECTURE_CONFIG_FILE = "graphit.architecture.json";
-export const ARCHITECTURE_BASELINE_FILE = "graphit.architecture.baseline.json";
+export const ARCHITECTURE_CONFIG_FILE = "skein.architecture.json";
+export const ARCHITECTURE_BASELINE_FILE = "skein.architecture.baseline.json";
 /** Files larger than these are refused before they are read. */
 export const MAX_CONFIG_BYTES = 256 * 1024;
 export const MAX_BASELINE_BYTES = 32 * 1024 * 1024;
@@ -50,7 +50,7 @@ const oneOrMany = <T extends z.ZodType>(item: T) => z.union([item, z.array(item)
 const ElementSchema = z
   .strictObject({
     path: oneOrMany(PatternSchema).optional()
-      .describe("Workspace-relative gitignore-style patterns, as in .graphitignore (e.g. 'frontend/', 'mfe/*')"),
+      .describe("Workspace-relative gitignore-style patterns, as in .skeinignore (e.g. 'frontend/', 'mfe/*')"),
     unit: oneOrMany(UnitPatternSchema).optional()
       .describe("Unit keys or package names (graph-it architecture --level units); * matches any characters"),
     role: oneOrMany(z.enum(UNIT_ROLES)).optional()
@@ -515,7 +515,7 @@ export async function checkWorkspaceArchitecture(
 }
 
 /**
- * The unit roles graphit.architecture.json declares, none without the file: what
+ * The unit roles skein.architecture.json declares, none without the file: what
  * `graph-it architecture --level units`, explore_architecture and the view apply.
  */
 export async function loadDeclaredRoles(workspaceRoot: string): Promise<DeclaredRoles | undefined> {

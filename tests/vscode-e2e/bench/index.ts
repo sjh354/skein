@@ -34,7 +34,7 @@ async function waitForIndex(started: number): Promise<number> {
 /** Resolves once the architecture view has rendered a build after `afterBuilds`. */
 async function waitForArchitecture(afterBuilds: number): Promise<void> {
   const started = performance.now();
-  const read = (key: string) => getContextKey<number>(`graph-it-live.architecture${key}`);
+  const read = (key: string) => getContextKey<number>(`skein.architecture${key}`);
   while (performance.now() - started < TIMEOUT_MS) {
     // A render of the new build: the view renders once the build's summary arrives.
     if (((await read('BuildCount')) ?? 0) > afterBuilds && ((await read('RenderCount')) ?? 0) > afterBuilds) return;
@@ -47,9 +47,9 @@ interface MatrixPaint { unit?: string; rows: number; digest: string; paintMs: nu
 
 /** Sends the architecture controls, then waits for a matrix paint that satisfies `predicate`. */
 async function matrixPaint(controls: object, predicate: (paint: MatrixPaint) => boolean): Promise<MatrixPaint> {
-  const read = <T>(key: string) => getContextKey<T>(`graph-it-live.architectureMatrix${key}`);
+  const read = <T>(key: string) => getContextKey<T>(`skein.architectureMatrix${key}`);
   const before = (await read<number>('Count')) ?? 0;
-  await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', controls);
+  await vscode.commands.executeCommand('skein.e2eArchitectureControls', controls);
   const started = performance.now();
   while (performance.now() - started < TIMEOUT_MS) {
     const paint = await read<MatrixPaint>('');
@@ -64,9 +64,9 @@ async function matrixPaint(controls: object, predicate: (paint: MatrixPaint) => 
  * paint from the toggle, then a scroll to its last cell. Wall time, polling included.
  */
 async function measureMatrix(unit: string): Promise<{ firstPaint: Sample; scroll: Sample; rows: number }> {
-  const read = (key: string) => getContextKey<number>(`graph-it-live.architecture${key}`);
+  const read = (key: string) => getContextKey<number>(`skein.architecture${key}`);
   const renders = (await read('RenderCount')) ?? 0;
-  await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { unit });
+  await vscode.commands.executeCommand('skein.e2eArchitectureControls', { unit });
   while (((await read('RenderCount')) ?? 0) <= renders) await sleep(POLL_MS); // NOSONAR S9382: polling
   let started = performance.now();
   const shown = await matrixPaint({ view: 'matrix' }, (paint) => paint.unit === unit && paint.cause === 'matrix');
@@ -98,19 +98,19 @@ async function measureFirstCallGraph(root: vscode.Uri, file: string): Promise<Sa
 export async function run(): Promise<void> {
   const { BENCH_VSCODE_FILE: file, BENCH_VSCODE_OUT: out } = process.env;
   const folder = vscode.workspace.workspaceFolders?.[0];
-  const extension = vscode.extensions.getExtension('sjh354.structure-graph');
+  const extension = vscode.extensions.getExtension('sjh354.skein');
   if (!file || !out || !folder || !extension) {
-    throw new Error('Needs BENCH_VSCODE_FILE, BENCH_VSCODE_OUT, an open folder and the Graph-It-Live extension');
+    throw new Error('Needs BENCH_VSCODE_FILE, BENCH_VSCODE_OUT, an open folder and the Skein extension');
   }
 
   // onStartupFinished fires after the test runner starts; if it ever wins the race, fail rather than report 0 ms.
-  if (extension.isActive) throw new Error('Graph-It-Live activated before the benchmark could time it');
+  if (extension.isActive) throw new Error('Skein activated before the benchmark could time it');
   const started = performance.now();
   await extension.activate();
   const activation: Sample = { wallMs: performance.now() - started, rssMB: currentRssMB() };
   // Background indexing starts when the view resolves. Index first: the status is polled
   // through vscode.lm, a round trip to the renderer that a rendering call graph would hold up.
-  await vscode.commands.executeCommand('graph-it-live.graphView.focus');
+  await vscode.commands.executeCommand('skein.graphView.focus');
   await sleep(800); // resolveWebviewView + React mount, as in openCallGraphFor
   // Opened while the background index is being built, as on a first start (#383).
   // Extension-host responsiveness (#343), 10 ms resolution: event-loop delay from opening the view
@@ -118,22 +118,22 @@ export async function run(): Promise<void> {
   const loop = monitorEventLoopDelay({ resolution: 10 });
   loop.enable();
   const architectureStarted = performance.now();
-  await vscode.commands.executeCommand('graph-it-live.setViewModeArchitecture');
+  await vscode.commands.executeCommand('skein.setViewModeArchitecture');
   const indexReady: Sample = { wallMs: await waitForIndex(started), rssMB: currentRssMB() };
   await waitForArchitecture(0);
   const architectureDuringIndex: Sample = { wallMs: performance.now() - architectureStarted, rssMB: peakRssMB() };
   const duringIndexLoop = takeLoopDelay(loop);
   // Built again with the index ready: what reopening the view costs.
   const rebuildStarted = performance.now();
-  await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+  await vscode.commands.executeCommand('skein.refreshGraph');
   await waitForArchitecture(1);
   const architectureIndexed: Sample = { wallMs: performance.now() - rebuildStarted, rssMB: peakRssMB() };
   const indexedLoop = takeLoopDelay(loop);
   loop.disable();
   const matrixUnit = process.env.BENCH_VSCODE_MATRIX_UNIT;
   const matrix = matrixUnit ? await measureMatrix(matrixUnit) : undefined;
-  await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { view: 'graph', unit: '' });
-  await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+  await vscode.commands.executeCommand('skein.e2eArchitectureControls', { view: 'graph', unit: '' });
+  await vscode.commands.executeCommand('skein.setViewModeFile');
   const firstCallGraph = await measureFirstCallGraph(folder.uri, file);
   // The peak RSS of the whole session: extension host and its worker threads.
   firstCallGraph.rssMB = peakRssMB();

@@ -238,7 +238,7 @@ describe('graph_context MCP contract', () => {
     const formatted = formatToolResponse(
       createSuccessResponse(result, 1, workspaceRoot),
       'toon',
-      'graphitlive_graph_context',
+      'skein_graph_context',
     );
 
     expect(result.seeds[0]).toBe('file:src/services/UserService.ts');
@@ -352,7 +352,7 @@ describe('graph_context MCP contract', () => {
       tokenBudget: 4_000,
     });
     const response = createSuccessResponse(result, 1, workspaceRoot);
-    const formatted = formatToolResponse(response, 'toon', 'graphitlive_graph_context');
+    const formatted = formatToolResponse(response, 'toon', 'skein_graph_context');
 
     expect(formatted.content[0].text).toMatch(/^graph_context\(/);
     expect(formatted.content[0].text).toContain('\nnodes(');
@@ -372,7 +372,7 @@ describe('graph_context MCP contract', () => {
     const formatted = formatToolResponse(
       createErrorResponse<GraphContextResponse>('Invalid graph request', 1, workspaceRoot),
       'toon',
-      'graphitlive_graph_context',
+      'skein_graph_context',
     );
 
     expect(formatted.content[0].text).toContain('errors(message)');
@@ -388,7 +388,7 @@ describe('graph_context MCP contract', () => {
     const formatted = formatToolResponse(
       createSuccessResponse(result, 1, workspaceRoot),
       'json',
-      'graphitlive_graph_context',
+      'skein_graph_context',
       'compact',
     );
     const compact = formatted.structuredContent.data as GraphContextResponse;
@@ -408,7 +408,7 @@ describe('graph_context MCP contract', () => {
     const formatted = formatToolResponse(
       createSuccessResponse(result, 1, workspaceRoot),
       'json',
-      'graphitlive_graph_context',
+      'skein_graph_context',
     );
     const parsed = JSON.parse(formatted.content[0].text) as {
       success: boolean;
@@ -481,7 +481,7 @@ describe('graph_context exact identifier ranking', () => {
     const formatted = formatToolResponse(
       createSuccessResponse(result, 1, workspaceRoot),
       'json',
-      'graphitlive_graph_context',
+      'skein_graph_context',
       'compact',
     );
     const { data } = JSON.parse(formatted.content[0].text) as { data: GraphContextResponse };

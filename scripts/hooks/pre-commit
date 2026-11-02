@@ -1,5 +1,5 @@
 #!/bin/bash
-# Pre-commit hook for Graph-It-Live
+# Pre-commit hook for Skein
 # Validates layer isolation before allowing commits
 
 set -e

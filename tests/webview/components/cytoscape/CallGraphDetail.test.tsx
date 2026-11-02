@@ -50,7 +50,7 @@ const renderPanel = (overrides: Partial<React.ComponentProps<typeof CallGraphDet
     nodes: [alpha, beta],
     edges: [call],
     rootSymbolId: alpha.id,
-    projectName: "graph-it-live",
+    projectName: "skein",
     generatedAt: 1_700_000_000_000,
     onOpenFile: vi.fn(),
     onFocusNode: vi.fn(),
@@ -105,7 +105,7 @@ describe("CallGraphDetail", () => {
     fireEvent.click(screen.getByText("Copy reference"));
 
     const text = (props.onCopy as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(text).toContain("project: graph-it-live");
+    expect(text).toContain("project: skein");
     expect(text).toContain(`node: ${beta.id}`);
     expect(text).toContain("symbol: beta (function, typescript) exported");
     expect(text).toContain(`path: ${beta.path}`);

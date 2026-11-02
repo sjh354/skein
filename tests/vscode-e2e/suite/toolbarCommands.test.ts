@@ -15,7 +15,7 @@ suite('Toolbar Commands Test Suite', () => {
     vscode.window.showInformationMessage('Starting toolbar commands tests');
     
     // Ensure extension is activated
-    const ext = vscode.extensions.getExtension('sjh354.structure-graph');
+    const ext = vscode.extensions.getExtension('sjh354.skein');
     if (ext && !ext.isActive) {
       await ext.activate();
     }
@@ -31,7 +31,7 @@ suite('Toolbar Commands Test Suite', () => {
   beforeEach(async function() {
     this.timeout(10000);
     try {
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await sleep(300);
     } catch {
       // Best-effort reset; individual tests assert the required state.
@@ -45,7 +45,7 @@ suite('Toolbar Commands Test Suite', () => {
   test('Should register setViewModeFile command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.setViewModeFile'),
+      commands.includes('skein.setViewModeFile'),
       'Should have setViewModeFile command'
     );
   });
@@ -53,7 +53,7 @@ suite('Toolbar Commands Test Suite', () => {
   test('Should register setViewModeList command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.setViewModeList'),
+      commands.includes('skein.setViewModeList'),
       'Should have setViewModeList command'
     );
   });
@@ -61,7 +61,7 @@ suite('Toolbar Commands Test Suite', () => {
   test('Should register setViewModeSymbol command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.setViewModeSymbol'),
+      commands.includes('skein.setViewModeSymbol'),
       'Should have setViewModeSymbol command'
     );
   });
@@ -69,7 +69,7 @@ suite('Toolbar Commands Test Suite', () => {
   test('Should register setWorkspace command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.setWorkspace'),
+      commands.includes('skein.setWorkspace'),
       'Should have setWorkspace command'
     );
   });
@@ -78,7 +78,7 @@ suite('Toolbar Commands Test Suite', () => {
   // Context Key Tests
   // ============================================================================
 
-  test('Context key graph-it-live.viewMode should be initialized', async function() {
+  test('Context key skein.viewMode should be initialized', async function() {
     this.timeout(10000);
     
     // Open graph view with an explicit file to avoid state leakage
@@ -102,11 +102,11 @@ suite('Toolbar Commands Test Suite', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Switch to list view first
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       
       // Now set to file view
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
       
       assert.ok(true, 'Successfully set to file view');
@@ -124,7 +124,7 @@ suite('Toolbar Commands Test Suite', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Set to list view
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       
       assert.ok(true, 'Successfully set to list view');
@@ -142,7 +142,7 @@ suite('Toolbar Commands Test Suite', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Set to symbol view
-      await vscode.commands.executeCommand('graph-it-live.setViewModeSymbol');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await waitForViewMode('symbol');
       
       assert.ok(true, 'Successfully set to symbol view');
@@ -160,15 +160,15 @@ suite('Toolbar Commands Test Suite', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Test file mode
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
       
       // Test list mode
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       
       // Test symbol mode
-      await vscode.commands.executeCommand('graph-it-live.setViewModeSymbol');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await waitForViewMode('symbol');
       
       assert.ok(true, 'Context key updated correctly for all modes');
@@ -190,15 +190,15 @@ suite('Toolbar Commands Test Suite', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Switch to list view
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       
       // Execute setViewModeFile
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
       
       // Verify we're back (refresh should work in file view)
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
       await new Promise(resolve => setTimeout(resolve, 500));
       
       assert.ok(true, 'Successfully returned to file view');
@@ -216,7 +216,7 @@ suite('Toolbar Commands Test Suite', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Execute setViewModeFile (should do nothing)
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
       
       assert.ok(true, 'setViewModeFile in file view handled gracefully');
@@ -239,12 +239,12 @@ suite('Toolbar Commands Test Suite', () => {
       console.log('Step 1 - File view opened');
       
       // Step 2: Toggle to list view
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       console.log('Step 2 - List view activated');
       
       // Step 3: Back to file view
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
       console.log('Step 3 - Back to file view');
       

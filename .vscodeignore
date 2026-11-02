@@ -63,7 +63,7 @@ dist/*.meta.json
 .eslintignore
 .eslintrc.json
 eslint.config.mjs
-graphit.architecture.json
+skein.architecture.json
 esbuild.js
 tsconfig.json
 tsconfig.webview.json

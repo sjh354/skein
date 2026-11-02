@@ -186,7 +186,7 @@ describe("GraphProvider", () => {
     expect(Spider).toHaveBeenCalled();
     // Source files, the architecture rule files the Architecture view reads, and the resolver configs (#419).
     expect(vscode.workspace.createFileSystemWatcher).toHaveBeenCalledTimes(3);
-    expect(vscode.workspace.createFileSystemWatcher).toHaveBeenCalledWith("**/graphit.architecture{,.baseline}.json");
+    expect(vscode.workspace.createFileSystemWatcher).toHaveBeenCalledWith("**/skein.architecture{,.baseline}.json");
     expect(vscode.workspace.createFileSystemWatcher).toHaveBeenCalledWith("**/*.json");
   });
 
@@ -351,7 +351,7 @@ describe("GraphProvider", () => {
     // Verify context key was updated
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       "setContext",
-      "graph-it-live.viewMode",
+      "skein.viewMode",
       "file",
     );
 
@@ -401,7 +401,7 @@ describe("GraphProvider", () => {
     // Verify context key was updated
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       "setContext",
-      "graph-it-live.viewMode",
+      "skein.viewMode",
       "list",
     );
   });
@@ -442,7 +442,7 @@ describe("GraphProvider", () => {
     // Verify context key was updated
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       "setContext",
-      "graph-it-live.viewMode",
+      "skein.viewMode",
       "symbol",
     );
   });
@@ -490,7 +490,7 @@ describe("GraphProvider", () => {
     // Verify context key was set to true
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       "setContext",
-      "graph-it-live.reverseDependenciesVisible",
+      "skein.reverseDependenciesVisible",
       true,
     );
   });
@@ -521,7 +521,7 @@ describe("GraphProvider", () => {
     // Verify context key was set to false
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       "setContext",
-      "graph-it-live.reverseDependenciesVisible",
+      "skein.reverseDependenciesVisible",
       false,
     );
   });
@@ -736,7 +736,7 @@ describe("GraphProvider", () => {
 
     await provider.setViewModeArchitecture();
     expect(provider.getViewMode()).toBe("architecture");
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("setContext", "graph-it-live.viewMode", "architecture");
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("setContext", "skein.viewMode", "architecture");
     expect(webview.postMessage).toHaveBeenLastCalledWith({ command: "switchViewMode", mode: "architecture" });
 
     // Active-file updates keep the workspace-wide view instead of posting a file graph.

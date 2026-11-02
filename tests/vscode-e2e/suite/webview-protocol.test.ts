@@ -14,7 +14,7 @@ suite('Webview Protocol - Context Value Side Effects', () => {
     this.timeout(30000);
     
     // Ensure extension is activated
-    const ext = vscode.extensions.getExtension('sjh354.structure-graph');
+    const ext = vscode.extensions.getExtension('sjh354.skein');
     assert.ok(ext, 'Extension should exist');
     await ext.activate();
     assert.strictEqual(ext.isActive, true, 'Extension should be active');
@@ -29,7 +29,7 @@ suite('Webview Protocol - Context Value Side Effects', () => {
   teardown(async function() {
     // Reset view mode to file after each test to prevent state bleeding
     try {
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await sleep(500);
     } catch {
       // Ignore errors if command fails
@@ -45,7 +45,7 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
-      const viewMode = await getContextKey<string>('graph-it-live.viewMode');
+      const viewMode = await getContextKey<string>('skein.viewMode');
       assert.strictEqual(viewMode, 'file', 'View mode should be "file" initially');
     });
 
@@ -55,10 +55,10 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Switch to list view
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       
-      const viewMode = await getContextKey<string>('graph-it-live.viewMode');
+      const viewMode = await getContextKey<string>('skein.viewMode');
       assert.strictEqual(viewMode, 'list', 'View mode should be "list"');
     });
 
@@ -68,10 +68,10 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Switch to symbol view
-      await vscode.commands.executeCommand('graph-it-live.setViewModeSymbol');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await waitForViewMode('symbol');
       
-      const viewMode = await getContextKey<string>('graph-it-live.viewMode');
+      const viewMode = await getContextKey<string>('skein.viewMode');
       assert.strictEqual(viewMode, 'symbol', 'View mode should be "symbol"');
     });
 
@@ -81,41 +81,41 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Switch to list
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
-      assert.strictEqual(await getContextKey('graph-it-live.viewMode'), 'list');
+      assert.strictEqual(await getContextKey('skein.viewMode'), 'list');
       
       // Switch to symbol
-      await vscode.commands.executeCommand('graph-it-live.setViewModeSymbol');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await waitForViewMode('symbol');
-      assert.strictEqual(await getContextKey('graph-it-live.viewMode'), 'symbol');
+      assert.strictEqual(await getContextKey('skein.viewMode'), 'symbol');
       
       // Switch back to file
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
-      assert.strictEqual(await getContextKey('graph-it-live.viewMode'), 'file');
+      assert.strictEqual(await getContextKey('skein.viewMode'), 'file');
     });
 
     test('Should round-trip architectureMounted / architectureSummary / architectureRendered', async function() {
       this.timeout(120000);
 
       await openGraphFor('sample-project', 'src', 'utils.ts');
-      const before = (await getContextKey<number>('graph-it-live.architectureRenderCount')) ?? 0;
+      const before = (await getContextKey<number>('skein.architectureRenderCount')) ?? 0;
 
       // The webview mounts the view and posts architectureMounted; the extension answers with
       // architectureState / architectureSummary; the webview reports architectureRendered.
-      await vscode.commands.executeCommand('graph-it-live.setViewModeArchitecture');
+      await vscode.commands.executeCommand('skein.setViewModeArchitecture');
       await waitForViewMode('architecture');
       const start = Date.now();
-      while (((await getContextKey<number>('graph-it-live.architectureRenderCount')) ?? 0) <= before) {
+      while (((await getContextKey<number>('skein.architectureRenderCount')) ?? 0) <= before) {
         assert.ok(Date.now() - start < 90000, 'Timed out waiting for architectureRendered');
         await sleep(250);
       }
-      assert.match((await getContextKey<string>('graph-it-live.architectureRevision')) ?? '', /^[0-9a-f]{64}$/);
-      assert.ok(((await getContextKey<number>('graph-it-live.architectureGroupCount')) ?? 0) > 0);
+      assert.match((await getContextKey<string>('skein.architectureRevision')) ?? '', /^[0-9a-f]{64}$/);
+      assert.ok(((await getContextKey<number>('skein.architectureGroupCount')) ?? 0) > 0);
 
       // toggleViewMode (File <-> Symbol) never cycles through Architecture: it leaves it for file.
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await waitForViewMode('file');
     });
   });
@@ -130,15 +130,15 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Enable filter
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await sleep(1000);
       
       // Refresh graph
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
       await sleep(2000);
       
       // Should still be able to toggle filter
-      await vscode.commands.executeCommand('graph-it-live.disableUnusedFilter');
+      await vscode.commands.executeCommand('skein.disableUnusedFilter');
       await sleep(500);
       
       assert.ok(true, 'Filter commands work after refresh');
@@ -150,15 +150,15 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Switch to list mode
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       
       // Refresh graph
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
       await sleep(2000);
       
       // Should still be in list mode
-      const viewMode = await getContextKey<string>('graph-it-live.viewMode');
+      const viewMode = await getContextKey<string>('skein.viewMode');
       assert.strictEqual(viewMode, 'list', 'View mode should persist after refresh');
     });
   });
@@ -173,14 +173,14 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Rapid switches
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
-      await vscode.commands.executeCommand('graph-it-live.setViewModeSymbol');
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       
       // Wait for final state
       await waitForViewMode('file');
       
-      const viewMode = await getContextKey<string>('graph-it-live.viewMode');
+      const viewMode = await getContextKey<string>('skein.viewMode');
       assert.strictEqual(viewMode, 'file', 'Final view mode should be "file"');
     });
 
@@ -190,13 +190,13 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Rapid toggles - should all execute without error
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await sleep(100);
-      await vscode.commands.executeCommand('graph-it-live.disableUnusedFilter');
+      await vscode.commands.executeCommand('skein.disableUnusedFilter');
       await sleep(100);
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await sleep(100);
-      await vscode.commands.executeCommand('graph-it-live.disableUnusedFilter');
+      await vscode.commands.executeCommand('skein.disableUnusedFilter');
       await sleep(1000);
       
       assert.ok(true, 'Rapid filter toggles executed successfully');
@@ -208,17 +208,17 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Combined operations - should all execute without error
-      await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await sleep(100);
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await sleep(100);
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await sleep(100);
-      await vscode.commands.executeCommand('graph-it-live.disableUnusedFilter');
+      await vscode.commands.executeCommand('skein.disableUnusedFilter');
       await sleep(1000);
       
       // Final view mode should be file
-      const finalMode = await getContextKey<string>('graph-it-live.viewMode');
+      const finalMode = await getContextKey<string>('skein.viewMode');
       assert.strictEqual(finalMode, 'file', 'Final view mode should be "file"');
     });
   });
@@ -234,13 +234,13 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       
       // Try to execute non-existent mode (should not crash)
       try {
-        await vscode.commands.executeCommand('graph-it-live.setViewModeInvalid');
+        await vscode.commands.executeCommand('skein.setViewModeInvalid');
       } catch {
         // Command doesn't exist, expected
       }
       
       // Context should still be valid
-      const viewMode = await getContextKey<string>('graph-it-live.viewMode');
+      const viewMode = await getContextKey<string>('skein.viewMode');
       assert.ok(['file', 'list', 'symbol'].includes(viewMode || ''), 'View mode should be valid');
     });
 
@@ -249,14 +249,14 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       
       // Try to switch view mode before opening graph (should not crash)
       try {
-        await vscode.commands.executeCommand('graph-it-live.setViewModeList');
+        await vscode.commands.executeCommand('skein.setViewModeList');
         await sleep(500);
       } catch {
         // May fail, that's okay
       }
       
       // Extension should still be functional
-      const ext = vscode.extensions.getExtension('sjh354.structure-graph');
+      const ext = vscode.extensions.getExtension('sjh354.skein');
       assert.ok(ext, 'Extension should still exist');
       assert.strictEqual(ext.isActive, true, 'Extension should still be active');
     });
@@ -272,9 +272,9 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       await openGraphFor('sample-project', 'src', 'utils.ts');
       
       // Should execute without error
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await sleep(500);
-      await vscode.commands.executeCommand('graph-it-live.disableUnusedFilter');
+      await vscode.commands.executeCommand('skein.disableUnusedFilter');
       await sleep(500);
       
       assert.ok(true, 'Filter commands execute successfully for TypeScript');
@@ -296,13 +296,13 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       const doc = await vscode.workspace.openTextDocument(jsFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await waitForViewMode('file');
       
       // Should execute without error
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await sleep(500);
-      await vscode.commands.executeCommand('graph-it-live.disableUnusedFilter');
+      await vscode.commands.executeCommand('skein.disableUnusedFilter');
       await sleep(500);
       
       assert.ok(true, 'Filter commands execute successfully for JavaScript');
@@ -323,10 +323,10 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       const doc = await vscode.workspace.openTextDocument(pyFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await waitForViewMode('file');
       
-      const viewMode = await getContextKey<string>('graph-it-live.viewMode');
+      const viewMode = await getContextKey<string>('skein.viewMode');
       assert.strictEqual(viewMode, 'file', 'View mode context should work for Python');
     });
   });

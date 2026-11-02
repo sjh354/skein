@@ -57,7 +57,7 @@ describe("TOON response encoding (crawl_dependency_graph payloads)", () => {
   for (const nodeCount of [100, 1_000, 5_000]) {
     const payload = buildCrawlResult(nodeCount);
     bench(`formatDataAsToon - ${nodeCount} nodes / ${payload.edgeCount} edges`, () => {
-      formatDataAsToon(payload, "data", "graphitlive_crawl_dependency_graph");
+      formatDataAsToon(payload, "data", "skein_crawl_dependency_graph");
     }, BENCH_OPTIONS);
   }
 });

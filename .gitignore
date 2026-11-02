@@ -184,8 +184,8 @@ docs/AGENT_*
 
 mcp.json
 !plugins/
-!plugins/graph-it-live/
-!plugins/graph-it-live/mcp.json
+!plugins/skein/
+!plugins/skein/mcp.json
 
 # Playwright files
 playwright-report/
@@ -197,7 +197,7 @@ test-results/
 .github/skills
 .github/hooks
 
-# .graph-it/ — ephemeral CLI state/cache directory (graph-it-live CLI)
+# .graph-it/ — ephemeral CLI state/cache directory (skein CLI)
 .graph-it/
 
 # Benchmark temporary files

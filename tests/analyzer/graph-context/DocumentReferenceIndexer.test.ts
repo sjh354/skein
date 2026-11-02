@@ -167,13 +167,13 @@ describe('DocumentReferenceIndexer', () => {
     }));
   });
 
-  it('skips documents excluded by .gitignore, .graphitignore and the default fixture rule', async () => {
+  it('skips documents excluded by .gitignore, .skeinignore and the default fixture rule', async () => {
     const root = await fixture(workspaces);
     for (const directory of ['docs', 'wiki', 'notes', path.join('tests', 'fixtures')]) {
       await mkdir(path.join(root, directory), { recursive: true });
     }
     await writeFile(path.join(root, '.gitignore'), '/wiki/\n');
-    await writeFile(path.join(root, '.graphitignore'), 'notes/\n');
+    await writeFile(path.join(root, '.skeinignore'), 'notes/\n');
     await writeFile(path.join(root, 'src.ts'), 'export const value = 1;\n');
     for (const document of ['docs/kept.md', 'wiki/index.md', 'notes/draft.md', 'tests/fixtures/sample.md']) {
       await writeFile(path.join(root, document), '[implementation](../src.ts)\n');

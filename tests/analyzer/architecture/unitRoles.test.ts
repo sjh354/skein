@@ -113,7 +113,7 @@ describe("unit roles on a workspace holding one unit per role", () => {
     expect(roles.misc).toEqual({
       role: "service",
       confidence: "declared",
-      evidence: [{ role: "service", detail: 'declared by roles["@acme/mi*"] in graphit.architecture.json' }],
+      evidence: [{ role: "service", detail: 'declared by roles["@acme/mi*"] in skein.architecture.json' }],
     });
     expect(roles.lib.confidence).toBe("inferred");
     // A declared role is part of the revision: the view rebuilds when it changes.

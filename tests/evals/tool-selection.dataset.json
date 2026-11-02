@@ -4,112 +4,112 @@
     {
       "id": "imports-of-a-file",
       "question": "What does src/utils.ts import?",
-      "expected": "graphitlive_analyze_dependencies"
+      "expected": "skein_analyze_dependencies"
     },
     {
       "id": "project-architecture",
       "question": "Show me the architecture of this module starting from src/index.ts — the full dependency tree.",
-      "expected": "graphitlive_crawl_dependency_graph",
+      "expected": "skein_crawl_dependency_graph",
       "acceptable": [
-        "graphitlive_graph_context"
+        "skein_graph_context"
       ]
     },
     {
       "id": "who-imports-this-file",
       "question": "What files import src/utils.ts?",
-      "expected": "graphitlive_find_referencing_files",
+      "expected": "skein_find_referencing_files",
       "acceptable": [
-        "graphitlive_graph_context"
+        "skein_graph_context"
       ]
     },
     {
       "id": "unused-import-check",
       "question": "Is main.ts actually using anything from utils.ts, or is that import dead?",
-      "expected": "graphitlive_verify_dependency_usage"
+      "expected": "skein_verify_dependency_usage"
     },
     {
       "id": "resolve-alias",
       "question": "Where does '@/components/Button' actually point to on disk, seen from src/app.ts?",
-      "expected": "graphitlive_resolve_module_path"
+      "expected": "skein_resolve_module_path"
     },
     {
       "id": "index-ready",
       "question": "Is the dependency index ready, and how many files are indexed?",
-      "expected": "graphitlive_get_index_status"
+      "expected": "skein_get_index_status"
     },
     {
       "id": "refresh-edited-files",
       "question": "I just changed src/utils.ts outside the editor. Refresh the cached analysis for that file.",
-      "expected": "graphitlive_invalidate_files"
+      "expected": "skein_invalidate_files"
     },
     {
       "id": "rebuild-after-branch-switch",
       "question": "I switched branches and the index no longer matches the tree. Rebuild the whole thing from scratch.",
-      "expected": "graphitlive_rebuild_index"
+      "expected": "skein_rebuild_index"
     },
     {
       "id": "symbol-level-graph",
       "question": "Show me which functions in UserService.ts call the database.",
-      "expected": "graphitlive_get_symbol_graph"
+      "expected": "skein_get_symbol_graph"
     },
     {
       "id": "dead-code-one-file",
       "question": "Find dead code in src/utils/helpers.ts — which exports are never imported?",
-      "expected": "graphitlive_find_unused_symbols"
+      "expected": "skein_find_unused_symbols"
     },
     {
       "id": "dead-code-workspace",
       "question": "Scan the whole project for dead code. Which exported functions are never used anywhere?",
-      "expected": "graphitlive_scan_dead_code"
+      "expected": "skein_scan_dead_code"
     },
     {
       "id": "who-calls-symbol",
       "question": "Who calls the validateEmail function?",
-      "expected": "graphitlive_query_call_graph",
+      "expected": "skein_query_call_graph",
       "acceptable": [
-        "graphitlive_get_impact_analysis"
+        "skein_get_impact_analysis"
       ]
     },
     {
       "id": "full-call-chain",
       "question": "Trace the execution of handleUserLogin from the controller — the full recursive call chain.",
-      "expected": "graphitlive_trace_function_execution",
+      "expected": "skein_trace_function_execution",
       "acceptable": [
-        "graphitlive_query_call_graph"
+        "skein_query_call_graph"
       ]
     },
     {
       "id": "breaking-changes",
       "question": "I added a required parameter to login(). Compare the old and new version of the file and tell me what breaks.",
-      "expected": "graphitlive_analyze_breaking_changes"
+      "expected": "skein_analyze_breaking_changes"
     },
     {
       "id": "blast-radius",
       "question": "What's the blast radius if I change the formatCurrency function? I want direct and transitive impact.",
-      "expected": "graphitlive_get_impact_analysis"
+      "expected": "skein_get_impact_analysis"
     },
     {
       "id": "file-overview",
       "question": "Give me a full structural overview of src/analyzer/Spider.ts: what it exports, what it depends on, and who depends on it.",
-      "expected": "graphitlive_generate_codemap"
+      "expected": "skein_generate_codemap"
     },
     {
       "id": "concept-question",
       "question": "How does the MCP server handle tool invocations?",
-      "expected": "graphitlive_query_natural_language",
+      "expected": "skein_query_natural_language",
       "acceptable": [
-        "graphitlive_graph_context"
+        "skein_graph_context"
       ]
     },
     {
       "id": "token-stats",
       "question": "How many tokens have the TOON responses saved compared to JSON in this session?",
-      "expected": "graphitlive_get_session_stats"
+      "expected": "skein_get_session_stats"
     },
     {
       "id": "set-workspace",
       "question": "Analyse the project at /Users/me/my-app. Nothing is configured yet.",
-      "expected": "graphitlive_set_workspace"
+      "expected": "skein_set_workspace"
     }
   ]
 }

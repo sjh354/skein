@@ -1,5 +1,5 @@
 #!/bin/bash
-# Post-build hook for Graph-It-Live
+# Post-build hook for Skein
 # Verifies WASM files and query files copied correctly
 
 set -e

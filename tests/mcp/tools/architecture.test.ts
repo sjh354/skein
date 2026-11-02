@@ -108,7 +108,7 @@ describe("executeExploreArchitecture", () => {
     expect(first.page).toEqual({ total: 3, offset: 0, returned: 2, truncated: true, nextOffset: 2 });
     expect(rest.pairs).toEqual([{ source: "src/api/d.ts", target: "src/db/b.ts" }]);
     expect(rest.page).toMatchObject({ total: 3, truncated: false, nextOffset: undefined });
-    expect(first.nextSteps).toContain("graphitlive_find_referencing_files");
+    expect(first.nextSteps).toContain("skein_find_referencing_files");
   });
 
   it("returns empty evidence for groups that are not linked", async () => {

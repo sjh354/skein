@@ -1,10 +1,10 @@
 {
   "servers": {
-    "graph-it-live": {
+    "skein": {
       "type": "stdio",
       "command": "node",
       "args": [
-        "${userHome}/.vscode/extensions/magic5644.graph-it-live-*/dist/mcpServer.mjs"
+        "${userHome}/.vscode/extensions/sjh354.skein-*/dist/mcpServer.mjs"
       ],
       "env": {
         "WORKSPACE_ROOT": "${workspaceFolder}",

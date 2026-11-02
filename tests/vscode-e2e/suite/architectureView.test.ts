@@ -111,13 +111,13 @@ async function expectMatrix(
   controls: Record<string, unknown>,
   predicate: (matrix: MatrixRender) => boolean,
 ): Promise<MatrixRender> {
-  const before = (await getContextKey<number>('graph-it-live.architectureMatrixCount')) ?? 0;
-  await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', controls);
+  const before = (await getContextKey<number>('skein.architectureMatrixCount')) ?? 0;
+  await vscode.commands.executeCommand('skein.e2eArchitectureControls', controls);
   const start = Date.now();
   let last: MatrixRender | undefined;
   while (Date.now() - start < 30000) {
-    last = await getContextKey<MatrixRender>('graph-it-live.architectureMatrix');
-    if (((await getContextKey<number>('graph-it-live.architectureMatrixCount')) ?? 0) > before && last && predicate(last)) return last;
+    last = await getContextKey<MatrixRender>('skein.architectureMatrix');
+    if (((await getContextKey<number>('skein.architectureMatrixCount')) ?? 0) > before && last && predicate(last)) return last;
     await sleep(250);
   }
   assert.fail(`${description}: last matrix ${JSON.stringify(last)}`);
@@ -128,19 +128,19 @@ const totalsOf = ({ rows, cells, fileEdges, upwardCells, cycles }: MatrixRender)
 /** Enters a folder of the drawn level (empty: up one level), then waits for the render of `expected`. */
 async function enterFolder(folder: string, expected: string | undefined): Promise<ArchitectureRender> {
   const before = (await readRender()).renderCount;
-  await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { folder });
+  await vscode.commands.executeCommand('skein.e2eArchitectureControls', { folder });
   return waitForRender(`the ${expected ?? 'unit'} render`, before, render => render.folder === expected);
 }
 
 /** Enters a unit (empty: back to the units), then waits for its render. */
 async function enterUnit(unit: string): Promise<ArchitectureRender> {
   const before = (await readRender()).renderCount;
-  await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { unit });
+  await vscode.commands.executeCommand('skein.e2eArchitectureControls', { unit });
   return waitForRender(`the ${unit || 'units'} render`, before, render => (render.unit ?? '') === unit);
 }
 
 async function readRender(): Promise<ArchitectureRender> {
-  const read = (key: string) => getContextKey(`graph-it-live.architecture${key}`);
+  const read = (key: string) => getContextKey(`skein.architecture${key}`);
   return {
     renderCount: (await read('RenderCount')) as number,
     groupCount: (await read('GroupCount')) as number,
@@ -192,7 +192,7 @@ interface ArchitectureInteraction {
   shownFileEdges: number;
 }
 
-const readInteractionCount = async () => (await getContextKey<number>('graph-it-live.architectureInteractionCount')) ?? 0;
+const readInteractionCount = async () => (await getContextKey<number>('skein.architectureInteractionCount')) ?? 0;
 
 /**
  * Sets the find and min-imports controls (none: the picture the render drew), then waits
@@ -204,11 +204,11 @@ async function expectInteraction(
   expected: ArchitectureInteraction,
 ): Promise<void> {
   const before = controls ? await readInteractionCount() : -1;
-  if (controls) await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', controls);
+  if (controls) await vscode.commands.executeCommand('skein.e2eArchitectureControls', controls);
   const start = Date.now();
   let last: ArchitectureInteraction | undefined;
   while (Date.now() - start < 15000) {
-    last = await getContextKey<ArchitectureInteraction>('graph-it-live.architectureInteraction');
+    last = await getContextKey<ArchitectureInteraction>('skein.architectureInteraction');
     const shown = last && Object.fromEntries(Object.keys(expected).map(key => [key, last![key as keyof ArchitectureInteraction]]));
     if ((await readInteractionCount()) > before && JSON.stringify(shown) === JSON.stringify(expected)) return;
     await sleep(250);
@@ -236,11 +236,11 @@ async function waitForInteraction(
   predicate: (interaction: ArchitectureInteraction) => boolean,
 ): Promise<ArchitectureInteraction> {
   const before = await readInteractionCount();
-  await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', controls);
+  await vscode.commands.executeCommand('skein.e2eArchitectureControls', controls);
   const start = Date.now();
   let last: ArchitectureInteraction | undefined;
   while (Date.now() - start < 15000) {
-    last = await getContextKey<ArchitectureInteraction>('graph-it-live.architectureInteraction');
+    last = await getContextKey<ArchitectureInteraction>('skein.architectureInteraction');
     if ((await readInteractionCount()) > before && last && predicate(last)) return last;
     await sleep(250);
   }
@@ -256,9 +256,9 @@ interface RenderedReport {
   headerRows?: string[];
   zoom?: number;
 }
-const readRendered = async () => (await getContextKey<RenderedReport>('graph-it-live.architectureRendered')) ?? {};
+const readRendered = async () => (await getContextKey<RenderedReport>('skein.architectureRendered')) ?? {};
 
-const readDetailCount = async () => (await getContextKey<number>('graph-it-live.architectureDetailCount')) ?? 0;
+const readDetailCount = async () => (await getContextKey<number>('skein.architectureDetailCount')) ?? 0;
 
 /** Sends the controls (none: only waits), then waits for what the expanded groups and evidence show to satisfy `predicate`. */
 async function expectDetail(
@@ -267,11 +267,11 @@ async function expectDetail(
   predicate: (detail: ArchitectureDetail) => boolean,
 ): Promise<ArchitectureDetail> {
   const before = controls ? await readDetailCount() : -1;
-  if (controls) await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', controls);
+  if (controls) await vscode.commands.executeCommand('skein.e2eArchitectureControls', controls);
   const start = Date.now();
   let last: ArchitectureDetail | undefined;
   while (Date.now() - start < 30000) {
-    last = await getContextKey<ArchitectureDetail>('graph-it-live.architectureDetail');
+    last = await getContextKey<ArchitectureDetail>('skein.architectureDetail');
     if ((await readDetailCount()) > before && last && predicate(last)) return last;
     await sleep(250);
   }
@@ -291,14 +291,14 @@ async function exploreGroup(key: string, groups: number, groupEdges: number): Pr
   assert.ok(expanded.expandedFileCount > 0, 'the entered group has files');
   assert.strictEqual(expanded.renderedFiles, Math.min(expanded.expandedFileCount, 200), 'rendered file nodes');
   assert.strictEqual(expanded.groupLevelEdges, groupEdges, 'the group edges stay on the entered group');
-  const interaction = await getContextKey<ArchitectureInteraction>('graph-it-live.architectureInteraction');
+  const interaction = await getContextKey<ArchitectureInteraction>('skein.architectureInteraction');
   assert.strictEqual(interaction?.shownFileEdges, 0, 'file edges wait for a hovered or selected file');
 
   const { evidence } = await expectDetail(`the evidence of ${key}`, { evidenceOf: key }, detail => detail.evidence !== undefined);
   assert.ok(evidence && evidence.total > 0, 'the evidence lists file pairs');
   assert.strictEqual(evidence.total, evidence.edgeCount, 'the evidence total equals the edge label');
 
-  await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { openEvidenceRow: 0 });
+  await vscode.commands.executeCommand('skein.e2eArchitectureControls', { openEvidenceRow: 0 });
   const start = Date.now();
   const active = () => {
     const uri = vscode.window.activeTextEditor?.document.uri;
@@ -307,7 +307,7 @@ async function exploreGroup(key: string, groups: number, groupEdges: number): Pr
   while (Date.now() - start < 15000 && active() !== evidence.firstSource) await sleep(250);
   assert.strictEqual(active(), evidence.firstSource, 'the clicked row opens its file');
 
-  await vscode.commands.executeCommand('graph-it-live.graphView.focus');
+  await vscode.commands.executeCommand('skein.graphView.focus');
   const collapsed = await expectDetail(`leaving ${key}`, { collapse: key }, detail => detail.expandedGroups === 0);
   assert.strictEqual(collapsed.renderedFiles, 0);
   const overview = await expectDetail('the overview', { focus: '' }, detail => detail.focusedGroup === undefined);
@@ -325,18 +325,18 @@ function assertReadableLayout(render: ArchitectureRender): void {
 async function openFreshArchitecture(): Promise<ArchitectureRender> {
   // The view must be the visible panel view: a hidden webview never receives a resize, and
   // another suite may have left Terminal or Output focused.
-  await vscode.commands.executeCommand('graph-it-live.graphView.focus');
+  await vscode.commands.executeCommand('skein.graphView.focus');
   // A cold extension host resolves the sidebar after suiteSetup's wait: until then the switch is a no-op ("View not initialized").
   const start = Date.now();
   do {
-    await vscode.commands.executeCommand('graph-it-live.setViewModeArchitecture');
-    if (await getContextKey('graph-it-live.viewMode') === 'architecture') break;
+    await vscode.commands.executeCommand('skein.setViewModeArchitecture');
+    if (await getContextKey('skein.viewMode') === 'architecture') break;
     await sleep(250);
   } while (Date.now() - start < 15000);
   await waitForViewMode('architecture');
   await sleep(500); // let the mount post architectureMounted first
   const before = (await readRender()).renderCount;
-  await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+  await vscode.commands.executeCommand('skein.refreshGraph');
   return waitForRender('a fresh render', before, render => !render.stale && render.communityMode === 'path');
 }
 
@@ -353,13 +353,13 @@ async function expectDependents(
   controls: Record<string, unknown>,
   predicate: (report: DependentsReport, groupCount: number) => boolean,
 ): Promise<DependentsReport> {
-  await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', controls);
+  await vscode.commands.executeCommand('skein.e2eArchitectureControls', controls);
   const start = Date.now();
   let last: DependentsReport | undefined;
   let count = 0;
   while (Date.now() - start < 30000) {
-    last = await getContextKey<DependentsReport>('graph-it-live.architectureDependents');
-    count = (await getContextKey<number>('graph-it-live.architectureDependentsGroupCount')) ?? 0;
+    last = await getContextKey<DependentsReport>('skein.architectureDependents');
+    count = (await getContextKey<number>('skein.architectureDependentsGroupCount')) ?? 0;
     if (last && predicate(last, count)) return last;
     await sleep(250);
   }
@@ -377,27 +377,27 @@ async function expectFileGraphOn(relativePath: string): Promise<void> {
   await waitForViewMode('file', { timeoutMs: 15000 });
   const start = Date.now();
   const root = async () => {
-    const filePath = await getContextKey<string>('graph-it-live.fileGraphRoot');
+    const filePath = await getContextKey<string>('skein.fileGraphRoot');
     return filePath ? vscode.workspace.asRelativePath(vscode.Uri.file(filePath), false) : undefined;
   };
   while (Date.now() - start < 15000 && (await root()) !== relativePath) await sleep(250);
   assert.strictEqual(await root(), relativePath, 'the file graph is rooted on the revealed file');
   assert.strictEqual(activeFile(), relativePath, 'the revealed file is the active editor');
-  assert.strictEqual(await getContextKey('graph-it-live.viewMode'), 'file');
+  assert.strictEqual(await getContextKey('skein.viewMode'), 'file');
 }
 
 suite('Architecture view mode', () => {
-  const config = () => vscode.workspace.getConfiguration('graph-it-live');
+  const config = () => vscode.workspace.getConfiguration('skein');
 
   suiteSetup(async function () {
     this.timeout(30000);
-    await vscode.commands.executeCommand('graph-it-live.graphView.focus');
+    await vscode.commands.executeCommand('skein.graphView.focus');
     await sleep(800); // let resolveWebviewView and the React mount complete
   });
 
   teardown(async () => {
     await config().update('communityMode', undefined, vscode.ConfigurationTarget.Global);
-    await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+    await vscode.commands.executeCommand('skein.setViewModeFile');
     await waitForViewMode('file');
   });
 
@@ -468,7 +468,7 @@ suite('Architecture view mode', () => {
     await sleep(1500); // let the restore's change event mark the view stale before Refresh
 
     const staleCount = (await readRender()).renderCount;
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.refreshGraph');
     const refreshed = await waitForRender('the refreshed render', staleCount, render => !render.stale);
     assert.strictEqual(refreshed.buildCount, built.buildCount + 1, 'Refresh rebuilds once');
     assert.strictEqual(refreshed.groupCount, EXPECTED.units.groups);
@@ -492,12 +492,12 @@ suite('Architecture view mode', () => {
       await vscode.workspace.fs.writeFile(target, Buffer.from('export const late = 1;\n'));
       await waitForRender('the stale banner', staleCount, render => render.stale);
       await sleep(2000); // let the create event re-analyse the importer before Refresh
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
       const after = await expectMatrix('the matrix with the new edge', { view: 'matrix' },
         matrix => matrix.unit === undefined && matrix.revision !== before.revision);
       assert.strictEqual(after.fileEdges, before.fileEdges + 1, 'the importer → created target edge');
     } finally {
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { view: 'graph' });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { view: 'graph' });
       await vscode.workspace.fs.delete(importer).then(undefined, () => undefined);
       await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
       await sleep(1500); // let the delete events reach the index before the next test refreshes
@@ -509,7 +509,7 @@ suite('Architecture view mode', () => {
     await change();
     await waitForRender('the stale banner', staleCount, render => render.stale);
     await sleep(2000); // let the config event re-index the importer before Refresh
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.refreshGraph');
     return expectMatrix(label, { view: 'matrix' }, matrix => matrix.unit === undefined && matrix.revision !== revision);
   };
 
@@ -532,7 +532,7 @@ suite('Architecture view mode', () => {
       const removed = await refreshMatrix('the matrix without the alias edge', added.revision, () => vscode.workspace.fs.writeFile(tsConfig, original));
       assert.strictEqual(removed.fileEdges, before.fileEdges, 'removing the alias removes the edge');
     } finally {
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { view: 'graph' });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { view: 'graph' });
       await vscode.workspace.fs.writeFile(tsConfig, original);
       await vscode.workspace.fs.delete(importer).then(undefined, () => undefined);
       await sleep(1500); // let the config and delete events reach the index before the next test refreshes
@@ -564,7 +564,7 @@ suite('Architecture view mode', () => {
       const removed = await refreshMatrix('the matrix without the alias edge', added.revision, () => vscode.workspace.fs.writeFile(base, baseWith({})));
       assert.strictEqual(removed.fileEdges, before.fileEdges, 'removing the alias removes the edge');
     } finally {
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { view: 'graph' });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { view: 'graph' });
       await vscode.workspace.fs.writeFile(tsConfig, original);
       await vscode.workspace.fs.delete(importer).then(undefined, () => undefined);
       await vscode.workspace.fs.delete(base).then(undefined, () => undefined);
@@ -579,8 +579,8 @@ suite('Architecture view mode', () => {
     if (process.env.E2E_INCLUDE_FLAKY !== '1') this.skip();
     const built = await openFreshArchitecture();
     const readResize = async () => ({
-      count: (await getContextKey<number>('graph-it-live.architectureResizeCount')) ?? 0,
-      size: JSON.stringify(await getContextKey('graph-it-live.architectureViewSize')),
+      count: (await getContextKey<number>('skein.architectureResizeCount')) ?? 0,
+      size: JSON.stringify(await getContextKey('skein.architectureViewSize')),
     });
     // Mount and header re-fits arrive asynchronously: wait until the count stops moving.
     let before = await readResize();
@@ -634,7 +634,7 @@ suite('Architecture view mode', () => {
     assert.deepStrictEqual(evidence.pairs, pairs, 'the Evidence region lists the unit edge\'s file pairs');
     assert.strictEqual(evidence.total, evidence.edgeCount, 'the evidence total equals the edge label');
 
-    await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { openEvidenceRow: 0 });
+    await vscode.commands.executeCommand('skein.e2eArchitectureControls', { openEvidenceRow: 0 });
     const active = () => {
       const uri = vscode.window.activeTextEditor?.document.uri;
       return uri ? vscode.workspace.asRelativePath(uri, false) : undefined;
@@ -643,7 +643,7 @@ suite('Architecture view mode', () => {
     while (Date.now() - start < 15000 && active() !== evidence.firstSource) await sleep(250);
     assert.strictEqual(active(), evidence.firstSource, 'the clicked row opens its file');
 
-    await vscode.commands.executeCommand('graph-it-live.graphView.focus');
+    await vscode.commands.executeCommand('skein.graphView.focus');
     await enterUnit(of);
     await expectDetail('the evidence closed by entering the unit', undefined, detail => detail.evidence === undefined);
     await enterUnit('');
@@ -692,7 +692,7 @@ suite('Architecture view mode', () => {
       await expectInteraction('the cleared find', { find: '' }, { ...nothing, shownGroupEdges: 3, ...noFileEdge });
       await expectInteraction('the reset filter', { minImports: 1 }, { ...nothing, shownGroupEdges: groupEdges, ...noFileEdge });
     } finally {
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { find: '', minImports: 1 });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { find: '', minImports: 1 });
       await enterUnit('');
     }
   });
@@ -757,24 +757,24 @@ suite('Architecture view mode', () => {
         { matrixCell: { row: cell[0], column: cell[1] } }, detail => detail.evidence?.total !== undefined);
       assert.strictEqual(louvainEvidence.evidence?.total, Number(cell[2]), 'the evidence total equals the cell');
     } finally {
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { view: 'graph' });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { view: 'graph' });
     }
   });
 
-  test('checks graphit.architecture.json: stale on edit, red edges and cells, Rules panel counts of the CLI, a rule\'s pairs', async function () {
+  test('checks skein.architecture.json: stale on edit, red edges and cells, Rules panel counts of the CLI, a rule\'s pairs', async function () {
     this.timeout(240000);
     const plain = await openFreshArchitecture();
     assert.strictEqual(plain.violationEdges, 0, 'no config, no violation');
     assert.deepStrictEqual(plain.rulesPanel, [], 'no config, no Rules panel');
 
     const root = vscode.workspace.workspaceFolders![0].uri;
-    const configFile = vscode.Uri.joinPath(root, 'graphit.architecture.json');
+    const configFile = vscode.Uri.joinPath(root, 'skein.architecture.json');
     try {
       await vscode.workspace.fs.writeFile(configFile, Buffer.from(JSON.stringify(RULES_CONFIG, null, 2)));
       const stale = await waitForRender('the stale banner after writing the config', plain.renderCount, render => render.stale);
       assert.strictEqual(stale.buildCount, plain.buildCount, 'a config edit marks the view stale without rebuilding');
 
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
       const ruled = await waitForRender('the render with rules', stale.renderCount, render => !render.stale && render.rulesPanel.length > 0);
       assert.deepStrictEqual(ruled.rulesPanel, EXPECTED.rules.panel, 'Rules panel counts equal graph-it check-architecture');
       assert.strictEqual(ruled.violationEdges, EXPECTED.rules.violationEdges, 'violating unit edges drawn red');
@@ -785,7 +785,7 @@ suite('Architecture view mode', () => {
 
       const matrix = await expectMatrix('the units matrix with rules', { view: 'matrix' }, painted => painted.unit === undefined);
       assert.strictEqual(matrix.violationCells, EXPECTED.rules.violationEdges, 'violating matrix cells framed red');
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { view: 'graph' });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { view: 'graph' });
 
       await vscode.workspace.fs.writeFile(configFile, Buffer.from('{ "elements": {}, "rules": [{ "name": "r", "noCycles": "ghost" }] }'));
       await waitForRender('the stale banner after breaking the config', ruled.renderCount, render => render.stale);
@@ -794,7 +794,7 @@ suite('Architecture view mode', () => {
     }
     await sleep(1500); // let the delete mark the view stale before Refresh
     const staleCount = (await readRender()).renderCount;
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.refreshGraph');
     const restored = await waitForRender('the render without rules', staleCount, render => !render.stale && render.rulesPanel.length === 0);
     assert.strictEqual(restored.violationEdges, 0, 'deleting the config removes the red edges');
   });
@@ -807,19 +807,19 @@ suite('Architecture view mode', () => {
     assert.strictEqual(built.unitLevel?.roleTooltips, EXPECTED.units.groups, 'every unit tooltip lists its role and evidence');
 
     // A real click on the legend's button: only the libraries stay drawn; a second click shows every unit.
-    await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { role: 'library' });
+    await vscode.commands.executeCommand('skein.e2eArchitectureControls', { role: 'library' });
     const filtered = await waitForRender('the library filter', built.renderCount, render => render.roles.includes('library=4*'));
     assert.strictEqual(filtered.unitLevel?.shownUnits, EXPECTED.roles.libraries, 'the filter keeps the libraries only');
-    await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { role: 'library' });
+    await vscode.commands.executeCommand('skein.e2eArchitectureControls', { role: 'library' });
     const all = await waitForRender('every unit again', filtered.renderCount, render => !render.roles.some(role => role.endsWith('*')));
     assert.strictEqual(all.unitLevel?.shownUnits, EXPECTED.units.groups, 'a second click shows every unit');
 
     const root = vscode.workspace.workspaceFolders![0].uri;
-    const configFile = vscode.Uri.joinPath(root, 'graphit.architecture.json');
+    const configFile = vscode.Uri.joinPath(root, 'skein.architecture.json');
     try {
       await vscode.workspace.fs.writeFile(configFile, Buffer.from(JSON.stringify(ROLES_CONFIG, null, 2)));
       const stale = await waitForRender('the stale banner after declaring a role', all.renderCount, render => render.stale);
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
       const declared = await waitForRender('the render with the declared role', stale.renderCount,
         render => !render.stale && render.roles.includes('frontend=1'));
       assert.deepStrictEqual(declared.roles, EXPECTED.roles.declared, 'a declared role overrides the inferred one, as the CLI reports');
@@ -829,7 +829,7 @@ suite('Architecture view mode', () => {
     }
     await sleep(1500); // let the delete mark the view stale before Refresh
     const staleCount = (await readRender()).renderCount;
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.refreshGraph');
     await waitForRender('the inferred roles again', staleCount, render => !render.stale && render.roles.join() === EXPECTED.roles.legend.join());
   });
 
@@ -840,23 +840,23 @@ suite('Architecture view mode', () => {
     const file = getProjectFile('sample-project', 'src', 'utils.ts');
     const original = await vscode.workspace.fs.readFile(file);
     try {
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { find: 'LAYERS' });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { find: 'LAYERS' });
       const focused = await expectDetail('focusing layers', { focus: '(root)/layers' }, detail => detail.focusedGroup === '(root)/layers');
-      const highlight = await getContextKey<ArchitectureInteraction>('graph-it-live.architectureInteraction');
+      const highlight = await getContextKey<ArchitectureInteraction>('skein.architectureInteraction');
       const before = (await readRender()).renderCount;
       await vscode.workspace.fs.writeFile(file, Buffer.concat([Buffer.from(original), Buffer.from('\n// architecture context E2E\n')]));
       const stale = await waitForRender('the stale banner', before, render => render.stale);
       assert.strictEqual(stale.unit, '(root)', 'a stale mark keeps the entered unit');
       const kept = await expectDetail('the stale detail', undefined, detail => detail.focusedGroup === '(root)/layers');
       assert.strictEqual(kept.viewport, focused.viewport, 'a stale mark does not move the viewport');
-      assert.deepStrictEqual(await getContextKey('graph-it-live.architectureInteraction'), highlight, 'a stale mark keeps the found highlight');
+      assert.deepStrictEqual(await getContextKey('skein.architectureInteraction'), highlight, 'a stale mark keeps the found highlight');
       assert.strictEqual(stale.groupLevel?.totalGroups, EXPECTED.root.groups, 'hidden and isolated groups stay counted');
 
       const filtered = await expectDetail('the min-imports filter', { minImports: 2 }, detail => detail.focusedGroup === '(root)/layers');
       assert.strictEqual(filtered.viewport, focused.viewport, 'the min-imports filter does not move the viewport');
     } finally {
       await vscode.workspace.fs.writeFile(file, original);
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { find: '', minImports: 1, focus: '' });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { find: '', minImports: 1, focus: '' });
       await enterUnit('');
     }
   });
@@ -891,7 +891,7 @@ suite('Architecture view mode', () => {
       const hidden = await expectDetail('finding a hidden group', { find: 'd55' }, detail => (detail.findStatus ?? '').includes('hidden'));
       assert.match(hidden.findStatus ?? '', /"d55" is also in 1 hidden group \(d55\)\. Show more groups/);
 
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { showMoreGroups: true });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { showMoreGroups: true });
       const more = await waitForRender('Show more groups', capped.renderCount, render => render.groupCount === 60);
       assert.strictEqual(more.folder, '(root)/zz-many-groups', 'Show more groups keeps the entered folder');
       assert.strictEqual(more.revision, capped.revision, 'Show more groups keeps the revision');
@@ -902,13 +902,13 @@ suite('Architecture view mode', () => {
       const drawn = await expectDetail('the find once drawn', undefined, detail => detail.findStatus === '');
       assert.strictEqual(drawn.findStatus, '', 'the found group is drawn: nothing left to report');
     } finally {
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { find: '' });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { find: '' });
       await vscode.workspace.fs.delete(unit, { recursive: true });
     }
     await sleep(1500); // let the delete mark the view stale before Refresh
     const staleCount = (await readRender()).renderCount;
-    await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { unit: '' });
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.e2eArchitectureControls', { unit: '' });
+    await vscode.commands.executeCommand('skein.refreshGraph');
     await waitForRender('the fixtures again', staleCount, render => !render.stale && render.groupCount === EXPECTED.units.groups);
   });
 
@@ -938,10 +938,10 @@ suite('Architecture view mode', () => {
     const moved = await waitForInteraction('an arrow key', { keys: ['ArrowDown'] }, interaction => interaction.canvasFocused === true && interaction.selectedGroups === 1);
     assert.ok((moved.announcement ?? '').length > 0, 'the live region announces the selection');
     const name = (moved.announcement ?? '').split(', ')[0];
-    await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { keys: ['Enter'] });
+    await vscode.commands.executeCommand('skein.e2eArchitectureControls', { keys: ['Enter'] });
     const entered = await waitForRender('Enter on the selection', units.renderCount, render => render.unit !== undefined);
     assert.ok(name.length > 0 && entered.unit !== undefined, `entered ${entered.unit} from "${name}"`);
-    await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { keys: ['Escape'] });
+    await vscode.commands.executeCommand('skein.e2eArchitectureControls', { keys: ['Escape'] });
     const back = await waitForRender('Escape', entered.renderCount, render => render.unit === undefined);
     assert.strictEqual(back.unitLevel?.cycleBlocks, EXPECTED.units.cycles, 'back on the units with their cycle block');
 
@@ -993,7 +993,7 @@ suite('Architecture view mode', () => {
     }
     await sleep(1500); // let the delete mark the view stale before Refresh
     const staleCount = (await readRender()).renderCount;
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.refreshGraph');
     await waitForRender('the fixtures again', staleCount, render => !render.stale && render.groupCount === EXPECTED.units.groups);
   });
 
@@ -1007,7 +1007,7 @@ suite('Architecture view mode', () => {
       (report) => report.seedLabel === '@ws/ui');
     assert.deepStrictEqual(ui.rows, ['workspaces-project/apps/web=2/2@1', 'workspaces-project=1/1@1']);
     assert.strictEqual(ui.highlightedGroups, 2, 'both units are highlighted');
-    assert.strictEqual(await getContextKey('graph-it-live.architectureDependentsGroupCount'), 2);
+    assert.strictEqual(await getContextKey('skein.architectureDependentsGroupCount'), 2);
     await expectDependents('the matrix rows', { view: 'matrix' }, (report, count) => report.view === 'matrix' && count === 2);
     await expectDependents('the graph again', { view: 'graph' }, (report, count) => report.view === 'graph' && count === 2);
     await expectDependents('the cleared dependents', { clearDependents: true }, (report, count) => report.seedLabel === '' && count === 0);
@@ -1034,7 +1034,7 @@ suite('Architecture view mode', () => {
       await openFreshArchitecture();
       await enterUnit('workspaces-project/packages/ui');
       await expectDetail('the ui group expanded', { expand: 'workspaces-project/packages/ui' }, (detail) => detail.renderedFiles > 0);
-      await vscode.commands.executeCommand('graph-it-live.e2eArchitectureControls', { revealFile: target });
+      await vscode.commands.executeCommand('skein.e2eArchitectureControls', { revealFile: target });
       await expectFileGraphOn(target);
     };
     // Not the active editor: utils.ts is.
@@ -1045,9 +1045,9 @@ suite('Architecture view mode', () => {
     await openGraphFor('sample-project', 'src', 'utils.ts');
     await openFreshArchitecture();
     await vscode.window.showTextDocument(getProjectFile('workspaces-project', 'packages', 'ui', 'src', 'index.ts'));
-    await vscode.commands.executeCommand('graph-it-live.graphView.focus');
+    await vscode.commands.executeCommand('skein.graphView.focus');
     assert.strictEqual(activeFile(), target);
-    const before = await getContextKey<string>('graph-it-live.fileGraphRoot');
+    const before = await getContextKey<string>('skein.fileGraphRoot');
     assert.ok(before?.endsWith('utils.ts'), `the file graph stays on utils.ts in architecture mode (${before})`);
     await reveal();
   });
@@ -1056,11 +1056,11 @@ suite('Architecture view mode', () => {
     this.timeout(60000);
     await openGraphFor('sample-project', 'src', 'utils.ts');
     for (const [command, mode] of [
-      ['graph-it-live.setViewModeFile', 'file'],
-      ['graph-it-live.setViewModeList', 'list'],
-      ['graph-it-live.setViewModeSymbol', 'symbol'],
+      ['skein.setViewModeFile', 'file'],
+      ['skein.setViewModeList', 'list'],
+      ['skein.setViewModeSymbol', 'symbol'],
     ] as const) {
-      await vscode.commands.executeCommand('graph-it-live.setViewModeArchitecture');
+      await vscode.commands.executeCommand('skein.setViewModeArchitecture');
       await waitForViewMode('architecture');
       await vscode.commands.executeCommand(command);
       await waitForViewMode(mode, { timeoutMs: 15000 });

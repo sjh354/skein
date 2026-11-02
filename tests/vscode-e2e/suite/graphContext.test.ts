@@ -5,6 +5,6 @@ suite('graph context LM tool', () => {
   test('is contributed and registered', function () {
     const tools = (vscode.lm as unknown as { tools?: ReadonlyArray<{ name: string }> }).tools;
     if (!tools) this.skip();
-    assert.ok(tools?.some(tool => tool.name === 'graph-it-live_graph_context'));
+    assert.ok(tools?.some(tool => tool.name === 'skein_graph_context'));
   });
 });

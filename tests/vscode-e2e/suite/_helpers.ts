@@ -28,14 +28,14 @@ export async function waitForViewMode(
   const start = Date.now();
 
   while (Date.now() - start < timeoutMs) {
-    const current = await getContextKey<ViewMode>('graph-it-live.viewMode');
+    const current = await getContextKey<ViewMode>('skein.viewMode');
     if (current === expected) {
       return current;
     }
     await sleep(intervalMs);
   }
 
-  const last = await getContextKey<ViewMode>('graph-it-live.viewMode');
+  const last = await getContextKey<ViewMode>('skein.viewMode');
   assert.strictEqual(
     last,
     expected,
@@ -52,16 +52,16 @@ export async function openGraphFor(
   const doc = await vscode.workspace.openTextDocument(file);
   await vscode.window.showTextDocument(doc);
 
-  await vscode.commands.executeCommand('graph-it-live.showGraph', file.fsPath);
+  await vscode.commands.executeCommand('skein.showGraph', file.fsPath);
   await waitForViewMode('file');
 
   return doc;
 }
 
 /**
- * Open a file, execute `graph-it-live.showCallGraph`, and wait until
+ * Open a file, execute `skein.showCallGraph`, and wait until
  * the webview posts `callGraphReady` (detected via the
- * `graph-it-live.callGraphRenderCount` context key incrementing).
+ * `skein.callGraphRenderCount` context key incrementing).
  *
  * Focuses the sidebar view first to guarantee `resolveWebviewView` has been
  * called (i.e. `sidebarWebview` is non-null in CallGraphViewService) before
@@ -74,7 +74,7 @@ export async function openCallGraphFor(
 ): Promise<vscode.TextDocument> {
   // Reveal the sidebar so the WebviewViewProvider resolves and CallGraphViewService
   // receives a valid sidebarWebview reference before any postMessage calls.
-  await vscode.commands.executeCommand('graph-it-live.graphView.focus');
+  await vscode.commands.executeCommand('skein.graphView.focus');
   await sleep(800); // allow resolveWebviewView + React mount to complete
 
   const file = getProjectFile(projectName, ...pathSegments);
@@ -86,16 +86,16 @@ export async function openCallGraphFor(
 }
 
 /**
- * Execute `graph-it-live.showCallGraph` for the active editor and wait until the
- * webview posts `callGraphReady` (`graph-it-live.callGraphRenderCount` increments).
+ * Execute `skein.showCallGraph` for the active editor and wait until the
+ * webview posts `callGraphReady` (`skein.callGraphRenderCount` increments).
  */
 export async function showCallGraphAndWait(timeoutMs: number, intervalMs: number): Promise<void> {
-  const prevCount = (await getContextKey<number>('graph-it-live.callGraphRenderCount')) ?? 0;
-  await vscode.commands.executeCommand('graph-it-live.showCallGraph');
+  const prevCount = (await getContextKey<number>('skein.callGraphRenderCount')) ?? 0;
+  await vscode.commands.executeCommand('skein.showCallGraph');
 
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const current = await getContextKey<number>('graph-it-live.callGraphRenderCount');
+    const current = await getContextKey<number>('skein.callGraphRenderCount');
     if ((current ?? 0) > prevCount) return;
     await sleep(intervalMs);
   }
@@ -108,7 +108,7 @@ export const lmToolsSupported = (): boolean =>
 
 /** Invoke the get_index_status LM tool and parse its JSON payload. */
 export async function getIndexStatus<T>(): Promise<T> {
-  const result = await vscode.lm.invokeTool('graph-it-live_get_index_status', {
+  const result = await vscode.lm.invokeTool('skein_get_index_status', {
     input: {},
     toolInvocationToken: undefined,
   });

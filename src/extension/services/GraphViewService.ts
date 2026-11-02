@@ -137,7 +137,7 @@ export class GraphViewService {
     if (this.config.unusedAnalysisMaxEdges > 0 && edgeCount > this.config.unusedAnalysisMaxEdges) {
       this.logger.warn(
         `Skipping unused analysis: ${edgeCount} edges exceeds threshold of ${this.config.unusedAnalysisMaxEdges}. ` +
-        `Use toolbar button for manual analysis or increase graph-it-live.unusedAnalysisMaxEdges setting.`
+        `Use toolbar button for manual analysis or increase skein.unusedAnalysisMaxEdges setting.`
       );
       return true;
     }

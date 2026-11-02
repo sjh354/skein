@@ -666,7 +666,7 @@ describe("ArchitectureViewService", () => {
       expect(posted.at(-1)).toMatchObject({ type: "architectureState", status: "empty" });
       // The reason names the folder and the exclusions; the webview offers Open settings.
       expect((posted.at(-1) as ArchitectureStateMessage).message).toBe(
-        `No supported source file in "${path.basename(empty)}". Files excluded by .graphitignore or the Graph-It-Live settings are not analysed.`);
+        `No supported source file in "${path.basename(empty)}". Files excluded by .skeinignore or the Skein settings are not analysed.`);
       expect(summaries()).toEqual([]);
     } finally {
       await fs.rm(empty, { recursive: true, force: true });

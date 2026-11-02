@@ -261,7 +261,7 @@ function layoutWithElk(cy: cytoscape.Core, elk: Pick<ElkRunner, "layout">, curre
     finish();
   };
   elk.layout(toElkGraph(cy)).then(settle, (error: unknown) => {
-    console.error("[Graph-It-Live] ELK layout failed", error);
+    console.error("[Skein] ELK layout failed", error);
     settle();
   });
 }
@@ -400,7 +400,7 @@ function RoleLegend({ roleCounts, roleFilter, onRole }: Readonly<{
   return (
     <div
       style={{ display: "flex", flexWrap: "wrap", gap: "2px 8px", alignItems: "baseline" }}
-      title="[role?] inferred from manifests and files (hover a unit for its evidence), [role] declared in graphit.architecture.json"
+      title="[role?] inferred from manifests and files (hover a unit for its evidence), [role] declared in skein.architecture.json"
     >
       <ul aria-label="Unit roles" style={{ display: "contents" }}>
         {Object.entries(roleCounts).map(([role, count]) => (
@@ -534,7 +534,7 @@ const ZOOM_STEP = 1.25;
 const SEVERITY_COLOR = { error: "var(--vscode-errorForeground)", warning: "var(--vscode-editorWarning-foreground)", off: undefined } as const;
 
 /**
- * The declared rules (graphit.architecture.json): "N violations of M rules (K new)" or "All N rules pass", then each
+ * The declared rules (skein.architecture.json): "N violations of M rules (K new)" or "All N rules pass", then each
  * rule with its count; a rule with violations opens its file pairs in the evidence panel.
  */
 function RulesPanel({ rules, onRule }: Readonly<{ rules: ArchitectureRulesView; onRule: (rule: ArchitectureRuleSummary) => void }>) {
@@ -938,7 +938,7 @@ function DependentsPanel({ dependents, tabs, onOpen, onRow, onMore, onClear }: R
           <div>Depth 1 imports the selection directly. Counts cover every file of the graph, drawn or not: the view draws the {DEFAULT_RENDERED_GROUPS} largest groups per level ({MAX_RENDERED_GROUPS} after Show more groups), and files are listed {DEPENDENT_FILES_PAGE} per page.</div>
           {result.maxDepthReached && <div>The walk stopped at its maximum depth: farther dependents are not counted.</div>}
           <div>{result.provenance}</div>
-          <div>For symbol-level impact use get_impact_analysis (Copilot tool graph-it-live_get_impact_analysis, MCP graphitlive_get_impact_analysis).</div>
+          <div>For symbol-level impact use get_impact_analysis (Copilot tool skein_get_impact_analysis, MCP skein_get_impact_analysis).</div>
         </div>
       )}
     </section>

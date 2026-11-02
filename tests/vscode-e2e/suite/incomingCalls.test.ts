@@ -16,7 +16,7 @@ suite('Incoming Calls Test Suite (Étape 5)', () => {
     vscode.window.showInformationMessage('Starting incoming calls tests');
     
     // Ensure extension is activated
-    const ext = vscode.extensions.getExtension('sjh354.structure-graph');
+    const ext = vscode.extensions.getExtension('sjh354.skein');
     if (ext && !ext.isActive) {
       await ext.activate();
     }
@@ -35,7 +35,7 @@ suite('Incoming Calls Test Suite (Étape 5)', () => {
     this.timeout(5000);
 
     try {
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
       await sleep(300);
     } catch {
@@ -64,7 +64,7 @@ suite('Incoming Calls Test Suite (Étape 5)', () => {
       console.log('[incomingCalls] active editor', activePath);
       
       // Switch to symbol mode deterministically
-      await vscode.commands.executeCommand('graph-it-live.setViewModeSymbol');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       const afterSymbol = await waitForViewMode('symbol', { timeoutMs: 15000 });
       console.log('[incomingCalls] after setViewModeSymbol viewMode=', afterSymbol);
       
@@ -92,7 +92,7 @@ suite('Incoming Calls Test Suite (Étape 5)', () => {
       console.log('[incomingCalls] active editor (edges test)', activePath);
       
       // Move to symbol mode
-      await vscode.commands.executeCommand('graph-it-live.setViewModeSymbol');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       const afterSymbol = await waitForViewMode('symbol', { timeoutMs: 15000 });
       console.log('[incomingCalls] after setViewModeSymbol (edges) viewMode=', afterSymbol);
       
@@ -118,11 +118,11 @@ suite('Incoming Calls Test Suite (Étape 5)', () => {
       const doc = await vscode.workspace.openTextDocument(tsFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Switch to symbol mode to see incoming calls
-      await vscode.commands.executeCommand('graph-it-live.setViewModeSymbol');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await waitForViewMode('symbol');
       
       assert.ok(true, 'Works with TypeScript');
@@ -149,11 +149,11 @@ suite('Incoming Calls Test Suite (Étape 5)', () => {
       const doc = await vscode.workspace.openTextDocument(jsFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Switch to symbol mode to see incoming calls
-      await vscode.commands.executeCommand('graph-it-live.setViewModeSymbol');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await waitForViewMode('symbol');
       
       assert.ok(true, 'Works with JavaScript');

@@ -26,7 +26,7 @@ interface BackgroundIndexingManagerOptions {
 }
 
 /** Where versions before the shared .graph-it/cache/ kept the index; cleared on start. */
-const LEGACY_REVERSE_INDEX_STORAGE_KEY = 'graph-it-live.reverseIndex';
+const LEGACY_REVERSE_INDEX_STORAGE_KEY = 'skein.reverseIndex';
 const WORKER_SCRIPT_PATH = 'dist/indexerWorker.js';
 
 export class BackgroundIndexingManager {
@@ -66,7 +66,7 @@ export class BackgroundIndexingManager {
         vscode.StatusBarAlignment.Left,
         100,
       );
-      this._statusBarItem.name = 'Graph-It-Live Indexing';
+      this._statusBarItem.name = 'Skein Indexing';
       this.context.subscriptions.push(this._statusBarItem);
     }
     return this._statusBarItem;
@@ -226,7 +226,7 @@ export class BackgroundIndexingManager {
     let waited = false;
     const release = await cache.lock((holderPid) => {
       waited = true;
-      this.statusBarItem.text = '$(sync~spin) Graph-It-Live: Waiting for index...';
+      this.statusBarItem.text = '$(sync~spin) Skein: Waiting for index...';
       this.statusBarItem.tooltip = `Another process (${holderPid ?? 'unknown'}) is indexing this workspace`;
       this.statusBarItem.show();
     });
@@ -257,7 +257,7 @@ export class BackgroundIndexingManager {
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Window,
-        title: 'Graph-It-Live',
+        title: 'Skein',
         cancellable: false,
       },
       async (progress) => {
@@ -322,17 +322,17 @@ export class BackgroundIndexingManager {
 
     const workerPath = path.join(this.extensionUri.fsPath, WORKER_SCRIPT_PATH);
 
-    this.statusBarItem.text = '$(sync~spin) Graph-It-Live: Counting files...';
+    this.statusBarItem.text = '$(sync~spin) Skein: Counting files...';
     this.statusBarItem.tooltip = 'Indexing workspace for reverse dependency lookup';
     this.statusBarItem.show();
 
     const unsubscribe = this.spider.subscribeToIndexStatus((snapshot) => {
       if (this.disposed || !this._statusBarItem) return;
       if (snapshot.state === 'counting') {
-        this.statusBarItem.text = '$(sync~spin) Graph-It-Live: Counting files...';
+        this.statusBarItem.text = '$(sync~spin) Skein: Counting files...';
       } else if (snapshot.state === 'indexing') {
         const percent = snapshot.percentage;
-        this.statusBarItem.text = `$(sync~spin) Graph-It-Live: ${percent}% (${snapshot.processed}/${snapshot.total})`;
+        this.statusBarItem.text = `$(sync~spin) Skein: ${percent}% (${snapshot.processed}/${snapshot.total})`;
         this.statusBarItem.tooltip = `Indexing: ${snapshot.currentFile ?? 'processing...'}`;
       }
     });
@@ -346,10 +346,10 @@ export class BackgroundIndexingManager {
 
       if (result.cancelled) {
         this.log.info('Indexing cancelled after', result.indexedFiles, 'files');
-        this.statusBarItem.text = '$(x) Graph-It-Live: Indexing cancelled';
+        this.statusBarItem.text = '$(x) Skein: Indexing cancelled';
       } else {
         this.log.info('Indexed', result.indexedFiles, 'files in', result.duration, 'ms');
-        this.statusBarItem.text = `$(check) Graph-It-Live: ${result.indexedFiles} files indexed`;
+        this.statusBarItem.text = `$(check) Skein: ${result.indexedFiles} files indexed`;
         this.warnOutOfRootImports();
         this.indexComplete = true;
         await this.persistIndex();
@@ -368,7 +368,7 @@ export class BackgroundIndexingManager {
     } catch (error) {
       if (this.disposed) return;
       this.log.error('Background indexing failed:', error);
-      this.statusBarItem.text = '$(error) Graph-It-Live: Indexing failed';
+      this.statusBarItem.text = '$(error) Skein: Indexing failed';
       this.statusBarItem.tooltip = error instanceof Error ? error.message : 'Unknown error';
       if (this.hideStatusTimer) {
         clearTimeout(this.hideStatusTimer);
@@ -378,7 +378,7 @@ export class BackgroundIndexingManager {
         if (!this.disposed) this.statusBarItem.hide();
       }, 5000);
       vscode.window.showErrorMessage(
-        `Graph-It-Live: Indexing failed - ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Skein: Indexing failed - ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     } finally {
       unsubscribe();

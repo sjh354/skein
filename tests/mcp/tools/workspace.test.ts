@@ -120,7 +120,7 @@ describe("workspace tools", () => {
           monorepoRoot: "../..",
         });
         expect(result.warning).toContain("Monorepo root detected (../..)");
-        expect(result.warning).toContain("graphitlive_set_workspace");
+        expect(result.warning).toContain("skein_set_workspace");
         expect(JSON.stringify(result)).not.toContain(mono);
       } finally {
         fs.rmSync(mono, { recursive: true, force: true });

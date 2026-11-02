@@ -195,7 +195,7 @@ function indexFile(filePath: string, relativePath: string, content: string, root
 
 async function collectFiles(root: string): Promise<string[]> {
   const result: string[] = [];
-  // Same .gitignore/.graphitignore rules as source indexing, so generated wikis and
+  // Same .gitignore/.skeinignore rules as source indexing, so generated wikis and
   // fixtures do not come back as documents.
   const isIgnored = createIgnoreMatcher(root);
   const visit = async (directory: string): Promise<void> => {

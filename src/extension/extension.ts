@@ -19,7 +19,7 @@ let mcpServerProvider: McpServerProvider | null = null;
 let graphProvider: GraphProvider | null = null;
 
 function resolvePreferredWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
-    const configuredPath = vscode.workspace.getConfiguration('graph-it-live').get<string>('workspaceFolder', '');
+    const configuredPath = vscode.workspace.getConfiguration('skein').get<string>('workspaceFolder', '');
     const configuredFolder = vscode.workspace.workspaceFolders?.find(folder => folder.uri.fsPath === configuredPath);
     if (configuredFolder) return configuredFolder;
 
@@ -55,7 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
     watchLogLevelConfig(context);
     
     const log = getExtensionLogger('Extension');
-    log.info('Structure Graph is now active!');
+    log.info('Skein is now active!');
 
     const provider = new GraphProvider(context.extensionUri, context);
     graphProvider = provider; // Keep reference for deactivation
@@ -93,10 +93,10 @@ export function activate(context: vscode.ExtensionContext) {
         callGraphViewService,
 
         // showCallGraph command
-        vscode.commands.registerCommand('graph-it-live.showCallGraph', () => {
+        vscode.commands.registerCommand('skein.showCallGraph', () => {
             provider.setViewModeCallgraph();
             callGraphViewService.show().catch((err: unknown) => {
-                log.error('graph-it-live.showCallGraph error:', err);
+                log.error('skein.showCallGraph error:', err);
             });
         }),
 
@@ -128,15 +128,15 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Command: switch the workspace root the graph and MCP server analyze
     disposables.push(
-        vscode.commands.registerCommand('graph-it-live.setWorkspace', async () => {
+        vscode.commands.registerCommand('skein.setWorkspace', async () => {
             const folders = vscode.workspace.workspaceFolders;
             if (!folders || folders.length === 0) {
-                vscode.window.showWarningMessage('Structure Graph: No workspace folders are open.');
+                vscode.window.showWarningMessage('Skein: No workspace folders are open.');
                 return;
             }
             if (folders.length === 1) {
                 vscode.window.showInformationMessage(
-                    `Structure Graph: Already analyzing "${folders[0].name}".`
+                    `Skein: Already analyzing "${folders[0].name}".`
                 );
                 return;
             }
@@ -148,7 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
             const current = mcpServerProvider?.workspaceRoot;
             const pick = await vscode.window.showQuickPick(items, {
                 placeHolder: `Current workspace: ${current ?? 'none'} — select a folder to analyze`,
-                title: 'Structure Graph: Set Workspace Folder',
+                title: 'Skein: Set Workspace Folder',
             });
             if (!pick) {
                 return;
@@ -156,7 +156,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (mcpServerProvider) {
                 mcpServerProvider.updateWorkspaceFolder(pick.folder);
             }
-            await vscode.workspace.getConfiguration('graph-it-live').update(
+            await vscode.workspace.getConfiguration('skein').update(
                 'workspaceFolder', pick.folder.uri.fsPath, vscode.ConfigurationTarget.Workspace
             );
             log.info('Workspace switched to:', pick.folder.uri.fsPath);
@@ -164,7 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
             // The graph view Spider is initialized at extension startup, so a
             // window reload is required for it to analyze the new root.
             vscode.window.showInformationMessage(
-                `Structure Graph: MCP server switched to "${pick.folder.name}". Reload the window to update the graph view.`,
+                `Skein: MCP server switched to "${pick.folder.name}". Reload the window to update the graph view.`,
                 'Reload Window'
             ).then(action => {
                 if (action === 'Reload Window') {

@@ -42,7 +42,7 @@ export type ArchitectureUnitLevel = Omit<ArchitectureUnits, "context"> & {
   cycleUnits?: string[][];
 };
 
-/** The declared rules (graphit.architecture.json) checked against one level, as graph-it check-architecture reports them. */
+/** The declared rules (skein.architecture.json) checked against one level, as graph-it check-architecture reports them. */
 export interface ArchitectureRulesView {
   configFile: string;
   /** context.revision of the check (code, rules and baseline): a new one redraws the violations. */
@@ -80,7 +80,7 @@ export interface ArchitectureSummaryMessage extends ArchitectureOverview {
   stale: boolean;
   /** Path mode only: units drawn on top, each entered to show its groups. */
   units?: ArchitectureUnitLevel;
-  /** With a graphit.architecture.json at the workspace root: its rules checked against this level. */
+  /** With a skein.architecture.json at the workspace root: its rules checked against this level. */
   rules?: ArchitectureRulesView;
   /** Groups drawn per level (per unit in path mode), largest first: DEFAULT_RENDERED_GROUPS until Show more groups. */
   maxGroups?: number;

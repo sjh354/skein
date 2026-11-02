@@ -590,7 +590,7 @@ export class ArchitectureViewService {
         post({
           type: "architectureState",
           status: "empty",
-          message: `No supported source file in "${folder}". Files excluded by .graphitignore or the Graph-It-Live settings are not analysed.`,
+          message: `No supported source file in "${folder}". Files excluded by .skeinignore or the Skein settings are not analysed.`,
         });
         return;
       }

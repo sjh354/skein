@@ -9,8 +9,7 @@
  * (src/extension/services/LmToolsService.ts) with smaller input schemas and no
  * tokenBudget paging; a surface whose key is absent omits the line.
  *
- * Tool names are written with the MCP prefix (`graphitlive_`); the LM text
- * rewrites them to the LM prefix (`graph-it-live_`).
+ * MCP and LM tools share the `skein_` name prefix.
  *
  * package.json is regenerated with `npm run sync:tool-descriptions`;
  * tests/mcp/toolDescriptions.test.ts fails when it drifts.
@@ -38,11 +37,11 @@ type LmOnlyToolName =
 export type DescribedToolName = McpToolName | "get_session_stats" | LmOnlyToolName;
 
 const OPEN_ENDED_HINT =
-  "For an open-ended question, start with graphitlive_graph_context and come here when you need this specific cut.";
+  "For an open-ended question, start with skein_graph_context and come here when you need this specific cut.";
 const TOKEN_BUDGET_LIMIT =
   "output capped by tokenBudget (default 4000, 0 = no limit); a cut sets truncated=true, omitted counts and nextOffset - pass it as offset to read the rest.";
 const LM_CALL_GRAPH_INDEX =
-  "needs the call graph index, built in the background when the Graph-It-Live view first loads (graph-it-live.preIndexCallGraph) or when the Call Graph panel opens; until then the tool returns an error.";
+  "needs the call graph index, built in the background when the Skein view first loads (skein.preIndexCallGraph) or when the Call Graph panel opens; until then the tool returns an error.";
 
 const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
   set_workspace: {
@@ -87,7 +86,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "WHY: crawls real import edges across the workspace rather than inferring structure from file names.",
       {
         mcp: "RETURNS: nodes (path, extension, dependency count, dependent count, circular flag, communityId/communityKey: by folder, or by import structure with communityMode 'louvain') and edges (import relations); paginated via offset/limit.",
-        lm: "RETURNS: nodes (workspace-relative path) and edges (import relations, source and target). maxDepth defaults to the configured graph-it-live.maxDepth, else 3.",
+        lm: "RETURNS: nodes (workspace-relative path) and edges (import relations, source and target). maxDepth defaults to the configured skein.maxDepth, else 3.",
       },
       { mcp: `LIMITS: ${TOKEN_BUDGET_LIMIT}` },
       OPEN_ENDED_HINT,
@@ -122,7 +121,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "WHEN: inspecting import style or alias usage, without the resolved paths.",
       "WHY: uses the language-aware parser pipeline, so it is more accurate than a text search.",
       "RETURNS: module specifier as written, import type, line number.",
-      "LIMITS: lists only imports that resolve to a workspace file, once per file - use graphitlive_resolve_module_path to debug one that does not.",
+      "LIMITS: lists only imports that resolve to a workspace file, once per file - use skein_resolve_module_path to debug one that does not.",
     ],
   },
   verify_dependency_usage: {
@@ -191,7 +190,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
         mcp: "RETURNS: exported symbols (name, kind, line, category) and symbol-to-symbol edges tagged runtime or type-only.",
         lm: "RETURNS: every symbol of the file (name, kind, line, category, internal ones included) and symbol-to-symbol edges tagged runtime or type-only.",
       },
-      "NOT THIS TOOL: for calls between symbols defined in the same file, use graphitlive_generate_codemap (its call flow section). This tool crosses the file boundary outward; that one stays inside it.",
+      "NOT THIS TOOL: for calls between symbols defined in the same file, use skein_generate_codemap (its call flow section). This tool crosses the file boundary outward; that one stays inside it.",
       OPEN_ENDED_HINT,
     ],
   },
@@ -211,7 +210,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "WHEN: changing a signature and needing every call site, or assessing the blast radius of a symbol-level change.",
       "WHY: walks the symbol graphs of every file that references the target, so file-level imports count as well as calls.",
       "RETURNS: caller symbol id, file path and workspace-relative path per dependent, plus a total count.",
-      "PICKING BETWEEN THE THREE: this one for every reference, including file-level imports, computed fresh; graphitlive_get_symbol_callers for call sites only; graphitlive_query_call_graph for multi-hop traversal, callees, or relation types.",
+      "PICKING BETWEEN THE THREE: this one for every reference, including file-level imports, computed fresh; skein_get_symbol_callers for call sites only; skein_query_call_graph for multi-hop traversal, callees, or relation types.",
     ],
   },
   trace_function_execution: {
@@ -227,9 +226,9 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
     summary: "Lists the call sites of one given symbol - one hop, from the call graph index.",
     lines: [
       `WHEN: the plain question "who calls X"; finding call sites before a rename; spotting a symbol with no callers.`,
-      "WHY: reads CALLS edges from the indexed call graph, so it returns only symbols that call X. File-level imports and other references are not callers; use graphitlive_get_symbol_dependents for those.",
+      "WHY: reads CALLS edges from the indexed call graph, so it returns only symbols that call X. File-level imports and other references are not callers; use skein_get_symbol_dependents for those.",
       "RETURNS: one entry per caller symbol with workspace-relative path, line of the first call and a type-only flag, plus runtime and type-only counts. Type-only references are added only with includeTypeOnly. The source field says whether the call graph or the symbol dependents fallback answered (the call graph is used once indexed; line is null in the fallback).",
-      "PICKING BETWEEN THE THREE: this one for call sites; graphitlive_get_symbol_dependents for every reference (imports included) computed fresh from source; graphitlive_query_call_graph when you need more than one hop, callees as well as callers, or relation types such as INHERITS and IMPLEMENTS.",
+      "PICKING BETWEEN THE THREE: this one for call sites; skein_get_symbol_dependents for every reference (imports included) computed fresh from source; skein_query_call_graph when you need more than one hop, callees as well as callers, or relation types such as INHERITS and IMPLEMENTS.",
     ],
   },
   analyze_breaking_changes: {
@@ -267,7 +266,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "WHEN: understanding how a file works internally, or spotting recursion before a refactor.",
       "WHY: built from the file's AST, so no language server is needed. Calls are matched by name within the file.",
       "RETURNS: nodes (symbol id, LSP SymbolKind number, type, export status, start/end line range), call edges with call-site line numbers, and cycle detection with the symbols involved.",
-      "NOT THIS TOOL: for what this file's symbols reach in OTHER files, use graphitlive_get_symbol_graph.",
+      "NOT THIS TOOL: for what this file's symbols reach in OTHER files, use skein_get_symbol_graph.",
       "SUPPORTS: TypeScript, JavaScript, Python, Rust.",
       OPEN_ENDED_HINT,
     ],
@@ -296,7 +295,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
         lm: "RETURNS: the matched symbol, its callers and callees with file and call-site line, relation type, and a cyclic flag per edge. Defaults: direction=both, depth=2.",
       },
       "SELECTING: two same-name methods in one file return reason=ambiguous with candidates; pass one candidate's symbolId or startLine to select it exactly. A stale selector returns reason=stale_selector (ids embed the line and change after edits); 'Class.method' names are not supported.",
-      "NOT THIS TOOL: for every file that imports a file, use graphitlive_find_referencing_files.",
+      "NOT THIS TOOL: for every file that imports a file, use skein_find_referencing_files.",
       {
         mcp: `LIMITS: the first call indexes the workspace (3-8s); later queries are fast. Output capped by tokenBudget (default 4000, 0 = no limit); a cut sets truncated=true, omitted counts and nextOffset - pass it as offset to read the rest.`,
         lm: `LIMITS: ${LM_CALL_GRAPH_INDEX}`,
@@ -334,18 +333,18 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
     lines: [
       `WHEN: "how is this project structured", "what depends on the analyzer layer", "why does group A import group B".`,
       "WHY: aggregates the whole import graph by folder domain (communityMode 'path') or import structure ('louvain') before any paging, so counts match graph-it architecture --groups and every group edge is backed by its file pairs.",
-      "RETURNS: no group/from/to - totals, unassigned files, the largest groups and group edges; group (a number is an id, a string a key or label) - its files and incoming / outgoing group edges; from + to - the distinct file pairs of that edge; level 'units' - packages (else top-level folders) with their layer (0 = depends on no other unit), role (function, micro-frontend, frontend, service, library, tooling, unknown) with its confidence (inferred, or declared in graphit.architecture.json) and evidence, roleCounts, layerCount, unit edges flagged down, upward or cycle, and the cycle count; level 'units' + from + to (unit keys, e.g. 'apps/web', '(root)') - the file pairs of that unit edge, sorted by target then source, total = the edge's file-pair count; folder (a unit key, or a group key of a folder level, path mode) - the same views one level down: its sub-folders and own files as groups, nestedGroups those that go deeper; view 'matrix' (with level 'units', folder or neither) - the level's dependency structure matrix: rows by layer with each cycle's rows together, non-zero cells (row imports column, diagonal = pairs inside, upward = above the diagonal), Ce/Ca/instability per row with the formula, cycles and totals. Each response states its context (grouping, graph kind, truncation, revision) and separates code facts from computed groupings.",
-      "LIMITS: import relations only (static analysis, not observed execution); every list (groups, group edges, files, incoming, outgoing, pairs, matrix cells) paginated by offset/limit (default 50) with totals, truncated and nextOffset; analyses every source file on each call, so pass the previous context.revision with a group id or offset: the call fails if the architecture changed, and you restart from the summary. Symbols and lines come from graphitlive_find_referencing_files, graphitlive_query_call_graph and graphitlive_get_impact_analysis.",
+      "RETURNS: no group/from/to - totals, unassigned files, the largest groups and group edges; group (a number is an id, a string a key or label) - its files and incoming / outgoing group edges; from + to - the distinct file pairs of that edge; level 'units' - packages (else top-level folders) with their layer (0 = depends on no other unit), role (function, micro-frontend, frontend, service, library, tooling, unknown) with its confidence (inferred, or declared in skein.architecture.json) and evidence, roleCounts, layerCount, unit edges flagged down, upward or cycle, and the cycle count; level 'units' + from + to (unit keys, e.g. 'apps/web', '(root)') - the file pairs of that unit edge, sorted by target then source, total = the edge's file-pair count; folder (a unit key, or a group key of a folder level, path mode) - the same views one level down: its sub-folders and own files as groups, nestedGroups those that go deeper; view 'matrix' (with level 'units', folder or neither) - the level's dependency structure matrix: rows by layer with each cycle's rows together, non-zero cells (row imports column, diagonal = pairs inside, upward = above the diagonal), Ce/Ca/instability per row with the formula, cycles and totals. Each response states its context (grouping, graph kind, truncation, revision) and separates code facts from computed groupings.",
+      "LIMITS: import relations only (static analysis, not observed execution); every list (groups, group edges, files, incoming, outgoing, pairs, matrix cells) paginated by offset/limit (default 50) with totals, truncated and nextOffset; analyses every source file on each call, so pass the previous context.revision with a group id or offset: the call fails if the architecture changed, and you restart from the summary. Symbols and lines come from skein_find_referencing_files, skein_query_call_graph and skein_get_impact_analysis.",
     ],
   },
   check_architecture: {
     summary:
-      "Checks the workspace imports against the architecture rules declared in graphit.architecture.json.",
+      "Checks the workspace imports against the architecture rules declared in skein.architecture.json.",
     lines: [
       `WHEN: "does this change break the architecture", "may the frontend import the backend", before adding an import across packages, or to list the violations a CI gate reports.`,
       "WHY: rules are human annotation (elements selected by path patterns, units or unit roles; forbid, allowOnly, noCycles); the check compares every static import pair with them, as graph-it check-architecture does, and a baseline separates accepted violations from new ones.",
       "RETURNS: passed (false when an error-severity violation is new), totals per severity, each rule with its violation count and element pairs, the violating file pairs (source, target, import line, element pairs, new) sorted by rule, files no element selects, baseline entries no longer found (resolved), and config warnings (patterns matching nothing). Invalid configs fail with the JSON path of each error.",
-      "LIMITS: import relations only (static analysis), no rule on symbols or calls; violations paginated by offset/limit (default 50) with totals; analyses every source file on each call, so pass the previous context.revision with an offset: the call fails if the code, rules or baseline changed. Pair it with graphitlive_explore_architecture to see the units and edges the rules refer to.",
+      "LIMITS: import relations only (static analysis), no rule on symbols or calls; violations paginated by offset/limit (default 50) with totals; analyses every source file on each call, so pass the previous context.revision with an offset: the call fails if the code, rules or baseline changed. Pair it with skein_explore_architecture to see the units and edges the rules refer to.",
     ],
   },
   get_session_stats: {
@@ -378,7 +377,7 @@ export function mcpToolDescription(name: DescribedToolName): string {
   return render(name, "mcp");
 }
 
-/** `modelDescription` of the VS Code Language Model tool `graph-it-live_<name>`. */
+/** `modelDescription` of the VS Code Language Model tool `skein_<name>`. */
 export function lmToolDescription(name: DescribedToolName): string {
-  return render(name, "lm").replaceAll("graphitlive_", "graph-it-live_");
+  return render(name, "lm");
 }

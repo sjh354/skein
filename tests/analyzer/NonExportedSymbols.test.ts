@@ -13,7 +13,7 @@ describe("SymbolAnalyzer - Non-Exported Symbols", () => {
 
   beforeAll(async () => {
     // Create temp directory
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "graph-it-live-test-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "skein-test-"));
 
     // Create test file with mix of exported and non-exported symbols
     testFilePath = path.join(tempDir, "test-symbols.ts");

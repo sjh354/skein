@@ -86,7 +86,7 @@ export const byCodeUnit = (left: string, right: string) => (left < right ? -1 : 
 
 /**
  * Units, layers and unit → unit edges of an architecture graph, aggregated from every file
- * pair before any paging, with the role of every unit (`roles` of graphit.architecture.json
+ * pair before any paging, with the role of every unit (`roles` of skein.architecture.json
  * win). `context.revision` also covers the units, their names and roles.
  */
 export function buildArchitectureUnits(

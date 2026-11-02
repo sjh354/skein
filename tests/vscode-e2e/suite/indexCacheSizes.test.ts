@@ -20,7 +20,7 @@ suite('Index cache sizes (#295)', function () {
     if (!lmToolsSupported()) {
       this.skip();
     }
-    await vscode.extensions.getExtension('sjh354.structure-graph')?.activate();
+    await vscode.extensions.getExtension('sjh354.skein')?.activate();
 
     let status: IndexStatus = {};
     const deadline = Date.now() + 80000;

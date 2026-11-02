@@ -72,14 +72,14 @@ describe("WebviewManager", () => {
       expect(html).toContain("<!DOCTYPE html>");
       expect(html).toContain("<html lang=\"en\">");
       expect(html).toContain("<head>");
-      expect(html).toContain('<body data-structure-graph-host="sidebar">');
+      expect(html).toContain('<body data-skein-host="sidebar">');
       expect(html).toContain("</html>");
     });
 
     it("marks the editor tab so the webview can show its mode toolbar", () => {
       const html = webviewManager.getHtmlForWebview(mockWebview, "editor");
 
-      expect(html).toContain('<body data-structure-graph-host="editor">');
+      expect(html).toContain('<body data-skein-host="editor">');
     });
 
     it("should include Content Security Policy meta tag", () => {
@@ -178,10 +178,10 @@ describe("WebviewManager", () => {
       expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1.0">');
     });
 
-    it("should set document title to Structure Graph", () => {
+    it("should set document title to Skein", () => {
       const html = webviewManager.getHtmlForWebview(mockWebview);
 
-      expect(html).toContain("<title>Structure Graph</title>");
+      expect(html).toContain("<title>Skein</title>");
     });
 
     it("should set proper charset encoding", () => {

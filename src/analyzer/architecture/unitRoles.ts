@@ -1,7 +1,7 @@
 /**
  * Unit roles: what a unit of `graph-it architecture --level units` is (a deployable function, a
  * frontend, a service, a shared library...), inferred from its manifest and files with the
- * evidence behind it, or declared in graphit.architecture.json. A role is an interpretation
+ * evidence behind it, or declared in skein.architecture.json. A role is an interpretation
  * (#300): it is always shown with its evidence and its confidence.
  *
  * CRITICAL ARCHITECTURE RULE: This module is completely VS Code agnostic!
@@ -12,7 +12,7 @@ import * as path from "node:path";
 import { UNIT_ROLES, type UnitRole, type UnitRoleEvidence, type UnitRoleInfo } from "../../shared/architecture-model";
 import { validateWorkspacePath } from "../../shared/pathSecurity";
 
-/** `roles` of graphit.architecture.json: unit key or package name pattern → role. */
+/** `roles` of skein.architecture.json: unit key or package name pattern → role. */
 export type DeclaredRoles = Partial<Record<string, UnitRole>>;
 
 /** Manifests and configs larger than this are ignored: they are read whole. */
@@ -216,5 +216,5 @@ export function unitRole(workspaceRoot: string, unit: UnitRoleInput & { key: str
   const match = Object.entries(declared ?? {}).find(([pattern]) => matchesWildcard(pattern, unit.key) || matchesWildcard(pattern, unit.name));
   if (match?.[1] === undefined) return inferred;
   const [pattern, role] = match;
-  return { role, confidence: "declared", evidence: [{ role, detail: `declared by roles["${pattern}"] in graphit.architecture.json` }, ...inferred.evidence] };
+  return { role, confidence: "declared", evidence: [{ role, detail: `declared by roles["${pattern}"] in skein.architecture.json` }, ...inferred.evidence] };
 }

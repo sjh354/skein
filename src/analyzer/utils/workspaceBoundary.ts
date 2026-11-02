@@ -141,7 +141,7 @@ export function reportOutOfRootImports(
     return {
       warning:
         "Imports resolving outside the workspace root are not counted while the reverse index is off; " +
-        "results may miss files outside this root (VS Code: enable graph-it-live.enableBackgroundIndexing).",
+        "results may miss files outside this root (VS Code: enable skein.enableBackgroundIndexing).",
     };
   }
   if (summary.count === 0) return { outOfRootImports: 0 };
@@ -153,6 +153,6 @@ export function reportOutOfRootImports(
     ...(label ? { monorepoRoot: label } : {}),
     warning:
       `${describeOutOfRootImports(summary, label)} Re-index from the monorepo root to include them ` +
-      "(CLI --workspace, MCP graphitlive_set_workspace, VS Code: open it as the workspace folder).",
+      "(CLI --workspace, MCP skein_set_workspace, VS Code: open it as the workspace folder).",
   };
 }

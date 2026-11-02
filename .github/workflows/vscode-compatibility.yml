@@ -123,6 +123,6 @@ jobs:
           git tag -a "$tag" \
             -m "VS Code version: $VERSION" \
             -m "CI result: $RESULT" \
-            -m "Graph-It-Live main commit: $MAIN_SHA" \
+            -m "Skein main commit: $MAIN_SHA" \
             -m "GitHub Actions run: $RUN_URL"
           git push origin "refs/tags/$tag"

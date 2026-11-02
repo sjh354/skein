@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install Git hooks for Graph-It-Live
+# Install Git hooks for Skein
 
 HOOKS_DIR=".git/hooks"
 SCRIPTS_DIR="scripts/hooks"

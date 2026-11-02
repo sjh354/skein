@@ -1,7 +1,7 @@
 /**
  * E2E Tests for the Live Call Graph feature.
  *
- * Tests the `graph-it-live.showCallGraph` command, graph rendering via the
+ * Tests the `skein.showCallGraph` command, graph rendering via the
  * `callGraphReady` context keys set by CallGraphViewService, cycle detection,
  * live file-save refresh, and Python language smoke.
  *
@@ -27,7 +27,7 @@ suite('Call Graph Test Suite', () => {
   before(async function () {
     this.timeout(30000);
     vscode.window.showInformationMessage('Starting call graph tests');
-    const ext = vscode.extensions.getExtension('sjh354.structure-graph');
+    const ext = vscode.extensions.getExtension('sjh354.skein');
     assert.ok(ext, 'Extension should exist');
     if (!ext.isActive) {
       await ext.activate();
@@ -42,7 +42,7 @@ suite('Call Graph Test Suite', () => {
   teardown(async function () {
     try {
       // Best-effort: reset sidebar view mode so tests don't bleed into each other
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await sleep(300);
     } catch {
       // Ignore — graph view may not be open
@@ -56,8 +56,8 @@ suite('Call Graph Test Suite', () => {
   test('Should register showCallGraph command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.showCallGraph'),
-      'graph-it-live.showCallGraph should be registered in the extension',
+      commands.includes('skein.showCallGraph'),
+      'skein.showCallGraph should be registered in the extension',
     );
   });
 
@@ -74,7 +74,7 @@ suite('Call Graph Test Suite', () => {
   test('LM callers include a named import alias (#398)', async function () {
     this.timeout(90000);
     await openCallGraphFor('symbols', 'alias-target.ts');
-    const result = await vscode.lm.invokeTool('graph-it-live_query_call_graph', {
+    const result = await vscode.lm.invokeTool('skein_query_call_graph', {
       input: { filePath: getProjectFile('symbols', 'alias-target.ts').fsPath, symbolName: 'aliasTarget398', direction: 'callers' },
       toolInvocationToken: undefined,
     });
@@ -94,7 +94,7 @@ suite('Call Graph Test Suite', () => {
     const withAlias = Buffer.from(Buffer.from(original).toString('utf8').replace('"paths": {', '"paths": {\n      "@e2e432/*": ["./src/*"],'));
     const callerNames = async (): Promise<string[]> => {
       await openCallGraphFor('sample-project', 'src', 'e2eAliasTarget432.ts');
-      const result = await vscode.lm.invokeTool('graph-it-live_query_call_graph', {
+      const result = await vscode.lm.invokeTool('skein_query_call_graph', {
         input: { filePath: target.fsPath, symbolName: 'aliasTarget432', direction: 'callers' },
         toolInvocationToken: undefined,
       });
@@ -128,7 +128,7 @@ suite('Call Graph Test Suite', () => {
     this.timeout(90000);
     await openCallGraphFor('symbols', 'functions.ts');
 
-    const nodeCount = await getContextKey<number>('graph-it-live.callGraphNodeCount');
+    const nodeCount = await getContextKey<number>('skein.callGraphNodeCount');
     assert.ok(
       (nodeCount ?? 0) > 0,
       `Expected callGraphNodeCount > 0, got ${nodeCount ?? 'undefined'}`,
@@ -143,7 +143,7 @@ suite('Call Graph Test Suite', () => {
     this.timeout(90000);
     await openCallGraphFor('symbols', 'functions.ts');
 
-    const edgeCount = await getContextKey<number>('graph-it-live.callGraphEdgeCount');
+    const edgeCount = await getContextKey<number>('skein.callGraphEdgeCount');
     assert.notStrictEqual(edgeCount, undefined, 'callGraphEdgeCount should be defined');
     assert.ok(
       (edgeCount ?? -1) >= 0,
@@ -160,7 +160,7 @@ suite('Call Graph Test Suite', () => {
     // recursion.ts contains isEven ↔ isOdd mutual recursion and fibonacci self-call
     await openCallGraphFor('symbols', 'recursion.ts');
 
-    const cycleCount = await getContextKey<number>('graph-it-live.callGraphCycleCount');
+    const cycleCount = await getContextKey<number>('skein.callGraphCycleCount');
     assert.ok(
       (cycleCount ?? 0) > 0,
       `Expected callGraphCycleCount > 0 for recursion.ts (mutual recursion), ` +
@@ -176,12 +176,12 @@ suite('Call Graph Test Suite', () => {
     this.timeout(90000);
     await openCallGraphFor('symbols', 'functions.ts');
     const renderCountBefore =
-      (await getContextKey<number>('graph-it-live.callGraphRenderCount')) ?? 0;
+      (await getContextKey<number>('skein.callGraphRenderCount')) ?? 0;
 
     // Open a different file so the service re-queries and posts a new callGraphReady
     await openCallGraphFor('symbols', 'recursion.ts');
     const renderCountAfter =
-      (await getContextKey<number>('graph-it-live.callGraphRenderCount')) ?? 0;
+      (await getContextKey<number>('skein.callGraphRenderCount')) ?? 0;
 
     assert.ok(
       renderCountAfter > renderCountBefore,
@@ -199,7 +199,7 @@ suite('Call Graph Test Suite', () => {
     // Open the call graph (which uses the sidebar webview, not the viewMode panel)
     await openCallGraphFor('symbols', 'functions.ts');
 
-    const viewMode = await getContextKey<string>('graph-it-live.viewMode');
+    const viewMode = await getContextKey<string>('skein.viewMode');
     // viewMode may be undefined (graph panel not open) or any valid mode string
     // 'callgraph' is a legitimate value set by showCallGraph via setViewModeCallgraph()
     assert.ok(
@@ -216,7 +216,7 @@ suite('Call Graph Test Suite', () => {
     this.timeout(90000);
     await openCallGraphFor('symbols', 'functions.ts');
     const renderCountBefore =
-      (await getContextKey<number>('graph-it-live.callGraphRenderCount')) ?? 0;
+      (await getContextKey<number>('skein.callGraphRenderCount')) ?? 0;
 
     // Trigger an explicit save of the currently open document.
     // VS Code fires onDidSaveTextDocument even for unmodified files.
@@ -226,7 +226,7 @@ suite('Call Graph Test Suite', () => {
     await sleep(4000);
 
     const renderCountAfter =
-      (await getContextKey<number>('graph-it-live.callGraphRenderCount')) ?? 0;
+      (await getContextKey<number>('skein.callGraphRenderCount')) ?? 0;
     assert.ok(
       renderCountAfter > renderCountBefore,
       `callGraphRenderCount should increase after file save ` +
@@ -246,7 +246,7 @@ suite('Call Graph Test Suite', () => {
     await vscode.workspace.fs.writeFile(file, Buffer.from(source, 'utf8'));
     try {
       await openCallGraphFor('symbols', 'wide-hub.ts');
-      const nodeCount = await getContextKey<number>('graph-it-live.callGraphNodeCount');
+      const nodeCount = await getContextKey<number>('skein.callGraphNodeCount');
       assert.strictEqual(nodeCount, 500, `Expected the 500-node cap, got ${nodeCount ?? 'undefined'}`);
     } finally {
       await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
@@ -263,8 +263,8 @@ suite('Call Graph Test Suite', () => {
     // No GraphQL language id without a GraphQL extension: the file extension selects the language.
     await openCallGraphFor('graphql-project', 'fragments', 'post.graphql');
 
-    const nodeCount = await getContextKey<number>('graph-it-live.callGraphNodeCount');
-    const edgeCount = await getContextKey<number>('graph-it-live.callGraphEdgeCount');
+    const nodeCount = await getContextKey<number>('skein.callGraphNodeCount');
+    const edgeCount = await getContextKey<number>('skein.callGraphEdgeCount');
     // PostFields spreads UserFields and TimestampFields.
     assert.ok((nodeCount ?? 0) >= 3, `Expected at least 3 GraphQL nodes, got ${nodeCount ?? 'undefined'}`);
     assert.ok((edgeCount ?? 0) >= 2, `Expected at least 2 GraphQL edges, got ${edgeCount ?? 'undefined'}`);
@@ -289,7 +289,7 @@ suite('Call Graph Test Suite', () => {
 
     // Python may or may not produce a full graph; the test only verifies no exception
     try {
-      await vscode.commands.executeCommand('graph-it-live.showCallGraph');
+      await vscode.commands.executeCommand('skein.showCallGraph');
       await sleep(5000);
     } catch (err) {
       assert.fail(`showCallGraph on Python file threw an error: ${String(err)}`);

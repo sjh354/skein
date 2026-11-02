@@ -24,7 +24,7 @@ interface LmToolContribution {
   modelDescription: string;
 }
 
-const LM_PREFIX = 'graph-it-live_';
+const LM_PREFIX = 'skein_';
 const manifest = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'),
 ) as { contributes: { languageModelTools: LmToolContribution[] } };
@@ -44,8 +44,7 @@ describe('tool descriptions registry', () => {
   it('LM descriptions name only registered LM tools', () => {
     for (const tool of lmTools) {
       const text = lmToolDescription(shortName(tool));
-      expect(text).not.toContain('graphitlive_');
-      for (const [ref] of text.matchAll(/graph-it-live_[a-z_]+/g)) {
+      for (const [ref] of text.matchAll(/skein_[a-z_]+/g)) {
         expect(lmToolNames, `${tool.name} references ${ref}`).toContain(ref);
       }
     }
@@ -54,8 +53,8 @@ describe('tool descriptions registry', () => {
   it('MCP descriptions name only registered MCP tools (issue #304)', () => {
     const mcpToolNames = new Set([...Object.keys(toolSchemas), 'get_session_stats']);
     for (const name of mcpToolNames) {
-      for (const [, ref] of mcpToolDescription(name as DescribedToolName).matchAll(/graphitlive_([a-z_]+)/g)) {
-        expect(mcpToolNames, `${name} references graphitlive_${ref}`).toContain(ref);
+      for (const [, ref] of mcpToolDescription(name as DescribedToolName).matchAll(/skein_([a-z_]+)/g)) {
+        expect(mcpToolNames, `${name} references skein_${ref}`).toContain(ref);
       }
     }
   });
@@ -72,8 +71,8 @@ describe('tool descriptions registry', () => {
     expect(mcpToolDescription('crawl_dependency_graph')).toMatch(/^Builds the transitive file dependency graph[^\n]*\n\nWHEN:/);
     expect(mcpToolDescription('crawl_dependency_graph')).toContain('LIMITS: output capped by tokenBudget');
     expect(lmToolDescription('crawl_dependency_graph')).not.toContain('LIMITS:');
-    expect(mcpToolDescription('query_call_graph')).toContain('graphitlive_find_referencing_files');
-    expect(lmToolDescription('query_call_graph')).toContain('graph-it-live_find_referencing_files');
+    expect(mcpToolDescription('query_call_graph')).toContain('skein_find_referencing_files');
+    expect(lmToolDescription('query_call_graph')).toContain('skein_find_referencing_files');
     expect(toolSummary('get_symbol_graph')).toBe(mcpToolDescription('get_symbol_graph').split('\n')[0]);
   });
 });

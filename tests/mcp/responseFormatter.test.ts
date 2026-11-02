@@ -94,7 +94,7 @@ describe('formatToolResponse', () => {
       meta: { llmProvider: 'none', keywordExtractionMs: 1, bfsMs: 1, totalMs: 3, tokenEstimate: 20, truncated: false },
     }, 5, '/workspace');
 
-    const text = formatToolResponse(response, 'toon', 'graphitlive_query_natural_language').content[0].text;
+    const text = formatToolResponse(response, 'toon', 'skein_query_natural_language').content[0].text;
 
     expect(text).toBe(
       'query(question,keywords,llmProvider,totalMs,tokenEstimate)\n'
@@ -111,7 +111,7 @@ describe('formatToolResponse', () => {
       edges: [],
     }, 5, '/workspace');
 
-    const text = formatToolResponse(response, 'toon', 'graphitlive_query_natural_language').content[0].text;
+    const text = formatToolResponse(response, 'toon', 'skein_query_natural_language').content[0].text;
 
     expect(text).not.toContain('query(');
     expect(text).toContain('[src/a.ts:main,main]');
@@ -122,7 +122,7 @@ describe('formatToolResponse failures and metadata (#238)', () => {
   const missing = () => createErrorResponse('File not found: src/missing.ts', 5, '/workspace');
 
   it.each(['toon', 'json', 'markdown'] as const)('sets isError and states the error in %s text', (format) => {
-    const result = formatToolResponse(missing(), format, 'graphitlive_analyze_dependencies');
+    const result = formatToolResponse(missing(), format, 'skein_analyze_dependencies');
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('File not found: src/missing.ts');
@@ -187,7 +187,7 @@ describe('formatToolResponse failures and metadata (#238)', () => {
   });
 
   it('does not add a second errors section to a failed graph_context call', () => {
-    const text = formatToolResponse(createErrorResponse('bad seed', 5, '/workspace'), 'toon', 'graphitlive_graph_context').content[0].text;
+    const text = formatToolResponse(createErrorResponse('bad seed', 5, '/workspace'), 'toon', 'skein_graph_context').content[0].text;
 
     expect(text.match(/errors\(/g)).toHaveLength(1);
     expect(text).toContain('bad seed');
@@ -404,14 +404,14 @@ describe('session stats recording', () => {
   ];
 
   it('records an entry with the provided toolName on formatDataAsToon', () => {
-    formatDataAsToon(sampleData, 'files', 'graphitlive_generate_codemap');
+    formatDataAsToon(sampleData, 'files', 'skein_generate_codemap');
 
     const snapshot = sessionStats.snapshot();
     expect(snapshot.totals.calls).toBe(1);
-    expect(snapshot.byTool['graphitlive_generate_codemap']).toBeDefined();
-    expect(snapshot.byTool['graphitlive_generate_codemap'].calls).toBe(1);
-    expect(snapshot.byTool['graphitlive_generate_codemap'].jsonTokens).toBeGreaterThan(0);
-    expect(snapshot.byTool['graphitlive_generate_codemap'].toonTokens).toBeGreaterThan(0);
+    expect(snapshot.byTool['skein_generate_codemap']).toBeDefined();
+    expect(snapshot.byTool['skein_generate_codemap'].calls).toBe(1);
+    expect(snapshot.byTool['skein_generate_codemap'].jsonTokens).toBeGreaterThan(0);
+    expect(snapshot.byTool['skein_generate_codemap'].toonTokens).toBeGreaterThan(0);
   });
 
   it('records under "unknown" when no toolName is provided', () => {
@@ -423,7 +423,7 @@ describe('session stats recording', () => {
   });
 
   it('records with truncated=false (truncation metadata not visible at this layer)', () => {
-    formatDataAsToon(sampleData, 'files', 'graphitlive_query_call_graph');
+    formatDataAsToon(sampleData, 'files', 'skein_query_call_graph');
 
     const snapshot = sessionStats.snapshot();
     expect(snapshot.totals.truncations).toBe(0);
@@ -431,23 +431,23 @@ describe('session stats recording', () => {
 
   it('propagates toolName through formatToolResponse for toon format', () => {
     const response = createSuccessResponse(sampleData, 5, '/workspace');
-    formatToolResponse(response, 'toon', 'graphitlive_analyze_dependencies');
+    formatToolResponse(response, 'toon', 'skein_analyze_dependencies');
 
     const snapshot = sessionStats.snapshot();
-    expect(snapshot.byTool['graphitlive_analyze_dependencies']).toBeDefined();
+    expect(snapshot.byTool['skein_analyze_dependencies']).toBeDefined();
     expect(snapshot.totals.calls).toBe(1);
   });
 
   it('does not record for json or markdown formats', () => {
     const response = createSuccessResponse(sampleData, 5, '/workspace');
-    formatToolResponse(response, 'json', 'graphitlive_analyze_dependencies');
-    formatToolResponse(response, 'markdown', 'graphitlive_analyze_dependencies');
+    formatToolResponse(response, 'json', 'skein_analyze_dependencies');
+    formatToolResponse(response, 'markdown', 'skein_analyze_dependencies');
 
     expect(sessionStats.snapshot().totals.calls).toBe(0);
   });
 
   it('does not record when TOON conversion fails (fallback to JSON)', () => {
-    formatDataAsToon([Symbol('invalid')] as never, 'items', 'graphitlive_x');
+    formatDataAsToon([Symbol('invalid')] as never, 'items', 'skein_x');
 
     expect(sessionStats.snapshot().totals.calls).toBe(0);
   });

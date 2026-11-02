@@ -267,7 +267,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       vscode.window.visibleTextEditors[0];
     if (!editor) {
       await vscode.window.showInformationMessage(
-        "Graph-It-Live: Open a source file and position the cursor on a symbol first.",
+        "Skein: Open a source file and position the cursor on a symbol first.",
       );
       return;
     }
@@ -276,7 +276,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     const lang = toSupportedLang(editor.document.languageId) ?? langFromPath(editor.document.uri.fsPath);
     if (!lang) {
       await vscode.window.showInformationMessage(
-        `Graph-It-Live: Call Graph is not supported for "${editor.document.languageId}". Supported: TypeScript, JavaScript, Vue, Svelte, Python, Rust, C#, Go, Java, Dart, GraphQL.`,
+        `Skein: Call Graph is not supported for "${editor.document.languageId}". Supported: TypeScript, JavaScript, Vue, Svelte, Python, Rust, C#, Go, Java, Dart, GraphQL.`,
       );
       return;
     }
@@ -565,7 +565,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     // and also set VS Code context key for `when` clause use.
     const cycleCount = result.edges.filter((e) => e.isCyclic).length;
     this.callGraphCycleCount = cycleCount;
-    void vscode.commands.executeCommand("setContext", "graph-it-live.callGraphCycleCount", cycleCount);
+    void vscode.commands.executeCommand("setContext", "skein.callGraphCycleCount", cycleCount);
     this.postMessage({
       type: "showCallGraph",
       rootSymbolId: result.rootSymbolId,
@@ -823,7 +823,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       });
     } else if (msg.command === "callGraphCopyReference") {
       void vscode.env.clipboard.writeText(msg.text).then(
-        () => vscode.window.setStatusBarMessage("Structure Graph: reference copied", 2000),
+        () => vscode.window.setStatusBarMessage("Skein: reference copied", 2000),
         (err: unknown) => this.log(`[CallGraph] copy error: ${errorMessage(err)}`),
       );
     } else if (msg.command === "callGraphMounted") {
@@ -849,9 +849,9 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       this.callGraphRenderCount += 1;
       this.callGraphNodeCount = msg.nodeCount;
       this.callGraphEdgeCount = msg.edgeCount;
-      void vscode.commands.executeCommand("setContext", "graph-it-live.callGraphNodeCount", msg.nodeCount);
-      void vscode.commands.executeCommand("setContext", "graph-it-live.callGraphEdgeCount", msg.edgeCount);
-      void vscode.commands.executeCommand("setContext", "graph-it-live.callGraphRenderCount", this.callGraphRenderCount);
+      void vscode.commands.executeCommand("setContext", "skein.callGraphNodeCount", msg.nodeCount);
+      void vscode.commands.executeCommand("setContext", "skein.callGraphEdgeCount", msg.edgeCount);
+      void vscode.commands.executeCommand("setContext", "skein.callGraphRenderCount", this.callGraphRenderCount);
     } else if (msg.command === "callGraphDepthChanged") {
       this.handleDepthChanged(msg.depth);
     } else if (msg.command === "callGraphFilterChanged") {
@@ -874,7 +874,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       doc = await vscode.workspace.openTextDocument(vscode.Uri.file(msg.uri));
     } catch {
       await vscode.window.showErrorMessage(
-        `Graph-It-Live: Could not open file: ${msg.uri}`,
+        `Skein: Could not open file: ${msg.uri}`,
       );
       return;
     }

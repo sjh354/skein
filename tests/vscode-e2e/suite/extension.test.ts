@@ -17,7 +17,7 @@ function getProjectFile(projectName: string, ...pathSegments: string[]): vscode.
   return vscode.Uri.joinPath(workspaceFolders[0].uri, projectName, ...pathSegments);
 }
 
-suite('Graph-It-Live Extension Test Suite', () => {
+suite('Skein Extension Test Suite', () => {
   before(() => {
     vscode.window.showInformationMessage('Start all tests.');
   });
@@ -27,14 +27,14 @@ suite('Graph-It-Live Extension Test Suite', () => {
   });
 
   test('Extension should be present', () => {
-    assert.ok(vscode.extensions.getExtension('sjh354.structure-graph'));
+    assert.ok(vscode.extensions.getExtension('sjh354.skein'));
   });
 
   test('Extension should load from the isolated VSIX profile when requested', () => {
     const expectedExtensionDirectory = process.env.E2E_EXPECTED_VSIX_EXTENSION_DIR;
     if (!expectedExtensionDirectory) return;
 
-    const extension = vscode.extensions.getExtension('sjh354.structure-graph');
+    const extension = vscode.extensions.getExtension('sjh354.skein');
     assert.ok(extension, 'Packaged extension should be installed');
 
     const relativePath = path.relative(expectedExtensionDirectory, extension!.extensionPath);
@@ -57,7 +57,7 @@ suite('Graph-It-Live Extension Test Suite', () => {
   test('Extension should activate', async function() {
     this.timeout(30000); // Give extension time to activate and index
     
-    const ext = vscode.extensions.getExtension('sjh354.structure-graph');
+    const ext = vscode.extensions.getExtension('sjh354.skein');
     assert.ok(ext, 'Extension should exist');
     
     await ext!.activate();
@@ -67,7 +67,7 @@ suite('Graph-It-Live Extension Test Suite', () => {
   test('Should register showGraph command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.showGraph'),
+      commands.includes('skein.showGraph'),
       'Should have showGraph command'
     );
   });
@@ -76,7 +76,7 @@ suite('Graph-It-Live Extension Test Suite', () => {
     this.timeout(10000);
     
     // Execute the show graph command
-    await vscode.commands.executeCommand('graph-it-live.showGraph');
+    await vscode.commands.executeCommand('skein.showGraph');
     
     // Wait a bit for the view to appear
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -227,7 +227,7 @@ suite('Python Language Analysis', () => {
       await vscode.window.showTextDocument(doc);
       
       // Execute graph visualization
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Python dependency graph visualized');
@@ -332,7 +332,7 @@ suite('Rust Language Analysis', () => {
       const doc = await vscode.workspace.openTextDocument(rustFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Rust dependency graph visualized');
@@ -359,7 +359,7 @@ suite('Cycle Detection', () => {
       const doc = await vscode.workspace.openTextDocument(cyclicFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // The extension should detect the cycle between a.ts and b.ts
@@ -382,7 +382,7 @@ suite('Cycle Detection', () => {
       const doc = await vscode.workspace.openTextDocument(complexCycleFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Complex cycles handled');
@@ -404,11 +404,11 @@ suite('Cycle Detection', () => {
       const doc = await vscode.workspace.openTextDocument(cyclicFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Refresh the graph
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Graph refreshed with cycles preserved');
@@ -426,11 +426,11 @@ suite('Unused Node Filtering', () => {
     const commands = await vscode.commands.getCommands(true);
     
     assert.ok(
-      commands.includes('graph-it-live.enableUnusedFilter'),
+      commands.includes('skein.enableUnusedFilter'),
       'Should have enableUnusedFilter command'
     );
     assert.ok(
-      commands.includes('graph-it-live.disableUnusedFilter'),
+      commands.includes('skein.disableUnusedFilter'),
       'Should have disableUnusedFilter command'
     );
   });
@@ -448,11 +448,11 @@ suite('Unused Node Filtering', () => {
       const doc = await vscode.workspace.openTextDocument(rustFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Enable unused filter - should filter out process_data and disconnect_db
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       assert.ok(true, 'Unused filter enabled successfully');
@@ -465,11 +465,11 @@ suite('Unused Node Filtering', () => {
     this.timeout(15000);
     
     try {
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Disable unused filter - should show all nodes
-      await vscode.commands.executeCommand('graph-it-live.disableUnusedFilter');
+      await vscode.commands.executeCommand('skein.disableUnusedFilter');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       assert.ok(true, 'Unused filter disabled successfully');
@@ -482,19 +482,19 @@ suite('Unused Node Filtering', () => {
     this.timeout(15000);
     
     try {
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Toggle on
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Toggle off
-      await vscode.commands.executeCommand('graph-it-live.disableUnusedFilter');
+      await vscode.commands.executeCommand('skein.disableUnusedFilter');
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Toggle on again
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await new Promise(resolve => setTimeout(resolve, 500));
       
       assert.ok(true, 'Unused filter toggled multiple times');
@@ -515,10 +515,10 @@ suite('Unused Node Filtering', () => {
       const doc = await vscode.workspace.openTextDocument(rustUnusedFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       assert.ok(true, 'Rust unused dependencies filtered');
@@ -576,7 +576,7 @@ suite('Additional Commands', () => {
   test('Should register forceReindex command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.forceReindex'),
+      commands.includes('skein.forceReindex'),
       'Should have forceReindex command'
     );
   });
@@ -584,7 +584,7 @@ suite('Additional Commands', () => {
   test('Should register showIndexStatus command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(
-      commands.includes('graph-it-live.showIndexStatus'),
+      commands.includes('skein.showIndexStatus'),
       'Should have showIndexStatus command'
     );
   });
@@ -593,7 +593,7 @@ suite('Additional Commands', () => {
     this.timeout(15000);
     
     try {
-      await vscode.commands.executeCommand('graph-it-live.forceReindex');
+      await vscode.commands.executeCommand('skein.forceReindex');
       // Wait for reindexing to process
       await new Promise(resolve => setTimeout(resolve, 2000));
       assert.ok(true, 'ForceReindex command executed successfully');
@@ -606,7 +606,7 @@ suite('Additional Commands', () => {
     this.timeout(10000);
     
     try {
-      await vscode.commands.executeCommand('graph-it-live.showIndexStatus');
+      await vscode.commands.executeCommand('skein.showIndexStatus');
       await new Promise(resolve => setTimeout(resolve, 500));
       assert.ok(true, 'ShowIndexStatus command executed successfully');
     } catch {
@@ -626,11 +626,11 @@ suite('Additional Commands', () => {
       const doc = await vscode.workspace.openTextDocument(sampleFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await waitForViewMode('file');
       
       // Toggle view mode (file-level <-> symbol-level)
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await waitForViewMode('list');
       
       assert.ok(true, 'ToggleViewMode command executed successfully');
@@ -645,7 +645,7 @@ suite('Additional Commands', () => {
 // ============================================================================
 suite('Settings Configuration', () => {
   test('Should read maxDepth setting', () => {
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const maxDepth = config.get<number>('maxDepth');
     
     assert.ok(typeof maxDepth === 'number', 'maxDepth should be a number');
@@ -653,21 +653,21 @@ suite('Settings Configuration', () => {
   });
 
   test('Should read excludeNodeModules setting', () => {
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const excludeNodeModules = config.get<boolean>('excludeNodeModules');
     
     assert.ok(typeof excludeNodeModules === 'boolean', 'excludeNodeModules should be a boolean');
   });
 
   test('Should read enableBackgroundIndexing setting', () => {
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const enableBackgroundIndexing = config.get<boolean>('enableBackgroundIndexing');
     
     assert.ok(typeof enableBackgroundIndexing === 'boolean', 'enableBackgroundIndexing should be a boolean');
   });
 
   test('Should read performanceProfile setting', () => {
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const profile = config.get<string>('performanceProfile');
     
     assert.ok(typeof profile === 'string', 'performanceProfile should be a string');
@@ -678,7 +678,7 @@ suite('Settings Configuration', () => {
   });
 
   test('Should contribute profile overrides as advanced settings', () => {
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
 
     assert.strictEqual(config.inspect('maxUnusedAnalysisCacheSize')?.defaultValue, 200);
     assert.strictEqual(config.inspect('indexingConcurrency')?.defaultValue, 4);
@@ -688,7 +688,7 @@ suite('Settings Configuration', () => {
   test('Should update maxDepth setting', async function() {
     this.timeout(10000);
     
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const originalValue = config.get<number>('maxDepth');
     
     try {
@@ -711,7 +711,7 @@ suite('Settings Configuration', () => {
   test('Should update excludeNodeModules setting', async function() {
     this.timeout(10000);
     
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const originalValue = config.get<boolean>('excludeNodeModules');
     
     try {
@@ -739,7 +739,7 @@ suite('Performance Profiles', () => {
   test('Should handle default performance profile', async function() {
     this.timeout(10000);
     
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const originalProfile = config.get<string>('performanceProfile');
     
     try {
@@ -760,7 +760,7 @@ suite('Performance Profiles', () => {
   test('Should handle low-memory performance profile', async function() {
     this.timeout(10000);
     
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const originalProfile = config.get<string>('performanceProfile');
     
     try {
@@ -781,7 +781,7 @@ suite('Performance Profiles', () => {
   test('Should handle high-performance profile', async function() {
     this.timeout(10000);
     
-    const config = vscode.workspace.getConfiguration('graph-it-live');
+    const config = vscode.workspace.getConfiguration('skein');
     const originalProfile = config.get<string>('performanceProfile');
     
     try {
@@ -816,11 +816,11 @@ suite('Symbol-Level Analysis', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Toggle to symbol-level view
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Symbol-level analysis executed');
@@ -841,11 +841,11 @@ suite('Symbol-Level Analysis', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Toggle to symbol-level view
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Class-level analysis executed');
@@ -866,10 +866,10 @@ suite('Symbol-Level Analysis', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Mixed imports/exports analyzed');
@@ -896,11 +896,11 @@ suite('Visual Verification', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Toggle to symbol-level view to see color-coded symbols
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Note: Visual verification of colors requires manual testing or browser automation
@@ -924,10 +924,10 @@ suite('Visual Verification', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: solid arrows = calls, dashed arrows = references
@@ -951,10 +951,10 @@ suite('Visual Verification', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: recursive edges should show "cycle" badge
@@ -978,10 +978,10 @@ suite('Visual Verification', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: breadcrumb should show "Project > symbols > functions.ts"
@@ -1005,10 +1005,10 @@ suite('Visual Verification', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: arrow functions should show contextual names like "map callback", "onClick handler"
@@ -1033,10 +1033,10 @@ suite('Visual Verification', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: external symbols should have opacity: 0.5 and dashed edges per FR-022
@@ -1065,7 +1065,7 @@ suite('Multi-Language Integration', () => {
       const doc = await vscode.workspace.openTextDocument(pythonFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Multi-language project analyzed');
@@ -1086,7 +1086,7 @@ suite('Multi-Language Integration', () => {
       const doc = await vscode.workspace.openTextDocument(monorepoFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Monorepo structure analyzed');
@@ -1112,7 +1112,7 @@ suite('GraphQL Support', () => {
       const doc = await vscode.workspace.openTextDocument(graphqlFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'GraphQL schema processed');
@@ -1133,7 +1133,7 @@ suite('GraphQL Support', () => {
       const doc = await vscode.workspace.openTextDocument(graphqlFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'GraphQL imports analyzed');
@@ -1177,7 +1177,7 @@ suite('Error Handling', () => {
       const doc = await vscode.workspace.openTextDocument(malformedFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Extension should handle parse errors gracefully
@@ -1207,7 +1207,7 @@ suite('Error Handling', () => {
       const doc = await vscode.workspace.openTextDocument(deepFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 3000));
       
       assert.ok(true, 'Deep dependency chains handled');
@@ -1234,7 +1234,7 @@ suite('Reverse Dependencies', () => {
       const doc = await vscode.workspace.openTextDocument(utilsFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // The graph should show files that import utils.ts
@@ -1257,7 +1257,7 @@ suite('Reverse Dependencies', () => {
       const doc = await vscode.workspace.openTextDocument(pythonModule);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Python reverse dependencies displayed');
@@ -1278,7 +1278,7 @@ suite('Reverse Dependencies', () => {
       const doc = await vscode.workspace.openTextDocument(rustModule);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Rust reverse dependencies displayed');
@@ -1304,11 +1304,11 @@ suite('Node Expansion', () => {
       const doc = await vscode.workspace.openTextDocument(sampleFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Execute expand all command
-      await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
+      await vscode.commands.executeCommand('skein.expandAllNodes');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'ExpandAllNodes executed successfully');
@@ -1329,11 +1329,11 @@ suite('Node Expansion', () => {
       const doc = await vscode.workspace.openTextDocument(complexFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Expand all nodes
-      await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
+      await vscode.commands.executeCommand('skein.expandAllNodes');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Should not crash with cyclic dependencies
@@ -1355,10 +1355,10 @@ suite('Node Expansion', () => {
       const doc = await vscode.workspace.openTextDocument(monorepoFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
+      await vscode.commands.executeCommand('skein.expandAllNodes');
       await new Promise(resolve => setTimeout(resolve, 3000));
       
       // Should handle large graph expansion
@@ -1392,7 +1392,7 @@ suite('Multiple Node Operations', () => {
           const doc = await vscode.workspace.openTextDocument(file);
           await vscode.window.showTextDocument(doc);
           
-          await vscode.commands.executeCommand('graph-it-live.showGraph');
+          await vscode.commands.executeCommand('skein.showGraph');
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch {
           // File might not exist, continue
@@ -1418,10 +1418,10 @@ suite('Multiple Node Operations', () => {
       await vscode.window.showTextDocument(doc);
       
       // Rapid-fire commands
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
-      await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.showGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
+      await vscode.commands.executeCommand('skein.expandAllNodes');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       
       await new Promise(resolve => setTimeout(resolve, 3000));
       
@@ -1444,19 +1444,19 @@ suite('Multiple Node Operations', () => {
       const doc = await vscode.workspace.openTextDocument(rustFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Expand all nodes
-      await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
+      await vscode.commands.executeCommand('skein.expandAllNodes');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Enable unused filter
-      await vscode.commands.executeCommand('graph-it-live.enableUnusedFilter');
+      await vscode.commands.executeCommand('skein.enableUnusedFilter');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Disable unused filter
-      await vscode.commands.executeCommand('graph-it-live.disableUnusedFilter');
+      await vscode.commands.executeCommand('skein.disableUnusedFilter');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       assert.ok(true, 'Filter toggle with expanded nodes handled');
@@ -1477,21 +1477,21 @@ suite('Multiple Node Operations', () => {
       const doc = await vscode.workspace.openTextDocument(symbolFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await waitForViewMode('file');
       
       // Expand all in file-level mode
-      await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
+      await vscode.commands.executeCommand('skein.expandAllNodes');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Toggle to symbol-level
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await waitForViewMode('list');
-      await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+      await vscode.commands.executeCommand('skein.toggleViewMode');
       await waitForViewMode('symbol');
       
       // Expand all in symbol-level mode
-      await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
+      await vscode.commands.executeCommand('skein.expandAllNodes');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'View mode toggle with expansion handled');
@@ -1512,15 +1512,15 @@ suite('Multiple Node Operations', () => {
       const doc = await vscode.workspace.openTextDocument(sampleFile);
       await vscode.window.showTextDocument(doc);
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Expand all
-      await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
+      await vscode.commands.executeCommand('skein.expandAllNodes');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Refresh should maintain expansion state
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Refresh after expansion handled correctly');
@@ -1552,7 +1552,7 @@ suite('Live Updates', () => {
       await vscode.window.showTextDocument(doc);
       
       // Show graph for the file
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Get original content
@@ -1605,7 +1605,7 @@ suite('Live Updates', () => {
       await vscode.window.showTextDocument(doc);
       
       // Show graph for the file
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Get original content
@@ -1693,7 +1693,7 @@ suite('Live Updates', () => {
       // Measure time from command execution to completion
       const startTime = performance.now();
       
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       
       // Wait for graph to render
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -1733,7 +1733,7 @@ suite('Live Updates', () => {
       await vscode.window.showTextDocument(doc);
       
       // Show graph for the file
-      await vscode.commands.executeCommand('graph-it-live.showGraph');
+      await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Get original content

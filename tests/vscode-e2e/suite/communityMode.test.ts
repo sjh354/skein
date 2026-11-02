@@ -15,7 +15,7 @@ async function waitForCommunities(
   const start = Date.now();
   let metadata: NodeMetadata | undefined;
   while (Date.now() - start < 15000) {
-    metadata = await getContextKey<NodeMetadata>('graph-it-live.fileGraphNodeMetadata');
+    metadata = await getContextKey<NodeMetadata>('skein.fileGraphNodeMetadata');
     if (metadata && predicate(metadata)) return metadata;
     await sleep(200);
   }
@@ -34,11 +34,11 @@ function community(metadata: NodeMetadata, nodeKey: string) {
 }
 
 suite('Community mode setting', () => {
-  const config = () => vscode.workspace.getConfiguration('graph-it-live');
+  const config = () => vscode.workspace.getConfiguration('skein');
 
   setup(async () => {
     // Earlier suites can leave the view in symbol or list mode.
-    await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+    await vscode.commands.executeCommand('skein.setViewModeFile');
     await waitForViewMode('file');
   });
 

@@ -650,7 +650,7 @@ describe('GraphContextRetriever search relevance', () => {
   });
 
   it('builds next queries around code seeds, not a document linked to every symbol', async () => {
-    const wiki = node('document:wiki/index.md', 'document', 'Wiki — Graph-It-Live', 'wiki/index.md');
+    const wiki = node('document:wiki/index.md', 'document', 'Wiki — Skein', 'wiki/index.md');
     const helpers = Array.from({ length: 4 }, (_, index) => node(
       `symbol:src/cli/helper${index}.ts:helper${index}:1`,
       'symbol',

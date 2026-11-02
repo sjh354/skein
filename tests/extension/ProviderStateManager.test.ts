@@ -273,7 +273,7 @@ describe('ProviderStateManager', () => {
       const advanced = packageJson.contributes.configuration.flatMap((section) =>
         Object.entries(section.properties)
           .filter(([, schema]) => (schema as { tags?: string[] }).tags?.includes('advanced'))
-          .map(([key]) => key.replace('graph-it-live.', '')),
+          .map(([key]) => key.replace('skein.', '')),
       );
       expect(advanced.sort()).toEqual(['indexingConcurrency', ...Object.keys(overrides)].sort());
       for (const key of advanced) expect(snapshot).toHaveProperty(key);

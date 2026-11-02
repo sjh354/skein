@@ -15,7 +15,7 @@ suite('Symbol Selection E2E Tests', () => {
     this.timeout(60000);
 
     // Activate extension
-    extension = vscode.extensions.getExtension('sjh354.structure-graph');
+    extension = vscode.extensions.getExtension('sjh354.skein');
     if (!extension) {
       throw new Error('Extension not found');
     }
@@ -31,7 +31,7 @@ suite('Symbol Selection E2E Tests', () => {
     this.timeout(10000);
     // Reset to file view before each test to ensure clean state
     try {
-      await vscode.commands.executeCommand('graph-it-live.setViewModeFile');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await new Promise((resolve) => setTimeout(resolve, 500));
     } catch (error) {
       console.warn('beforeEach: Failed to reset to file view:', error);
@@ -56,7 +56,7 @@ suite('Symbol Selection E2E Tests', () => {
     await vscode.window.showTextDocument(document);
 
     // Show graph
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Note: We cannot directly simulate webview postMessage from E2E tests
@@ -77,11 +77,11 @@ suite('Symbol Selection E2E Tests', () => {
     await vscode.window.showTextDocument(document);
 
     // Show graph
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Refresh graph (should preserve state)
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.refreshGraph');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     assert.ok(true, 'State maintained after refresh');
@@ -96,11 +96,11 @@ suite('Symbol Selection E2E Tests', () => {
     await vscode.window.showTextDocument(document);
 
     // Show graph in file mode
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Toggle to symbol view (should clear symbol selection)
-    await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+    await vscode.commands.executeCommand('skein.toggleViewMode');
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Test passes if commands execute without error (context key verification not possible in E2E)
@@ -116,7 +116,7 @@ suite('Symbol Selection E2E Tests', () => {
     const editor = await vscode.window.showTextDocument(document);
 
     // Show graph
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     const originalContent = document.getText();
@@ -155,7 +155,7 @@ suite('Symbol Selection E2E Tests', () => {
     await vscode.window.showTextDocument(document);
 
     // Show graph (file mode)
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Test passes if commands execute without error (context key verification not possible in E2E)
@@ -175,11 +175,11 @@ suite('Symbol Selection E2E Tests', () => {
     await vscode.window.showTextDocument(document);
 
     // Show graph
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Refresh to clear any selections
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.refreshGraph');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     assert.ok(true, 'Selection cleared via refresh');
@@ -194,12 +194,12 @@ suite('Symbol Selection E2E Tests', () => {
     await vscode.window.showTextDocument(document);
 
     // Show graph
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Simulate rapid refreshes (simulates rapid symbol changes)
     for (let i = 0; i < 3; i++) {
-      await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+      await vscode.commands.executeCommand('skein.refreshGraph');
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
 
@@ -218,15 +218,15 @@ suite('Symbol Selection E2E Tests', () => {
     await vscode.window.showTextDocument(document);
 
     // Show graph
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Toggle expand all (should work with symbol selection)
-    await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
+    await vscode.commands.executeCommand('skein.expandAllNodes');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Toggle back
-    await vscode.commands.executeCommand('graph-it-live.expandAllNodes');
+    await vscode.commands.executeCommand('skein.expandAllNodes');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     assert.ok(true, 'Graph integrity maintained');
@@ -241,37 +241,37 @@ suite('Symbol Selection E2E Tests', () => {
     await vscode.window.showTextDocument(document);
 
     console.log('Step 1: Open graph in file view');
-    await vscode.commands.executeCommand('graph-it-live.showGraph', testFile);
+    await vscode.commands.executeCommand('skein.showGraph', testFile);
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Verify file mode
     let contextValue = await vscode.commands.executeCommand(
       'getContext',
-      'graph-it-live.viewMode'
+      'skein.viewMode'
     );
     assert.strictEqual(contextValue, 'file', 'Should start in file mode');
 
     console.log('Step 2: Refresh graph (with hypothetical symbol selection)');
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.refreshGraph');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     console.log('Step 3: Clear selection via another refresh');
-    await vscode.commands.executeCommand('graph-it-live.refreshGraph');
+    await vscode.commands.executeCommand('skein.refreshGraph');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     console.log('Step 4: Toggle to list view');
-    await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+    await vscode.commands.executeCommand('skein.toggleViewMode');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     contextValue = await vscode.commands.executeCommand(
       'getContext',
-      'graph-it-live.viewMode'
+      'skein.viewMode'
     );
     assert.strictEqual(contextValue, 'list', 'Should be in list mode');
 
     console.log('Step 5: Back to file view');
-    await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
-    await vscode.commands.executeCommand('graph-it-live.toggleViewMode');
+    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.toggleViewMode');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     assert.ok(true, 'Full workflow completed successfully');

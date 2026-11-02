@@ -17,10 +17,10 @@ Apply this file by explicit routing for shell-heavy work, repository exploration
 - Use `rtk proxy <command>` when no optimized wrapper exists.
 - Use `rtk gain`, `rtk gain --history`, and `rtk discover` to inspect savings and missed opportunities.
 
-## Graph-It-Live
+## Skein
 
-- **Mandatory first step for JavaScript-family code exploration:** for `.js`, `.jsx`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.cts`, and `.mts` files, use the available Graph-It-Live MCP tools before directly reading or searching source files. Start with index status or workspace architecture, then use targeted dependency, caller, file-logic, symbol, or trace queries.
-- Direct source inspection with `read_file`, `rg`, or equivalent is a follow-up step: use it to verify implementation details, resolve gaps, and prepare edits after the Graph-It-Live pass. Do not replace the initial Graph-It-Live analysis with direct reading.
+- **Mandatory first step for JavaScript-family code exploration:** for `.js`, `.jsx`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.cts`, and `.mts` files, use the available Skein MCP tools before directly reading or searching source files. Start with index status or workspace architecture, then use targeted dependency, caller, file-logic, symbol, or trace queries.
+- Direct source inspection with `read_file`, `rg`, or equivalent is a follow-up step: use it to verify implementation details, resolve gaps, and prepare edits after the Skein pass. Do not replace the initial Skein analysis with direct reading.
 - Run the `rebuild_index` MCP tool after source changes to refresh the index.
 - For broad feature/refactor/audit work, take one workspace snapshot with `explore_architecture` and reuse its counts, then run targeted codemap/call-graph/file-logic queries.
 

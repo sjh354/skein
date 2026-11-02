@@ -36,7 +36,7 @@ export class CommandCoordinator {
 
   async handleForceReindex(): Promise<void> {
     await this.provider.forceReindex();
-    this.ui.showInformationMessage("Graph-It-Live: Re-index triggered");
+    this.ui.showInformationMessage("Skein: Re-index triggered");
   }
 
   async handleExpandAll(): Promise<void> {
@@ -93,7 +93,7 @@ export class CommandCoordinator {
       const message = `Indexer: ${status.state} ${status.processed}/${status.total} (${status.percentage}%)`;
       this.ui.showInformationMessage(message);
     } else {
-      this.ui.showInformationMessage("Graph-It-Live: No indexer available");
+      this.ui.showInformationMessage("Skein: No indexer available");
     }
   }
 }

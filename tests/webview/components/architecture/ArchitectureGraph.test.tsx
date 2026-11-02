@@ -1001,7 +1001,7 @@ describe("ArchitectureGraph", () => {
           },
           {
             key: "packages/core", name: "@ws/core", fileCount: 4, internalEdgeCount: 0, layer: 1,
-            role: "library", confidence: "declared", evidence: [{ role: "library", detail: 'declared by roles["@ws/core"] in graphit.architecture.json' }],
+            role: "library", confidence: "declared", evidence: [{ role: "library", detail: 'declared by roles["@ws/core"] in skein.architecture.json' }],
           },
         ],
         unitEdges: [
@@ -1236,7 +1236,7 @@ describe("ArchitectureGraph", () => {
       try {
         elk.runner.layout.mockRejectedValueOnce(new Error("ELK worker failed: blocked"));
         const postMessage = await setup(unseen());
-        expect(error).toHaveBeenCalledWith("[Graph-It-Live] ELK layout failed", expect.any(Error));
+        expect(error).toHaveBeenCalledWith("[Skein] ELK layout failed", expect.any(Error));
         expect(elk.applyElkLayout).not.toHaveBeenCalled();
         expect(cy.instance.container().style.visibility).toBe("");
         expect(lastOf(postMessage, "architectureRendered")).toEqual(expect.objectContaining({ renderedGroups: 2, overlappingGroups: 0 }));
@@ -1699,7 +1699,7 @@ describe("ArchitectureGraph: declared architecture rules", () => {
   const withRules: ArchitectureSummaryMessage = {
     ...summary,
     rules: {
-      configFile: "graphit.architecture.json",
+      configFile: "skein.architecture.json",
       revision: "c1",
       totals: { files: 10, unmatchedFiles: 2, rules: 2, brokenRules: 1, violations: 3, newViolations: 1, errors: 3, newErrors: 1, warnings: 0, resolved: 0 },
       rules: [rule, { ...rule, name: "quiet", violations: 0, newViolations: 0, elementPairs: [] }],
@@ -1751,7 +1751,7 @@ describe("ArchitectureGraph: declared architecture rules", () => {
         groupEdges: {},
       },
     });
-    expect(screen.getByText(/All 2 rules pass · graphit\.architecture\.json/)).toBeTruthy();
+    expect(screen.getByText(/All 2 rules pass · skein\.architecture\.json/)).toBeTruthy();
     expect(screen.queryByText(/violations? of/)).toBeNull();
   });
 
@@ -1772,7 +1772,7 @@ describe("ArchitectureGraph: declared architecture rules", () => {
 
   it("says why a refused config was not checked", () => {
     render(<ArchitectureGraph postMessage={vi.fn()} />);
-    send({ ...summary, rules: { configFile: "graphit.architecture.json", error: "graphit.architecture.json: $.rules[0].from: unknown element \"x\"", rules: [], configWarnings: [], unitEdges: {}, groupEdges: {} } });
+    send({ ...summary, rules: { configFile: "skein.architecture.json", error: "skein.architecture.json: $.rules[0].from: unknown element \"x\"", rules: [], configWarnings: [], unitEdges: {}, groupEdges: {} } });
     expect(screen.getByText(/Architecture rules not checked: .*unknown element "x"/)).toBeTruthy();
   });
 });

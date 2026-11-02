@@ -57,8 +57,8 @@ export const IGNORED_DIRECTORIES = [
 
 
 export const WATCH_GLOB = "**/*.{ts,tsx,js,jsx,mjs,cjs,vue,svelte,gql,graphql,py,pyi,rs,toml,cs,csproj,go,java,dart}";
-/** graphit.architecture.json and its baseline (architectureRules.ts); the view reads them at the root only, so a nested match changes nothing. */
-export const ARCHITECTURE_RULES_GLOB = "**/graphit.architecture{,.baseline}.json";
+/** skein.architecture.json and its baseline (architectureRules.ts); the view reads them at the root only, so a nested match changes nothing. */
+export const ARCHITECTURE_RULES_GLOB = "**/skein.architecture{,.baseline}.json";
 /**
  * Files PathResolver reads: tsconfig `paths` / `baseUrl` (and their `extends` targets), package.json `imports`,
  * `aliases`, `name` / `source` / `main` / `module` and `file:` dependencies (PathResolver.readResolverInputs()); not `exports`.

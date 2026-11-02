@@ -62,7 +62,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Graph-It-Live version
+      label: Skein version
     validations:
       required: true
   - type: dropdown

@@ -41,7 +41,7 @@ export class EditorEventsService {
 
   private registerConfigChangeListener(): vscode.Disposable {
     return vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('graph-it-live')) {
+      if (event.affectsConfiguration('skein')) {
         this.target.updateConfig();
         this.target.notifyMcpServerOfConfigChange?.();
       }

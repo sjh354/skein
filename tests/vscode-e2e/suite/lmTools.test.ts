@@ -1,16 +1,16 @@
 /**
  * E2E Tests for native Language Model Tools registration.
  *
- * Verifies that after extension activation all 23 Structure Graph LM tools
+ * Verifies that after extension activation all 23 Skein LM tools
  * are present in `vscode.lm.tools`.  Tests are skipped gracefully when the
  * VS Code host doesn't support `vscode.lm.tools` (pre-1.90 or non-Copilot
  * environments) so they never cause false failures on older CI agents.
  *
  * New tools added in session (v1.8.0):
- *   - graph-it-live_resolve_module_path
- *   - graph-it-live_analyze_breaking_changes
- *   - graph-it-live_query_call_graph
- *   - graph-it-live_scan_dead_code
+ *   - skein_resolve_module_path
+ *   - skein_analyze_breaking_changes
+ *   - skein_query_call_graph
+ *   - skein_scan_dead_code
  */
 
 import { before } from 'mocha';
@@ -19,30 +19,30 @@ import * as vscode from 'vscode';
 
 // Minimum set of expected tool names (all 23).
 const EXPECTED_TOOLS = [
-  'graph-it-live_find_referencing_files',
-  'graph-it-live_analyze_dependencies',
-  'graph-it-live_crawl_dependency_graph',
-  'graph-it-live_get_symbol_graph',
-  'graph-it-live_find_unused_symbols',
-  'graph-it-live_get_symbol_callers',
-  'graph-it-live_get_impact_analysis',
-  'graph-it-live_get_index_status',
-  'graph-it-live_parse_imports',
-  'graph-it-live_generate_codemap',
-  'graph-it-live_expand_node',
-  'graph-it-live_verify_dependency_usage',
-  'graph-it-live_invalidate_files',
-  'graph-it-live_rebuild_index',
-  'graph-it-live_get_symbol_dependents',
-  'graph-it-live_trace_function_execution',
-  'graph-it-live_analyze_file_logic',
+  'skein_find_referencing_files',
+  'skein_analyze_dependencies',
+  'skein_crawl_dependency_graph',
+  'skein_get_symbol_graph',
+  'skein_find_unused_symbols',
+  'skein_get_symbol_callers',
+  'skein_get_impact_analysis',
+  'skein_get_index_status',
+  'skein_parse_imports',
+  'skein_generate_codemap',
+  'skein_expand_node',
+  'skein_verify_dependency_usage',
+  'skein_invalidate_files',
+  'skein_rebuild_index',
+  'skein_get_symbol_dependents',
+  'skein_trace_function_execution',
+  'skein_analyze_file_logic',
   // v1.8.0 batch 2
-  'graph-it-live_resolve_module_path',
-  'graph-it-live_analyze_breaking_changes',
-  'graph-it-live_query_call_graph',
-  'graph-it-live_scan_dead_code',
-  'graph-it-live_graph_context',
-  'graph-it-live_query_natural_language',
+  'skein_resolve_module_path',
+  'skein_analyze_breaking_changes',
+  'skein_query_call_graph',
+  'skein_scan_dead_code',
+  'skein_graph_context',
+  'skein_query_natural_language',
 ];
 
 /** Returns true when vscode.lm.tools is supported by the current host. */
@@ -64,7 +64,7 @@ function getRegisteredTools(): ReadonlyArray<{ name: string }> {
 suite('LM Tools Registration Test Suite', () => {
   before(async function () {
     this.timeout(30000);
-    const ext = vscode.extensions.getExtension('sjh354.structure-graph');
+    const ext = vscode.extensions.getExtension('sjh354.skein');
     assert.ok(ext, 'Extension should exist');
     if (!ext.isActive) {
       await ext.activate();
@@ -80,7 +80,7 @@ suite('LM Tools Registration Test Suite', () => {
     assert.ok(supported, 'vscode.lm.registerTool should be a function');
   });
 
-  test('All 23 Structure Graph LM tools are registered', function () {
+  test('All 23 Skein LM tools are registered', function () {
     if (!lmToolsSupported()) {
       this.skip();
     }
@@ -100,8 +100,8 @@ suite('LM Tools Registration Test Suite', () => {
       this.skip();
     }
 
-    const tool = getRegisteredTools().find((t) => t.name === 'graph-it-live_resolve_module_path');
-    assert.ok(tool, 'graph-it-live_resolve_module_path should be registered');
+    const tool = getRegisteredTools().find((t) => t.name === 'skein_resolve_module_path');
+    assert.ok(tool, 'skein_resolve_module_path should be registered');
   });
 
   test('analyze_breaking_changes tool is registered with correct name', function () {
@@ -109,8 +109,8 @@ suite('LM Tools Registration Test Suite', () => {
       this.skip();
     }
 
-    const tool = getRegisteredTools().find((t) => t.name === 'graph-it-live_analyze_breaking_changes');
-    assert.ok(tool, 'graph-it-live_analyze_breaking_changes should be registered');
+    const tool = getRegisteredTools().find((t) => t.name === 'skein_analyze_breaking_changes');
+    assert.ok(tool, 'skein_analyze_breaking_changes should be registered');
   });
 
   test('query_call_graph tool is registered with correct name', function () {
@@ -118,21 +118,21 @@ suite('LM Tools Registration Test Suite', () => {
       this.skip();
     }
 
-    const tool = getRegisteredTools().find((t) => t.name === 'graph-it-live_query_call_graph');
-    assert.ok(tool, 'graph-it-live_query_call_graph should be registered');
+    const tool = getRegisteredTools().find((t) => t.name === 'skein_query_call_graph');
+    assert.ok(tool, 'skein_query_call_graph should be registered');
   });
 
-  test('Total Structure Graph tool count is exactly 23', function () {
+  test('Total Skein tool count is exactly 23', function () {
     if (!lmToolsSupported()) {
       this.skip();
     }
 
     const tools = getRegisteredTools();
-    const graphItLiveTools = tools.filter((t) => t.name.startsWith('graph-it-live_'));
+    const skeinTools = tools.filter((t) => t.name.startsWith('skein_'));
     assert.strictEqual(
-      graphItLiveTools.length,
+      skeinTools.length,
       23,
-      `Expected 23 graph-it-live tools, found ${graphItLiveTools.length}: ${graphItLiveTools.map((t) => t.name).join(', ')}`,
+      `Expected 23 skein tools, found ${skeinTools.length}: ${skeinTools.map((t) => t.name).join(', ')}`,
     );
   });
 });

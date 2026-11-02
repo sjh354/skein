@@ -17,7 +17,7 @@
         "type": "object",
         "properties": {
           "path": {
-            "description": "Workspace-relative gitignore-style patterns, as in .graphitignore (e.g. 'frontend/', 'mfe/*')",
+            "description": "Workspace-relative gitignore-style patterns, as in .skeinignore (e.g. 'frontend/', 'mfe/*')",
             "anyOf": [
               {
                 "type": "string",

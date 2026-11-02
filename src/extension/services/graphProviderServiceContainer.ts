@@ -30,7 +30,7 @@ import { UnusedAnalysisCache } from "./UnusedAnalysisCache";
 
 // Read on every graph build, so changing the setting applies on the refresh it triggers.
 function readCommunityMode(): CommunityMode {
-  const mode = vscode.workspace.getConfiguration("graph-it-live").get<string>("communityMode", "path");
+  const mode = vscode.workspace.getConfiguration("skein").get<string>("communityMode", "path");
   return mode === "louvain" ? "louvain" : "path";
 }
 
@@ -106,7 +106,7 @@ export interface GraphProviderServiceContainerResult {
 }
 
 function resolvePreferredWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
-  const configuredPath = vscode.workspace.getConfiguration("graph-it-live").get<string>("workspaceFolder", "");
+  const configuredPath = vscode.workspace.getConfiguration("skein").get<string>("workspaceFolder", "");
   const configuredFolder = vscode.workspace.workspaceFolders?.find(folder => folder.uri.fsPath === configuredPath);
   if (configuredFolder) return configuredFolder;
 
@@ -259,10 +259,10 @@ export function createGraphProviderServiceContainer(
         // graph ends up on this file whether or not it was already the active editor.
         revealInFileGraph: async (absolutePath) => {
           await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), { preview: true });
-          await vscode.commands.executeCommand("graph-it-live.setViewModeFile");
+          await vscode.commands.executeCommand("skein.setViewModeFile");
         },
         openSettings: () => {
-        void vscode.commands.executeCommand("workbench.action.openSettings", "graph-it-live");
+        void vscode.commands.executeCommand("workbench.action.openSettings", "skein");
       },
       warn: (message) => options.logger.warn(message),
       });

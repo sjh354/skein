@@ -1466,7 +1466,7 @@ describe('validateToolParams — uncovered branches', () => {
   it('returns failure with root-level message when issue path is empty', () => {
     // get_index_status takes no params — passing a wrong type triggers a root-level Zod error
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = validateToolParams('graphitlive_get_index_status' as any, 'not-an-object');
+    const result = validateToolParams('skein_get_index_status' as any, 'not-an-object');
     expect(result.success).toBe(false);
   });
 });

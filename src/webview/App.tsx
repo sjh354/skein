@@ -157,7 +157,7 @@ class ErrorBoundary extends React.Component<
         }}
       >
         <div style={{ fontSize: 16, fontWeight: 700 }}>
-          Graph-It-Live: la webview a rencontré une erreur
+          Skein: la webview a rencontré une erreur
         </div>
         <div
           style={{
@@ -870,7 +870,7 @@ const App: React.FC = () => {
             marginBottom: "8px",
           }}
         >
-          📊 Graph-It-Live
+          📊 Skein
         </div>
         <div
           style={{
@@ -900,7 +900,7 @@ const App: React.FC = () => {
 
   const isEditorTab =
     typeof document !== "undefined" &&
-    document.body.dataset.structureGraphHost === "editor";
+    document.body.dataset.skeinHost === "editor";
 
   return (
     <ErrorBoundary>

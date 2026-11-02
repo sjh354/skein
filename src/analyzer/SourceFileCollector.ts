@@ -14,7 +14,7 @@ export interface SourceFileCollectorOptions {
 
 /**
  * Walks the workspace tree and returns the list of supported source files.
- * Honors the root `.gitignore`/`.graphitignore` and the default ignore patterns.
+ * Honors the root `.gitignore`/`.skeinignore` and the default ignore patterns.
  * Extracted from Spider to keep traversal/cancellation logic isolated.
  */
 export class SourceFileCollector {

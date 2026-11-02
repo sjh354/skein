@@ -45,64 +45,64 @@ export class CommandRegistrationService {
   }
 
   private registerShowGraphCommand(): vscode.Disposable {
-    return vscode.commands.registerCommand('graph-it-live.showGraph', async (resource?: vscode.Uri) => {
+    return vscode.commands.registerCommand('skein.showGraph', async (resource?: vscode.Uri) => {
       try {
         if (resource) {
           this.provider.showEditorGraph(resource);
         } else {
-          await vscode.commands.executeCommand('graph-it-live.graphView.focus');
+          await vscode.commands.executeCommand('skein.graphView.focus');
         }
       } catch (error) {
-        this.handleCommandError('graph-it-live.showGraph', error, 'Graph-It-Live: Could not focus the graph');
+        this.handleCommandError('skein.showGraph', error, 'Skein: Could not focus the graph');
       }
     });
   }
 
   private registerToggleUnusedFilterCommands(): vscode.Disposable {
     const d1 = this.registerProviderCommand(
-      'graph-it-live.enableUnusedFilter',
+      'skein.enableUnusedFilter',
       async () => {
         await this.commandCoordinator.handleEnableUnusedFilter();
       },
-      'Graph-It-Live: Enable filter failed'
+      'Skein: Enable filter failed'
     );
     const d2 = this.registerProviderCommand(
-      'graph-it-live.disableUnusedFilter',
+      'skein.disableUnusedFilter',
       async () => {
         await this.commandCoordinator.handleDisableUnusedFilter();
       },
-      'Graph-It-Live: Disable filter failed'
+      'Skein: Disable filter failed'
     );
     return vscode.Disposable.from(d1, d2);
   }
 
   private registerForceReindexCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.forceReindex',
+      'skein.forceReindex',
       async () => {
         await this.commandCoordinator.handleForceReindex();
       },
-      'Graph-It-Live: Re-index failed'
+      'Skein: Re-index failed'
     );
   }
 
   private registerExpandAllCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.expandAllNodes',
+      'skein.expandAllNodes',
       async () => {
         await this.commandCoordinator.handleExpandAll();
       },
-      'Graph-It-Live: Toggle expand all failed'
+      'Skein: Toggle expand all failed'
     );
   }
 
   private registerRefreshGraphCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.refreshGraph',
+      'skein.refreshGraph',
       async () => {
         await this.commandCoordinator.handleRefreshGraph();
       },
-      'Graph-It-Live: Refresh failed'
+      'Skein: Refresh failed'
     );
   }
   /**
@@ -111,82 +111,82 @@ export class CommandRegistrationService {
    */
   private registerToggleViewModeCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.toggleViewMode',
+      'skein.toggleViewMode',
       async () => {
         await this.commandCoordinator.handleToggleViewMode();
       },
-      'Graph-It-Live: Toggle view mode failed'
+      'Skein: Toggle view mode failed'
     );
   }
   private registerSetViewModeFileCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.setViewModeFile',
+      'skein.setViewModeFile',
       async () => {
         await this.commandCoordinator.handleSetViewModeFile();
       },
-      'Graph-It-Live: Switch to file view failed'
+      'Skein: Switch to file view failed'
     );
   }
 
   private registerSetViewModeListCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.setViewModeList',
+      'skein.setViewModeList',
       async () => {
         await this.commandCoordinator.handleSetViewModeList();
       },
-      'Graph-It-Live: Switch to list view failed'
+      'Skein: Switch to list view failed'
     );
   }
 
   private registerSetViewModeSymbolCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.setViewModeSymbol',
+      'skein.setViewModeSymbol',
       async () => {
         await this.commandCoordinator.handleSetViewModeSymbol();
       },
-      'Graph-It-Live: Switch to symbol view failed'
+      'Skein: Switch to symbol view failed'
     );
   }
 
   private registerSetViewModeArchitectureCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.setViewModeArchitecture',
+      'skein.setViewModeArchitecture',
       async () => {
         await this.commandCoordinator.handleSetViewModeArchitecture();
       },
-      'Graph-It-Live: Switch to architecture view failed'
+      'Skein: Switch to architecture view failed'
     );
   }
 
   private registerShowReverseDependenciesCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.showReverseDependencies',
+      'skein.showReverseDependencies',
       async () => {
         await this.commandCoordinator.handleShowReverseDependencies();
       },
-      'Graph-It-Live: Show reverse dependencies failed'
+      'Skein: Show reverse dependencies failed'
     );
   }
 
   private registerHideReverseDependenciesCommand(): vscode.Disposable {
     return this.registerProviderCommand(
-      'graph-it-live.hideReverseDependencies',
+      'skein.hideReverseDependencies',
       async () => {
         await this.commandCoordinator.handleHideReverseDependencies();
       },
-      'Graph-It-Live: Hide reverse dependencies failed'
+      'Skein: Hide reverse dependencies failed'
     );
   }
 
   private registerShowIndexStatusCommand(): vscode.Disposable {
-    return vscode.commands.registerCommand('graph-it-live.showIndexStatus', async () => {
+    return vscode.commands.registerCommand('skein.showIndexStatus', async () => {
       try {
         await this.commandCoordinator.handleShowIndexStatus();
       } catch (error) {
         this.handleCommandError(
-          'graph-it-live.showIndexStatus',
+          'skein.showIndexStatus',
           error,
-          'Graph-It-Live: Could not get index status'
+          'Skein: Could not get index status'
         );
       }
     });
@@ -200,42 +200,42 @@ export class CommandRegistrationService {
     const architecture = () => this.provider.getArchitectureE2EState();
     // Context keys are stored in VS Code's internal state, so GraphProvider tracks the ones tests read.
     const getters = new Map<string, () => unknown>([
-      ['graph-it-live.viewMode', () => this.provider.getViewMode()],
-      ['graph-it-live.reverseDependenciesVisible', () => this.provider.getReverseDependenciesVisible()],
-      ['graph-it-live.callGraphRenderCount', () => this.provider.getCallGraphRenderCount()],
-      ['graph-it-live.callGraphNodeCount', () => this.provider.getCallGraphNodeCount()],
-      ['graph-it-live.callGraphEdgeCount', () => this.provider.getCallGraphEdgeCount()],
-      ['graph-it-live.callGraphCycleCount', () => this.provider.getCallGraphCycleCount()],
-      ['graph-it-live.fileGraphNodeMetadata', () => this.provider.getFileGraphNodeMetadata()],
-      ['graph-it-live.fileGraphRoot', () => this.provider.getFileGraphRoot()],
-      ['graph-it-live.architectureRenderCount', () => architecture()?.renderCount ?? 0],
-      ['graph-it-live.architectureGroupCount', () => architecture()?.groupCount ?? 0],
-      ['graph-it-live.architectureGroupEdgeCount', () => architecture()?.groupEdgeCount ?? 0],
-      ['graph-it-live.architectureRevision', () => architecture()?.revision],
-      ['graph-it-live.architectureBuildCount', () => architecture()?.buildCount ?? 0],
-      ['graph-it-live.architectureCommunityMode', () => architecture()?.communityMode],
-      ['graph-it-live.architectureStale', () => architecture()?.stale ?? false],
-      ['graph-it-live.architectureOverlappingGroups', () => architecture()?.overlappingGroups ?? 0],
-      ['graph-it-live.architectureOverflowingLabels', () => architecture()?.overflowingLabels ?? 0],
-      ['graph-it-live.architecturePositions', () => architecture()?.positions],
-      ['graph-it-live.architectureUnit', () => architecture()?.unit],
-      ['graph-it-live.architectureFolder', () => architecture()?.folder],
-      ['graph-it-live.architectureUnitLevel', () => architecture()?.unitLevel],
-      ['graph-it-live.architectureGroupLevel', () => architecture()?.groupLevel],
-      ['graph-it-live.architectureViolationEdges', () => architecture()?.violationEdges ?? 0],
-      ['graph-it-live.architectureRulesPanel', () => architecture()?.rules ?? []],
-      ['graph-it-live.architectureRoles', () => architecture()?.roles ?? []],
-      ['graph-it-live.architectureResizeCount', () => architecture()?.resizeCount ?? 0],
-      ['graph-it-live.architectureViewSize', () => architecture()?.viewSize],
-      ['graph-it-live.architectureInteractionCount', () => architecture()?.interactionCount ?? 0],
-      ['graph-it-live.architectureInteraction', () => architecture()?.interaction],
-      ['graph-it-live.architectureDetailCount', () => architecture()?.detailCount ?? 0],
-      ['graph-it-live.architectureDetail', () => architecture()?.detail],
-      ['graph-it-live.architectureMatrixCount', () => architecture()?.matrixCount ?? 0],
-      ['graph-it-live.architectureMatrix', () => architecture()?.matrix],
-      ['graph-it-live.architectureRendered', () => architecture()?.rendered],
-      ['graph-it-live.architectureDependentsGroupCount', () => architecture()?.dependents?.highlightedGroups ?? 0],
-      ['graph-it-live.architectureDependents', () => architecture()?.dependents],
+      ['skein.viewMode', () => this.provider.getViewMode()],
+      ['skein.reverseDependenciesVisible', () => this.provider.getReverseDependenciesVisible()],
+      ['skein.callGraphRenderCount', () => this.provider.getCallGraphRenderCount()],
+      ['skein.callGraphNodeCount', () => this.provider.getCallGraphNodeCount()],
+      ['skein.callGraphEdgeCount', () => this.provider.getCallGraphEdgeCount()],
+      ['skein.callGraphCycleCount', () => this.provider.getCallGraphCycleCount()],
+      ['skein.fileGraphNodeMetadata', () => this.provider.getFileGraphNodeMetadata()],
+      ['skein.fileGraphRoot', () => this.provider.getFileGraphRoot()],
+      ['skein.architectureRenderCount', () => architecture()?.renderCount ?? 0],
+      ['skein.architectureGroupCount', () => architecture()?.groupCount ?? 0],
+      ['skein.architectureGroupEdgeCount', () => architecture()?.groupEdgeCount ?? 0],
+      ['skein.architectureRevision', () => architecture()?.revision],
+      ['skein.architectureBuildCount', () => architecture()?.buildCount ?? 0],
+      ['skein.architectureCommunityMode', () => architecture()?.communityMode],
+      ['skein.architectureStale', () => architecture()?.stale ?? false],
+      ['skein.architectureOverlappingGroups', () => architecture()?.overlappingGroups ?? 0],
+      ['skein.architectureOverflowingLabels', () => architecture()?.overflowingLabels ?? 0],
+      ['skein.architecturePositions', () => architecture()?.positions],
+      ['skein.architectureUnit', () => architecture()?.unit],
+      ['skein.architectureFolder', () => architecture()?.folder],
+      ['skein.architectureUnitLevel', () => architecture()?.unitLevel],
+      ['skein.architectureGroupLevel', () => architecture()?.groupLevel],
+      ['skein.architectureViolationEdges', () => architecture()?.violationEdges ?? 0],
+      ['skein.architectureRulesPanel', () => architecture()?.rules ?? []],
+      ['skein.architectureRoles', () => architecture()?.roles ?? []],
+      ['skein.architectureResizeCount', () => architecture()?.resizeCount ?? 0],
+      ['skein.architectureViewSize', () => architecture()?.viewSize],
+      ['skein.architectureInteractionCount', () => architecture()?.interactionCount ?? 0],
+      ['skein.architectureInteraction', () => architecture()?.interaction],
+      ['skein.architectureDetailCount', () => architecture()?.detailCount ?? 0],
+      ['skein.architectureDetail', () => architecture()?.detail],
+      ['skein.architectureMatrixCount', () => architecture()?.matrixCount ?? 0],
+      ['skein.architectureMatrix', () => architecture()?.matrix],
+      ['skein.architectureRendered', () => architecture()?.rendered],
+      ['skein.architectureDependentsGroupCount', () => architecture()?.dependents?.highlightedGroups ?? 0],
+      ['skein.architectureDependents', () => architecture()?.dependents],
     ]);
     // Unknown keys return undefined.
     return vscode.commands.registerCommand('getContext', (key: string) => getters.get(key)?.());
@@ -244,7 +244,7 @@ export class CommandRegistrationService {
   /** E2E test helper: drives the architecture view's controls and clicks, which tests cannot reach in the webview. */
   private registerArchitectureControlsCommand(): vscode.Disposable {
     return vscode.commands.registerCommand(
-      'graph-it-live.e2eArchitectureControls',
+      'skein.e2eArchitectureControls',
       (controls: Parameters<GraphProvider['setArchitectureControls']>[0]) => this.provider.setArchitectureControls(controls)
     );
   }

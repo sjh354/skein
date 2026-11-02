@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/sjh354/Graph-It-Live/main/schemas/architecture.schema.json",
+  "$schema": "https://raw.githubusercontent.com/sjh354/skein/main/schemas/architecture.schema.json",
   "elements": {
     "shared": {
       "path": "src/shared/"

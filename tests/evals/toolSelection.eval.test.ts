@@ -84,7 +84,7 @@ function renderCatalogue(snapshot: ToolSnapshot): string {
  * than silently counting as a miss for a different reason.
  */
 function extractToolName(reply: string, knownNames: Set<string>): string | null {
-  const candidates = reply.match(/graphitlive_[a-z_]+/g);
+  const candidates = reply.match(/skein_[a-z_]+/g);
   if (!candidates) return null;
   return candidates.find((candidate) => knownNames.has(candidate)) ?? null;
 }
@@ -169,7 +169,7 @@ function reportStability(scores: VariantScore[]): void {
       `\n${score.label}: ${unstable.length}/${caseCount} cases gave different answers across ${REPEAT} runs`,
     );
     for (const [id, picks] of unstable) {
-      console.log(`  ${id}: ${picks.map((p) => p.replace('graphitlive_', '')).join(' | ')}`);
+      console.log(`  ${id}: ${picks.map((p) => p.replace('skein_', '')).join(' | ')}`);
     }
     if (unstable.length === 0) console.log('  (every case answered identically)');
   }

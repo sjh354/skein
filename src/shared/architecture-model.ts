@@ -102,7 +102,7 @@ export interface UnitRoleEvidence {
 
 export interface UnitRoleInfo {
   role: UnitRole;
-  /** `declared` in graphit.architecture.json, else `inferred` from the evidence. */
+  /** `declared` in skein.architecture.json, else `inferred` from the evidence. */
   confidence: "inferred" | "declared";
   evidence: UnitRoleEvidence[];
 }
@@ -202,7 +202,7 @@ export interface ArchitectureMatrix<Id extends number | string = number | string
 }
 
 // ---------------------------------------------------------------------------
-// Declared rules (graphit.architecture.json)
+// Declared rules (skein.architecture.json)
 // ---------------------------------------------------------------------------
 
 export const ARCHITECTURE_RULE_KINDS = ["forbid", "allowOnly", "noCycles"] as const;

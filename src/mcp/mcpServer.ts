@@ -196,7 +196,7 @@ if (
     currentConfig.workspaceRoot,
   );
   debugLog(
-    "[McpServer] Workspace not set - use graphitlive_set_workspace tool to configure",
+    "[McpServer] Workspace not set - use skein_set_workspace tool to configure",
   );
   currentConfig.workspaceRoot = "";
 }
@@ -208,7 +208,7 @@ if (!currentConfig.workspaceRoot) {
   // If cwd is root or empty, don't set a default - require explicit configuration
   if (cwd === "/" || cwd === "") {
     debugLog(
-      "[McpServer] No workspace configured - use graphitlive_set_workspace tool to set workspace",
+      "[McpServer] No workspace configured - use skein_set_workspace tool to set workspace",
     );
   } else {
     // Same rule as the CLI without --workspace: the nearest package root.
@@ -230,7 +230,7 @@ if (
     currentConfig.workspaceRoot,
   );
   debugLog(
-    "[McpServer] Use graphitlive_set_workspace tool to configure a valid workspace",
+    "[McpServer] Use skein_set_workspace tool to configure a valid workspace",
   );
   currentConfig.workspaceRoot = "";
 }
@@ -270,7 +270,7 @@ const McpToolResponseSchema = z.object({
 // ============================================================================
 
 const server = new McpServer({
-  name: "structure-graph",
+  name: "skein",
   version: MCP_SERVER_VERSION,
 });
 
@@ -584,10 +584,10 @@ function checkRateLimit(tool: string): string | null {
 // Tool Definitions - Using registerTool (recommended over deprecated tool())
 // ============================================================================
 
-// Tool: graphitlive_set_workspace
+// Tool: skein_set_workspace
 // This tool is special - it doesn't require the worker to be ready first
 server.registerTool(
-  "graphitlive_set_workspace",
+  "skein_set_workspace",
   {
     title: "Set Workspace Directory",
     description: mcpToolDescription("set_workspace"),
@@ -625,7 +625,7 @@ server.registerTool(
           startTime,
         ),
         responseFormat,
-        "graphitlive_set_workspace",
+        "skein_set_workspace",
       );
     }
 
@@ -642,7 +642,7 @@ server.registerTool(
           startTime,
         ),
         responseFormat,
-      "graphitlive_set_workspace",
+      "skein_set_workspace",
       );
     }
 
@@ -658,7 +658,7 @@ server.registerTool(
           startTime,
         ),
         responseFormat,
-      "graphitlive_set_workspace",
+      "skein_set_workspace",
       );
     }
 
@@ -727,7 +727,7 @@ server.registerTool(
         `[McpServer] Workspace configured successfully: ${filesIndexed} files indexed`,
       );
 
-      return formatToolResponse(response, responseFormat, "graphitlive_set_workspace");
+      return formatToolResponse(response, responseFormat, "skein_set_workspace");
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -743,15 +743,15 @@ server.registerTool(
           startTime,
         ),
         responseFormat,
-      "graphitlive_set_workspace",
+      "skein_set_workspace",
       );
     }
   },
 );
 
-// Tool: graphitlive_analyze_dependencies
+// Tool: skein_analyze_dependencies
 server.registerTool(
-  "graphitlive_analyze_dependencies",
+  "skein_analyze_dependencies",
   {
     title: "Analyze File Dependencies",
     description: mcpToolDescription("analyze_dependencies"),
@@ -774,7 +774,7 @@ server.registerTool(
       return formatToolResponse(
         workerCheck.response,
         response_format,
-      "graphitlive_analyze_dependencies",
+      "skein_analyze_dependencies",
       );
 
     const response = await invokeToolWithResponse<AnalyzeDependenciesResult>(
@@ -782,13 +782,13 @@ server.registerTool(
       { filePath },
     );
 
-    return formatToolResponse(response, response_format, "graphitlive_analyze_dependencies");
+    return formatToolResponse(response, response_format, "skein_analyze_dependencies");
   },
 );
 
-// Tool: graphitlive_crawl_dependency_graph
+// Tool: skein_crawl_dependency_graph
 server.registerTool(
-  "graphitlive_crawl_dependency_graph",
+  "skein_crawl_dependency_graph",
   {
     title: "Crawl Full Dependency Graph",
     description: mcpToolDescription("crawl_dependency_graph"),
@@ -809,7 +809,7 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_crawl_dependency_graph");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_crawl_dependency_graph");
 
     const params = { entryFile, maxDepth, limit, offset, onlyUsed, tokenBudget, communityMode };
     const result = await workerHost?.invoke<CrawlDependencyGraphResult>(
@@ -820,7 +820,7 @@ server.registerTool(
       return formatToolResponse(
         createErrorResponse<CrawlDependencyGraphResult>("Worker not available", 0, getWorkspaceRoot()),
         responseFormat,
-      "graphitlive_crawl_dependency_graph",
+      "skein_crawl_dependency_graph",
       );
     }
 
@@ -844,13 +844,13 @@ server.registerTool(
       pagination,
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_crawl_dependency_graph");
+    return formatToolResponse(response, responseFormat, "skein_crawl_dependency_graph");
   },
 );
 
-// Tool: graphitlive_find_referencing_files
+// Tool: skein_find_referencing_files
 server.registerTool(
-  "graphitlive_find_referencing_files",
+  "skein_find_referencing_files",
   {
     title: "Find Files That Import This File",
     description: mcpToolDescription("find_referencing_files"),
@@ -871,20 +871,20 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_find_referencing_files");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_find_referencing_files");
 
     const response = await invokeToolWithResponse<FindReferencingFilesResult>(
       "find_referencing_files",
       { targetPath },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_find_referencing_files");
+    return formatToolResponse(response, responseFormat, "skein_find_referencing_files");
   },
 );
 
-// Tool: graphitlive_verify_dependency_usage
+// Tool: skein_verify_dependency_usage
 server.registerTool(
-  "graphitlive_verify_dependency_usage",
+  "skein_verify_dependency_usage",
   {
     title: "Verify Dependency Usage",
     description: mcpToolDescription("verify_dependency_usage"),
@@ -905,7 +905,7 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_verify_dependency_usage");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_verify_dependency_usage");
 
     const response = await invokeToolWithResponse<unknown>(
       "verify_dependency_usage",
@@ -915,13 +915,13 @@ server.registerTool(
       },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_verify_dependency_usage");
+    return formatToolResponse(response, responseFormat, "skein_verify_dependency_usage");
   },
 );
 
-// Tool: graphitlive_resolve_module_path
+// Tool: skein_resolve_module_path
 server.registerTool(
-  "graphitlive_resolve_module_path",
+  "skein_resolve_module_path",
   {
     title: "Resolve Module Specifier to File Path",
     description: mcpToolDescription("resolve_module_path"),
@@ -942,20 +942,20 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_resolve_module_path");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_resolve_module_path");
 
     const response = await invokeToolWithResponse<ResolveModulePathResult>(
       "resolve_module_path",
       { fromFile, moduleSpecifier },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_resolve_module_path");
+    return formatToolResponse(response, responseFormat, "skein_resolve_module_path");
   },
 );
 
-// Tool: graphitlive_get_index_status
+// Tool: skein_get_index_status
 server.registerTool(
-  "graphitlive_get_index_status",
+  "skein_get_index_status",
   {
     title: "Get Dependency Index Status",
     description: mcpToolDescription("get_index_status"),
@@ -976,20 +976,20 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_get_index_status");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_get_index_status");
 
     const response = await invokeToolWithResponse<GetIndexStatusResult>(
       "get_index_status",
       {},
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_get_index_status");
+    return formatToolResponse(response, responseFormat, "skein_get_index_status");
   },
 );
 
-// Tool: graphitlive_invalidate_files
+// Tool: skein_invalidate_files
 server.registerTool(
-  "graphitlive_invalidate_files",
+  "skein_invalidate_files",
   {
     title: "Invalidate File Cache",
     description: mcpToolDescription("invalidate_files"),
@@ -1013,13 +1013,13 @@ server.registerTool(
       return formatToolResponse(
         createErrorResponse<InvalidateFilesResult>(rateLimitError, 0, getWorkspaceRoot()),
         responseFormat,
-        "graphitlive_invalidate_files",
+        "skein_invalidate_files",
       );
     }
 
     const workerCheck = await ensureWorkerReady();
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_invalidate_files");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_invalidate_files");
 
     const response = await invokeToolWithResponse<InvalidateFilesResult>(
       "invalidate_files",
@@ -1028,13 +1028,13 @@ server.registerTool(
       },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_invalidate_files");
+    return formatToolResponse(response, responseFormat, "skein_invalidate_files");
   },
 );
 
-// Tool: graphitlive_rebuild_index
+// Tool: skein_rebuild_index
 server.registerTool(
-  "graphitlive_rebuild_index",
+  "skein_rebuild_index",
   {
     title: "Rebuild Full Dependency Index",
     description: mcpToolDescription("rebuild_index"),
@@ -1058,26 +1058,26 @@ server.registerTool(
       return formatToolResponse(
         createErrorResponse<RebuildIndexResult>(rateLimitError, 0, getWorkspaceRoot()),
         responseFormat,
-        "graphitlive_rebuild_index",
+        "skein_rebuild_index",
       );
     }
 
     const workerCheck = await ensureWorkerReady();
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_rebuild_index");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_rebuild_index");
 
     const response = await invokeToolWithResponse<RebuildIndexResult>(
       "rebuild_index",
       {},
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_rebuild_index");
+    return formatToolResponse(response, responseFormat, "skein_rebuild_index");
   },
 );
 
-// Tool: graphitlive_get_symbol_graph
+// Tool: skein_get_symbol_graph
 server.registerTool(
-  "graphitlive_get_symbol_graph",
+  "skein_get_symbol_graph",
   {
     title: "Get Symbol-Level Dependency Graph",
     description: mcpToolDescription("get_symbol_graph"),
@@ -1098,20 +1098,20 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_get_symbol_graph");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_get_symbol_graph");
 
     const response = await invokeToolWithResponse<GetSymbolGraphResult>(
       "get_symbol_graph",
       { filePath },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_get_symbol_graph");
+    return formatToolResponse(response, responseFormat, "skein_get_symbol_graph");
   },
 );
 
-// Tool: graphitlive_find_unused_symbols
+// Tool: skein_find_unused_symbols
 server.registerTool(
-  "graphitlive_find_unused_symbols",
+  "skein_find_unused_symbols",
   {
     title: "Find Dead Code (Unused Exports)",
     description: mcpToolDescription("find_unused_symbols"),
@@ -1132,20 +1132,20 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_find_unused_symbols");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_find_unused_symbols");
 
     const response = await invokeToolWithResponse<FindUnusedSymbolsResult>(
       "find_unused_symbols",
       { filePath },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_find_unused_symbols");
+    return formatToolResponse(response, responseFormat, "skein_find_unused_symbols");
   },
 );
 
-// Tool: graphitlive_trace_function_execution
+// Tool: skein_trace_function_execution
 server.registerTool(
-  "graphitlive_trace_function_execution",
+  "skein_trace_function_execution",
   {
     title: "Trace Function Execution Chain",
     description: mcpToolDescription("trace_function_execution"),
@@ -1166,7 +1166,7 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_trace_function_execution");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_trace_function_execution");
 
     const response = await invokeToolWithResponse<TraceFunctionExecutionResult>(
       "trace_function_execution",
@@ -1177,13 +1177,13 @@ server.registerTool(
       },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_trace_function_execution");
+    return formatToolResponse(response, responseFormat, "skein_trace_function_execution");
   },
 );
 
-// Tool: graphitlive_analyze_breaking_changes
+// Tool: skein_analyze_breaking_changes
 server.registerTool(
-  "graphitlive_analyze_breaking_changes",
+  "skein_analyze_breaking_changes",
   {
     title: "Analyze Breaking Changes in Signature",
     description: mcpToolDescription("analyze_breaking_changes"),
@@ -1204,7 +1204,7 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_analyze_breaking_changes");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_analyze_breaking_changes");
 
     const response = await invokeToolWithResponse<AnalyzeBreakingChangesResult>(
       "analyze_breaking_changes",
@@ -1216,13 +1216,13 @@ server.registerTool(
       },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_analyze_breaking_changes");
+    return formatToolResponse(response, responseFormat, "skein_analyze_breaking_changes");
   },
 );
 
-// Tool: graphitlive_get_impact_analysis
+// Tool: skein_get_impact_analysis
 server.registerTool(
-  "graphitlive_get_impact_analysis",
+  "skein_get_impact_analysis",
   {
     title: "Get Comprehensive Impact Analysis",
     description: mcpToolDescription("get_impact_analysis"),
@@ -1249,7 +1249,7 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_get_impact_analysis");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_get_impact_analysis");
 
     const response = await invokeToolWithResponse<GetImpactAnalysisResult>(
       "get_impact_analysis",
@@ -1261,13 +1261,13 @@ server.registerTool(
       },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_get_impact_analysis");
+    return formatToolResponse(response, responseFormat, "skein_get_impact_analysis");
   },
 );
 
-// Tool: graphitlive_generate_codemap
+// Tool: skein_generate_codemap
 server.registerTool(
-  "graphitlive_generate_codemap",
+  "skein_generate_codemap",
   {
     title: "Generate File Codemap",
     description: mcpToolDescription("generate_codemap"),
@@ -1289,19 +1289,19 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_generate_codemap");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_generate_codemap");
 
     const response = await invokeToolWithResponse("generate_codemap", {
       filePath,
     });
 
-    return formatToolResponse(response, responseFormat, "graphitlive_generate_codemap");
+    return formatToolResponse(response, responseFormat, "skein_generate_codemap");
   },
 );
 
-// Tool: graphitlive_query_call_graph
+// Tool: skein_query_call_graph
 server.registerTool(
-  "graphitlive_query_call_graph",
+  "skein_query_call_graph",
   {
     title: "Query Cross-File Call Graph",
     description: mcpToolDescription("query_call_graph"),
@@ -1322,20 +1322,20 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_query_call_graph");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_query_call_graph");
 
     const response = await invokeToolWithResponse(
       "query_call_graph",
       { filePath, symbolName, symbolId, startLine, direction, depth, relationTypes, includeTypeOnly, offset, tokenBudget },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_query_call_graph");
+    return formatToolResponse(response, responseFormat, "skein_query_call_graph");
   },
 );
 
-// Tool: graphitlive_scan_dead_code
+// Tool: skein_scan_dead_code
 server.registerTool(
-  "graphitlive_scan_dead_code",
+  "skein_scan_dead_code",
   {
     title: "Scan Workspace for Dead Code",
     description: mcpToolDescription("scan_dead_code"),
@@ -1356,20 +1356,20 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_scan_dead_code");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_scan_dead_code");
 
     const response = await invokeToolWithResponse(
       "scan_dead_code",
       { scopePath, maxFiles },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_scan_dead_code");
+    return formatToolResponse(response, responseFormat, "skein_scan_dead_code");
   },
 );
 
-// Tool: graphitlive_graph_context
+// Tool: skein_graph_context
 server.registerTool(
-  "graphitlive_graph_context",
+  "skein_graph_context",
   {
     title: "Retrieve Unified Graph Context",
     description: mcpToolDescription("graph_context"),
@@ -1389,7 +1389,7 @@ server.registerTool(
       return formatToolResponse(
         workerCheck.response,
         responseFormat,
-        "graphitlive_graph_context",
+        "skein_graph_context",
       );
     }
 
@@ -1397,13 +1397,13 @@ server.registerTool(
       "graph_context",
       params,
     );
-    return formatToolResponse(response, responseFormat, "graphitlive_graph_context", params.detail);
+    return formatToolResponse(response, responseFormat, "skein_graph_context", params.detail);
   },
 );
 
-// Tool: graphitlive_explore_architecture
+// Tool: skein_explore_architecture
 server.registerTool(
-  "graphitlive_explore_architecture",
+  "skein_explore_architecture",
   {
     title: "Explore Grouped Architecture",
     description: mcpToolDescription("explore_architecture"),
@@ -1420,16 +1420,16 @@ server.registerTool(
     const responseFormat = response_format ?? "toon";
     const workerCheck = await ensureWorkerReady();
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_explore_architecture");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_explore_architecture");
 
     const response = await invokeToolWithResponse("explore_architecture", params);
-    return formatToolResponse(response, responseFormat, "graphitlive_explore_architecture");
+    return formatToolResponse(response, responseFormat, "skein_explore_architecture");
   },
 );
 
-// Tool: graphitlive_check_architecture
+// Tool: skein_check_architecture
 server.registerTool(
-  "graphitlive_check_architecture",
+  "skein_check_architecture",
   {
     title: "Check Architecture Rules",
     description: mcpToolDescription("check_architecture"),
@@ -1446,16 +1446,16 @@ server.registerTool(
     const responseFormat = response_format ?? "toon";
     const workerCheck = await ensureWorkerReady();
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_check_architecture");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_check_architecture");
 
     const response = await invokeToolWithResponse("check_architecture", params);
-    return formatToolResponse(response, responseFormat, "graphitlive_check_architecture");
+    return formatToolResponse(response, responseFormat, "skein_check_architecture");
   },
 );
 
-// Tool: graphitlive_query_natural_language
+// Tool: skein_query_natural_language
 server.registerTool(
-  "graphitlive_query_natural_language",
+  "skein_query_natural_language",
   {
     title: "Query Codebase with Natural Language",
     description: mcpToolDescription("query_natural_language"),
@@ -1476,22 +1476,22 @@ server.registerTool(
     const workerCheck = await ensureWorkerReady();
     const responseFormat = response_format;
     if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "graphitlive_query_natural_language");
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_query_natural_language");
 
     const response = await invokeToolWithResponse(
       "query_natural_language",
       { question, depth, tokenBudget, fileFilter, outputFormat },
     );
 
-    return formatToolResponse(response, responseFormat, "graphitlive_query_natural_language");
+    return formatToolResponse(response, responseFormat, "skein_query_natural_language");
   },
 );
 
-// Tool: graphitlive_get_session_stats
+// Tool: skein_get_session_stats
 // Runs in the server process (no worker needed): the sessionStats singleton
 // is populated by responseFormatter in this same process.
 server.registerTool(
-  "graphitlive_get_session_stats",
+  "skein_get_session_stats",
   {
     title: "Get Session Token Stats",
     description: mcpToolDescription("get_session_stats"),
@@ -1513,7 +1513,7 @@ server.registerTool(
       getWorkspaceRoot(),
     );
     // Always JSON: stats output is small and must stay exact (no TOON re-encoding).
-    return formatToolResponse(response, "json", "graphitlive_get_session_stats");
+    return formatToolResponse(response, "json", "skein_get_session_stats");
   },
 );
 
@@ -1522,9 +1522,9 @@ server.registerTool(
 // ============================================================================
 
 async function main(): Promise<void> {
-  debugLog("[McpServer] Graph-It-Live MCP Server starting...");
+  debugLog("[McpServer] Skein MCP Server starting...");
   debugLog(
-    `[McpServer] Workspace: ${getWorkspaceRoot() || "(not configured - use graphitlive_set_workspace)"}`,
+    `[McpServer] Workspace: ${getWorkspaceRoot() || "(not configured - use skein_set_workspace)"}`,
   );
   debugLog(
     `[McpServer] TSConfig: ${currentConfig.tsConfigPath ?? "auto-detect"}`,
