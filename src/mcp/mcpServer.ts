@@ -108,6 +108,14 @@ import { formatToolResponse } from "./responseFormatter";
 import { nextWorkspaceConfig } from "./shared/helpers";
 import { mcpToolDescription } from "./toolDescriptions";
 import {
+  ControlViewSchema,
+  type ControlViewResult,
+  executeControlView,
+  executeGetViewState,
+  GetViewStateSchema,
+  type GetViewStateResult,
+} from "./tools/viewState";
+import {
   AnalyzeBreakingChangesParamsSchema,
   type AnalyzeBreakingChangesResult,
   AnalyzeDependenciesParamsSchema,
@@ -1484,6 +1492,62 @@ server.registerTool(
     );
 
     return formatToolResponse(response, responseFormat, "skein_query_natural_language");
+  },
+);
+
+// Tool: skein_get_view_state
+// Runs in the server process: reads the state file the VS Code extension writes.
+server.registerTool(
+  "skein_get_view_state",
+  {
+    title: "Get Graph View State",
+    description: mcpToolDescription("get_view_state"),
+    inputSchema: GetViewStateSchema,
+    outputSchema: McpToolResponseSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async () => {
+    const startTime = Date.now();
+    const result = await executeGetViewState(getWorkspaceRoot());
+    const response = createSuccessResponse<GetViewStateResult>(
+      result,
+      Date.now() - startTime,
+      getWorkspaceRoot(),
+    );
+    return formatToolResponse(response, "json", "skein_get_view_state");
+  },
+);
+
+// Tool: skein_control_view
+// Queues an action for the VS Code extension and waits for its result.
+server.registerTool(
+  "skein_control_view",
+  {
+    title: "Control Graph View",
+    description: mcpToolDescription("control_view"),
+    inputSchema: ControlViewSchema,
+    outputSchema: McpToolResponseSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (params) => {
+    const startTime = Date.now();
+    const result = await executeControlView(getWorkspaceRoot(), params);
+    const response = createSuccessResponse<ControlViewResult>(
+      result,
+      Date.now() - startTime,
+      getWorkspaceRoot(),
+    );
+    return formatToolResponse(response, "json", "skein_control_view");
   },
 );
 

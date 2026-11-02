@@ -115,10 +115,36 @@ export interface CallGraphIndexingMessage {
   percent?: number;
 }
 
+/**
+ * Asks the webview to select a node (MCP-driven). The webview reports the
+ * result back with `callGraphSelectionChanged` and `userInitiated: false`.
+ */
+export interface CallGraphSelectNodeMessage {
+  type: "callGraphSelectNode";
+  nodeId: string;
+}
+
+/** Asks the webview to hide or show a node type or folder (MCP-driven). */
+export interface CallGraphSetFilterMessage {
+  type: "callGraphSetFilter";
+  filterType: "nodeType" | "folder" | "edgeType";
+  value: string;
+  visible: boolean;
+}
+
+/** Synchronises the depth slider without re-querying (the extension owns the query). */
+export interface CallGraphSetDepthMessage {
+  type: "callGraphSetDepth";
+  depth: number;
+}
+
 /** Discriminated union of all extension → webview messages for this feature */
 export type CallGraphExtensionMessage =
   | ShowCallGraphMessage
-  | CallGraphIndexingMessage;
+  | CallGraphIndexingMessage
+  | CallGraphSelectNodeMessage
+  | CallGraphSetFilterMessage
+  | CallGraphSetDepthMessage;
 
 // ---------------------------------------------------------------------------
 // Webview → Extension messages
@@ -213,6 +239,20 @@ export interface CallGraphCopyReferenceCommand {
   text: string;
 }
 
+/**
+ * Sent when the graph selection changes, including selections requested by the
+ * extension on behalf of an agent. `userInitiated` separates human actions
+ * (which take priority over queued agent commands) from agent-driven changes.
+ */
+export interface CallGraphSelectionChangedCommand {
+  command: "callGraphSelectionChanged";
+  nodeId?: string;
+  path?: string;
+  name?: string;
+  startLine?: number;
+  userInitiated: boolean;
+}
+
 /** Discriminated union of all webview → extension messages for this feature */
 export type CallGraphWebviewCommand =
   | CallGraphMountedCommand
@@ -221,4 +261,5 @@ export type CallGraphWebviewCommand =
   | CallGraphCopyReferenceCommand
   | CallGraphReadyCommand
   | CallGraphFilterChangedCommand
-  | CallGraphDepthChangedCommand;
+  | CallGraphDepthChangedCommand
+  | CallGraphSelectionChangedCommand;

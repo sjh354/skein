@@ -121,6 +121,9 @@ export class MessageDispatcher {
         callGraphFilterChanged: async (m) => {
           deps.handleCallGraphMessage?.(m);
         },
+        callGraphSelectionChanged: async (m) => {
+          deps.handleCallGraphMessage?.(m);
+        },
         architectureMounted: async (m) => {
           await deps.handleArchitectureMessage?.(m);
         },

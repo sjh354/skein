@@ -16,6 +16,7 @@ import type {
   CallGraphMountedCommand,
   CallGraphOpenFileCommand,
   CallGraphReadyCommand,
+  CallGraphSelectionChangedCommand,
   CallGraphSymbolFocusCommand,
   ShowCallGraphMessage,
 } from "./callgraph-types";
@@ -255,4 +256,5 @@ export type WebviewToExtensionMessage =
   | CallGraphFilterChangedCommand
   | CallGraphSymbolFocusCommand
   | CallGraphMountedCommand
+  | CallGraphSelectionChangedCommand
   | ArchitectureWebviewCommand;

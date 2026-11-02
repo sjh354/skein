@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import type { IndexerStatusSnapshot } from "../analyzer/IndexerStatus";
 import { Spider } from "../analyzer/Spider";
 import { SUPPORTED_SOURCE_FILE_REGEX } from "../shared/constants";
+import type { CallGraphWebviewCommand } from "../shared/callgraph-types";
+import type { SkeinViewSnapshot } from "../shared/viewState";
 import type {
   ExtensionToWebviewMessage,
   GraphData,
@@ -101,6 +103,8 @@ export class GraphProvider implements vscode.WebviewViewProvider {
    * Used to route call-graph webview messages and provide sidebar webview.
    */
   private _callGraphViewService: CallGraphViewService | null = null;
+  /** Optional sink for call-graph webview messages (shared view state). */
+  private _viewStateObserver: ((message: CallGraphWebviewCommand) => void) | null = null;
   private _disposePromise: Promise<void> | null = null;
   private _isDisposing = false;
   private readonly _activeDrillDowns = new Set<Promise<void>>();
@@ -115,6 +119,61 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     this._callGraphViewService = service;
     // Also inject into SymbolViewService for cross-file caller enrichment
     this.symbolViewService?.setCallGraphQueryService(service);
+  }
+
+  /** Routes call-graph webview messages to the shared view state (DESIGN 10). */
+  public setViewStateObserver(observer: (message: CallGraphWebviewCommand) => void): void {
+    this._viewStateObserver = observer;
+  }
+
+  /** What the graph tab currently shows, published to `.skein/state.json`. */
+  public getViewStateSnapshot(): { snapshot: SkeinViewSnapshot; graphVersion: number } {
+    const mode = this._stateManager.viewMode;
+    const snapshot: SkeinViewSnapshot = {
+      mode,
+      hiddenFilters: [],
+      expandAll: this._graphState.getExpandAll(),
+    };
+    if (mode === "callgraph" && this._callGraphViewService) {
+      const filePath = this._callGraphViewService.getViewedFilePath();
+      if (filePath) snapshot.filePath = filePath;
+      const selection = this._callGraphViewService.getSelectedNode();
+      if (selection) snapshot.selection = selection;
+      snapshot.callGraph = this._callGraphViewService.getViewSnapshot();
+      snapshot.hiddenFilters = this._callGraphViewService.getHiddenFilters();
+    } else {
+      const filePath = this._stateManager.currentFilePath;
+      if (filePath) snapshot.filePath = filePath;
+    }
+    return {
+      snapshot,
+      graphVersion: this._callGraphViewService?.getCurrentGraphVersion() ?? 0,
+    };
+  }
+
+  /** Opens a file at a position for an MCP-driven command. */
+  public async openFileAt(filePath: string, line = 0, character = 0): Promise<boolean> {
+    try {
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+      const position = new vscode.Position(line, character);
+      await vscode.window.showTextDocument(document, {
+        selection: new vscode.Range(position, position),
+        preserveFocus: false,
+        preview: true,
+      });
+      return true;
+    } catch (err) {
+      log.warn(`Could not open ${filePath}:`, err);
+      return false;
+    }
+  }
+
+  /** Expands or collapses every node; returns false when the graph view is closed. */
+  public async setExpandAllState(expandAll: boolean): Promise<boolean> {
+    if (!this._view) return false;
+    if (this._graphState.getExpandAll() === expandAll) return true;
+    await this.expandAllNodes();
+    return true;
   }
 
   private get spider(): Spider | undefined {
@@ -318,6 +377,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
         },
         handleCallGraphMessage: (msg) => {
           this._callGraphViewService?.handleWebviewMessage(msg);
+          this._viewStateObserver?.(msg);
         },
         handleArchitectureMessage: async (msg) => {
           await this.architectureViewService?.handleWebviewMessage(msg);
