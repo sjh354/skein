@@ -1929,6 +1929,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
         reset();
         return post({ command: "architectureMounted" });
       case "architectureControls":
+        surface.markUserAction();
         return control(message);
     }
   };

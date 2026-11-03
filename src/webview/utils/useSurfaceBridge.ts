@@ -75,6 +75,7 @@ export function useSurfaceBridge(options: {
         return;
       }
       if (message.command !== "surfaceCommand") return;
+      syncTarget.current = undefined;
       const o = latest.current;
       const action = message.action;
       const nodes = o.getNodes?.() ?? o.nodes;
@@ -102,7 +103,8 @@ export function useSurfaceBridge(options: {
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, []);
-  return { markUserAction: () => { userPending.current = true; }, selectedId: selection?.nodeId, select: (nodeId?: string, path?: string) => {
+  return { markUserAction: () => { syncTarget.current = undefined; userPending.current = true; }, selectedId: selection?.nodeId, select: (nodeId?: string, path?: string) => {
+    syncTarget.current = undefined;
     current.current.selection = nodeId ? { nodeId, path } : undefined;
     setSelection(current.current.selection); report(true);
   } };

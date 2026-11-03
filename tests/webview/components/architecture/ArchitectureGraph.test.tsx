@@ -1778,6 +1778,15 @@ describe("ArchitectureGraph: declared architecture rules", () => {
 });
 
 describe('architecture MCP surface', () => {
+  it('lets a new explicit control supersede a delayed peer snapshot', () => {
+    const postMessage = vi.fn(); render(<ArchitectureGraph postMessage={postMessage} />);
+    act(() => window.dispatchEvent(new MessageEvent('message', { data: { command: 'surfaceSync', mode: 'architecture', state: { nodeIds: [], expandedNodeIds: [], architecture: { view: 'graph', minImports: 1 } }, selection: { nodeId: 'group-1' } } })));
+    send({ type: 'architectureControls', view: 'matrix' });
+    send(summary);
+    expect(lastOf(postMessage, 'surfaceState').state.architecture.view).toBe('matrix');
+    expect(postMessage.mock.calls.some(([m]) => m.command === 'architectureMatrix')).toBe(true);
+  });
+
   afterEach(cleanup);
   const command = (action: unknown) => act(() => window.dispatchEvent(new MessageEvent('message', { data: { command: 'surfaceCommand', mode: 'architecture', id: 'mcp', action } })));
   it('publishes the revision and switches graph/matrix and edge threshold', () => {
