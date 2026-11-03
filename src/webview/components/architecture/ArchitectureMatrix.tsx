@@ -150,8 +150,8 @@ export function ArchitectureMatrix(props: Readonly<ArchitectureMatrixProps>): Re
       reported = true;
       callbacks.current.onPaint({ renderedCells, paintMs: performance.now() - paint.started, cause: paint.cause });
     };
-    requestAnimationFrame(report);
-    setTimeout(report, 250);
+    const timer = setTimeout(report, 250);
+    requestAnimationFrame(() => { clearTimeout(timer); report(); });
   });
 
   /** Scrolls the least needed to show a cell next to the headers. */
