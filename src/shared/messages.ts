@@ -214,7 +214,27 @@ export interface ShowSymbolListMessage {
   type: "showSymbolList";
 }
 
+export interface SurfaceCommandMessage {
+  command: "surfaceCommand";
+  mode: import("./viewState").SkeinViewMode;
+  id: string;
+  action: import("./viewState").SkeinViewAction;
+}
+export interface SurfaceStateMessage {
+  command: "surfaceState";
+  mode: import("./viewState").SkeinViewMode;
+  state: import("./viewState").SkeinSurfaceState;
+  selection?: import("./viewState").SkeinSelection;
+  userInitiated?: boolean;
+}
+export interface SurfaceResultMessage {
+  command: "surfaceResult";
+  id: string;
+  reason?: string;
+}
+
 export type ExtensionToWebviewMessage =
+  | SurfaceCommandMessage
   | ShowGraphMessage
   | ExpandedGraphMessage
   | ReferencingFilesMessage
@@ -235,6 +255,8 @@ export type ExtensionToWebviewMessage =
   | ArchitectureExtensionMessage;
 
 export type WebviewToExtensionMessage =
+  | SurfaceStateMessage
+  | SurfaceResultMessage
   | OpenFileMessage
   | ExpandNodeMessage
   | SetExpandAllMessage

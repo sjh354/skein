@@ -3,6 +3,8 @@ import { SymbolDependency, SymbolInfo } from "../../shared/types";
 import { getFileName } from "../utils/nodeUtils";
 
 interface SymbolCardViewProps {
+  mode?: "list" | "symbol";
+  postMessage?: (message: import("../../shared/messages").WebviewToExtensionMessage) => void;
   filePath: string;
   symbols: SymbolInfo[];
   dependencies: SymbolDependency[];
@@ -37,7 +39,11 @@ const CATEGORY_ICONS: Record<string, string> = {
   other: "?",
 };
 
+import { useSurfaceBridge } from "../utils/useSurfaceBridge";
+
 const SymbolCardView: React.FC<SymbolCardViewProps> = ({
+  postMessage,
+  mode = "list",
   filePath,
   symbols,
   dependencies,
@@ -52,6 +58,17 @@ const SymbolCardView: React.FC<SymbolCardViewProps> = ({
   onRefresh,
   onToggleFilterUnused,
 }) => {
+  const surface = useSurfaceBridge({
+    mode, nodes: symbols.map(symbol => ({ id: symbol.id, label: symbol.name })),
+    state: { expandedNodeIds: [], analysis: { nodes: symbols.length, edges: dependencies.length, stale: false } }, post: postMessage,
+    apply: action => {
+      if (action.action !== "select" && action.action !== "focus") return "unsupported-view-action";
+      const element = document.querySelector<HTMLElement>(`[data-symbol-id="${CSS.escape(action.nodeId)}"]`);
+      if (!element) return "node-not-visible";
+      if (action.action === "focus") element.scrollIntoView?.({ block: "center" });
+      return undefined;
+    },
+  });
   // Filter symbols based on showTypes
   const filteredSymbols = showTypes
     ? symbols
@@ -306,7 +323,8 @@ const SymbolCardView: React.FC<SymbolCardViewProps> = ({
                 symbol={symbol}
                 members={childrenByParent.get(symbol.id) || []}
                 externalDeps={getExternalDeps(symbol.id)}
-                onSymbolClick={onSymbolClick}
+                selectedId={surface.selectedId}
+                onSymbolClick={(id, line) => { surface.select(id); onSymbolClick(id, line); }}
                 onNavigateToFile={onNavigateToFile}
               />
             ))}
@@ -466,6 +484,7 @@ const ImporterRow: React.FC<ImporterRowProps> = ({
 
 // Component for symbol cards
 interface SymbolCardProps {
+  selectedId?: string;
   symbol: SymbolInfo;
   members: SymbolInfo[];
   externalDeps: Map<string, SymbolDependency[]>;
@@ -474,6 +493,7 @@ interface SymbolCardProps {
 }
 
 const SymbolCard: React.FC<SymbolCardProps> = ({
+  selectedId,
   symbol,
   members,
   externalDeps,
@@ -502,6 +522,8 @@ const SymbolCard: React.FC<SymbolCardProps> = ({
       {/* Card Header */}
       <div //NOSONAR
         role="button"
+        data-symbol-id={symbol.id}
+        aria-pressed={selectedId === symbol.id}
         tabIndex={0}
         onClick={() => onSymbolClick(symbol.id, symbol.line)}
         onKeyDown={(e) =>
@@ -512,7 +534,7 @@ const SymbolCard: React.FC<SymbolCardProps> = ({
           alignItems: "center",
           gap: 8,
           padding: "10px 12px",
-          background: colors.bg + "33",
+          background: selectedId === symbol.id ? "var(--vscode-list-activeSelectionBackground)" : colors.bg + "33",
           borderBottom: "1px solid var(--vscode-widget-border)",
           cursor: "pointer",
         }}
@@ -592,6 +614,8 @@ const SymbolCard: React.FC<SymbolCardProps> = ({
                 key={member.id}
                 role="button"
                 tabIndex={0}
+                data-symbol-id={member.id}
+                aria-pressed={selectedId === member.id}
                 onClick={() => onSymbolClick(member.id, member.line)}
                 onKeyDown={(e) =>
                   handleKeyDown(e, () => onSymbolClick(member.id, member.line))
@@ -601,6 +625,7 @@ const SymbolCard: React.FC<SymbolCardProps> = ({
                   alignItems: "center",
                   gap: 6,
                   padding: "4px 0",
+                  background: selectedId === member.id ? "var(--vscode-list-activeSelectionBackground)" : undefined,
                   cursor: "pointer",
                 }}
               >

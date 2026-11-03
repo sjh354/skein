@@ -297,6 +297,25 @@ suite('View State MCP round trip (step 4, phase 1)', () => {
     await waitForPublished((s) => (s.expandAll === false ? s : null), 'expandAll false');
   });
 
+  test('file surface: search, select and individual collapse round-trip through MCP', async function () {
+    this.timeout(60_000);
+    await vscode.commands.executeCommand('skein.setViewModeFile');
+    await waitForViewMode('file');
+    const published = await waitForPublished(s => s.mode === 'file' && s.surface?.nodeIds?.length ? s : null, 'file surface nodes');
+    const nodeId = published.surface.nodeIds[0];
+    const selected = await mcp.callTool('skein_control_view', { action: 'select', nodeId });
+    assert.strictEqual(selected.data.applied, true, JSON.stringify(selected.data));
+    assert.strictEqual(selected.data.state.views.file.nodeId, nodeId);
+    const searched = await mcp.callTool('skein_control_view', { action: 'search', query: path.basename(nodeId) });
+    assert.strictEqual(searched.data.applied, true, JSON.stringify(searched.data));
+    assert.ok(searched.data.state.surface.search.matches.includes(nodeId));
+    const collapsed = await mcp.callTool('skein_control_view', { action: 'set_expanded', nodeId, expanded: false });
+    assert.strictEqual(collapsed.data.applied, true, JSON.stringify(collapsed.data));
+    assert.ok(!collapsed.data.state.surface.expandedNodeIds.includes(nodeId));
+    const missing = await mcp.callTool('skein_control_view', { action: 'select', nodeId: 'missing-file-node' });
+    assert.strictEqual(missing.data.reason, 'node-not-found');
+  });
+
   test('unknown node id is rejected with node-not-found', async function () {
     this.timeout(60_000);
     await openCallGraphFor('symbols', 'functions.ts');

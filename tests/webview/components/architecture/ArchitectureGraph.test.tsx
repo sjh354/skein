@@ -1776,3 +1776,23 @@ describe("ArchitectureGraph: declared architecture rules", () => {
     expect(screen.getByText(/Architecture rules not checked: .*unknown element "x"/)).toBeTruthy();
   });
 });
+
+describe('architecture MCP surface', () => {
+  afterEach(cleanup);
+  const command = (action: unknown) => act(() => window.dispatchEvent(new MessageEvent('message', { data: { command: 'surfaceCommand', mode: 'architecture', id: 'mcp', action } })));
+  it('publishes the revision and switches graph/matrix and edge threshold', () => {
+    const postMessage = vi.fn(); render(<ArchitectureGraph postMessage={postMessage} />); send(summary);
+    command({ action: 'set_architecture', view: 'matrix', minImports: 2 });
+    const state = lastOf(postMessage, 'surfaceState');
+    expect(state.state.architecture).toMatchObject({ revision: 'r1', view: 'matrix', minImports: 2 });
+    expect(state.state.analysis.stale).toBe(false);
+    expect(lastOf(postMessage, 'surfaceResult')).toEqual({ command: 'surfaceResult', id: 'mcp', reason: undefined });
+  });
+  it('selects a rendered group by its exact ID and rejects unknown groups', () => {
+    const postMessage = vi.fn(); render(<ArchitectureGraph postMessage={postMessage} />); send(summary);
+    command({ action: 'select', nodeId: 'group-1' });
+    expect(lastOf(postMessage, 'surfaceState').selection.nodeId).toBe('group-1');
+    command({ action: 'select', nodeId: 'group-missing' });
+    expect(lastOf(postMessage, 'surfaceResult').reason).toBe('node-not-found');
+  });
+});

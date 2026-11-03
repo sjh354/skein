@@ -149,6 +149,7 @@ export function activate(context: vscode.ExtensionContext) {
                 logger: log,
                 host: {
                     read: () => provider.getViewStateSnapshot(),
+                    controlSurface: (action) => provider.controlSurface(action),
                     select: async (nodeId) => callGraphViewService.selectNode(nodeId),
                     hasNode: (nodeId) => callGraphViewService.hasNode(nodeId),
                     focus: async (nodeId) => callGraphViewService.focusNode(nodeId),
@@ -164,6 +165,7 @@ export function activate(context: vscode.ExtensionContext) {
                 },
             });
             provider.setViewStateObserver((message) => viewStateService?.observeWebviewCommand(message));
+            provider.setSurfaceUserActionObserver(() => viewStateService?.markUserAction());
             const service = viewStateService;
             disposables.push(service);
             viewStateStart = service.start().catch((err: unknown) => {

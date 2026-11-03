@@ -8,6 +8,7 @@
  * extension answers with the cached summary or a build, so no message can arrive early.
  */
 
+import { useSurfaceBridge } from "../../utils/useSurfaceBridge";
 import cytoscape from "cytoscape";
 import type { ElkNode } from "elkjs/lib/elk-api";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -354,7 +355,7 @@ const sameEnds = (left: EvidenceEnds, right: EvidenceEnds) =>
   && left.rule === right.rule;
 
 interface ArchitectureGraphProps {
-  postMessage: (message: ArchitectureWebviewCommand) => void;
+  postMessage: (message: ArchitectureWebviewCommand | import("../../../shared/messages").SurfaceStateMessage | import("../../../shared/messages").SurfaceResultMessage) => void;
 }
 
 const MODE_WORDING = {
@@ -1580,6 +1581,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
   const markSelected = (cy: cytoscape.Core, node: cytoscape.NodeSingular | undefined) => {
     setSelection(node ? selectionOf(node) : null);
     selectedIdRef.current = node?.id() ?? null;
+    surface.select(node?.id(), node?.data("relativePath"));
     markNodes(cy, "selected", node ?? cy.collection());
     const live = document.getElementById(LIVE_REGION);
     if (live) live.textContent = node ? describeNode(node) : "";
@@ -1853,6 +1855,48 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     controlCanvas(message);
     controlSelection(message);
   };
+  const surface = useSurfaceBridge({
+    mode: "architecture",
+    nodes: Array.from(cyRef.current?.nodes() ?? []).map(node => ({ id: node.id(), label: String(node.data("label") ?? "") })),
+    getNodes: () => Array.from(cyRef.current?.nodes() ?? []).map(node => ({ id: node.id(), label: String(node.data("label") ?? "") })),
+    post: message => { if (message.command === "surfaceState" || message.command === "surfaceResult") postMessage(message); },
+    state: {
+      expandedNodeIds: [...expansions.keys()].map(id => `group-${id}`),
+      architecture: { revision: summary?.revision, unit: unit ?? undefined, folder, view, minImports },
+      ...(summary ? { analysis: { revision: summary.revision, nodes: summary.totals.files, edges: summary.totals.fileEdges, stale: summary.stale } } : {}),
+      ...(summary?.diagnostics ? { diagnostics: { total: summary.diagnostics.totals.confirmed + summary.diagnostics.totals.candidate,
+        truncated: summary.diagnostics.totals.confirmed + summary.diagnostics.totals.candidate > 100,
+        items: summary.diagnostics.diagnostics.slice(0, 100).map(({ id, kind, status }) => ({ id, kind, status })) } } : {}),
+    },
+    apply: action => {
+      const cy = cyRef.current;
+      if (!cy || !summary) return "view-not-available";
+      if (action.action === "set_architecture") {
+        if (action.unit !== undefined && action.unit !== "" && !summary.units?.units.some(u => u.key === action.unit)) return "node-not-found";
+        if (action.unit !== undefined && action.folder !== undefined) return "one-navigation-per-command";
+        if (action.folder && !drawn?.groups.some(group => group.key === action.folder)) return "node-not-found";
+        // Navigation returns early in the UI driver; apply orthogonal controls explicitly.
+        if (action.view !== undefined) controlMatrix({ type: "architectureControls", view: action.view });
+        if (action.minImports !== undefined) setMinImports(action.minImports);
+        if (action.unit !== undefined) selectUnit(action.unit === "" ? null : action.unit);
+        if (action.folder !== undefined) { if (action.folder === "") upOneFolder(); else enterFolder(action.folder); }
+      } else if (action.action === "select" || action.action === "focus") {
+        const node = cy.getElementById(action.nodeId);
+        if (!node.isNode()) return "node-not-found";
+        pinnedRef.current = node;
+        markNodes(cy, "selected", node);
+        setSelection(selectionOf(node));
+        selectedIdRef.current = node.id();
+        if (action.action === "focus") cy.fit(node, 60);
+      } else if (action.action === "set_expanded") {
+        const node = cy.getElementById(action.nodeId);
+        if (!isGroup(node) || node.data("unitKey") !== undefined) return "unsupported-node-kind";
+        const id = Number(node.data("groupId"));
+        if (action.expanded) enter(id); else collapse(id);
+      } else return "unsupported-view-action";
+      return undefined;
+    },
+  });
   const receive = (message: ArchitectureExtensionMessage) => {
     switch (message.type) {
       case "architectureSummary":
@@ -2209,7 +2253,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
         <StatePanel state={state} onRetry={refresh} onSettings={() => postMessageRef.current({ command: "architectureOpenSettings" })} />
       )}
       {!state && summary && drawn && (
-        <>
+        <div style={{ maxHeight: "50%", overflowY: "auto", flexShrink: 0 }}>
           <SummaryHeader
             summary={summary} level={drawn} onShowMore={() => actionsRef.current.showMoreGroups()}
             unit={unit} minImports={minImports} onRefresh={refresh}
@@ -2247,7 +2291,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
             view={view}
             />}
           />
-        </>
+        </div>
       )}
       <div ref={canvasAreaRef} style={{ position: "relative", flex: 1, minHeight: 0, visibility: state ? "hidden" : "visible" }}>
         {/* Hidden on a wrapper: the ELK layout shows and hides the container itself. */}

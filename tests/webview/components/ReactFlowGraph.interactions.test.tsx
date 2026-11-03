@@ -194,3 +194,26 @@ describe('file graph interactions', () => {
     expect(edge(a, b).style?.strokeWidth).toBe(2.5);
   });
 });
+
+describe('file graph MCP surface', () => {
+  const command = (action: unknown) => act(() => window.dispatchEvent(new MessageEvent('message', { data: { command: 'surfaceCommand', mode: 'file', id: 'mcp', action } })));
+  it('expands and collapses one node, then reports its rendered expansion state', () => {
+    const postMessage = vi.fn();
+    render(<ReactFlowGraph {...props} expandAll={false} postMessage={postMessage} />);
+    command({ action: 'set_expanded', nodeId: b, expanded: true });
+    expect(flow.props.nodes?.some(n => n.id === c)).toBe(true);
+    expect(postMessage.mock.calls.some(([m]) => m.state?.expandedNodeIds.includes(b))).toBe(true);
+    command({ action: 'set_expanded', nodeId: b, expanded: false });
+    expect(flow.props.nodes?.some(n => n.id === c)).toBe(false);
+    expect(postMessage.mock.calls.filter(([m]) => m.command === 'surfaceResult')).toHaveLength(2);
+  });
+  it('focuses a visible search match and refuses a non-visible node', () => {
+    const postMessage = vi.fn();
+    render(<ReactFlowGraph {...props} expandAll={false} postMessage={postMessage} />);
+    command({ action: 'search', query: '/b/' });
+    expect(flow.fitView).toHaveBeenCalledWith({ nodes: [{ id: b }], duration: 300 });
+    expect(postMessage.mock.calls.some(([m]) => m.state?.search?.matches.includes(b))).toBe(true);
+    command({ action: 'select', nodeId: d });
+    expect(postMessage).toHaveBeenCalledWith({ command: 'surfaceResult', id: 'mcp', reason: 'node-not-visible' });
+  });
+});

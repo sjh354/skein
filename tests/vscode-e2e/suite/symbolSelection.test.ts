@@ -100,7 +100,7 @@ suite('Symbol Selection E2E Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Toggle to symbol view (should clear symbol selection)
-    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.setViewModeList');
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Test passes if commands execute without error (context key verification not possible in E2E)
@@ -260,7 +260,7 @@ suite('Symbol Selection E2E Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     console.log('Step 4: Toggle to list view');
-    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.setViewModeList');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     contextValue = await vscode.commands.executeCommand(
@@ -270,8 +270,8 @@ suite('Symbol Selection E2E Tests', () => {
     assert.strictEqual(contextValue, 'list', 'Should be in list mode');
 
     console.log('Step 5: Back to file view');
-    await vscode.commands.executeCommand('skein.toggleViewMode');
-    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.setViewModeSymbol');
+    await vscode.commands.executeCommand('skein.setViewModeFile');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     assert.ok(true, 'Full workflow completed successfully');

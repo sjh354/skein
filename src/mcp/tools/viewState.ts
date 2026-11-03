@@ -41,6 +41,9 @@ export interface GetViewStateResult {
 }
 
 const ActionSchema = z.enum([
+    "search",
+    "set_expanded",
+    "set_architecture",
     "select",
     "focus",
     "set_depth",
@@ -51,8 +54,14 @@ const ActionSchema = z.enum([
 
 export const ControlViewSchema = z.object({
     action: ActionSchema.describe(
-        "select: highlight a call graph node; focus: re-centre the graph on it; set_depth: re-query at 1-5; open_file: open a file at a line; set_filter: hide/show a node type or folder; set_expand_all: expand or collapse the dependency graph.",
+        "search: search the rendered view; set_expanded: expand/collapse one file graph node or architecture group; set_architecture: change architecture view/unit/folder/minImports (one navigation level per call); select: highlight a node; focus: re-centre the graph on it; set_depth: re-query at 1-5; open_file: open a file at a line; set_filter: hide/show a node type or folder; set_expand_all: expand or collapse the dependency graph.",
     ),
+    query: z.string().max(256).optional().describe("Search the current rendered view; empty clears the search. Results are in state.surface.search."),
+    expanded: z.boolean().optional().describe("Target expansion for set_expanded."),
+    view: z.enum(["graph", "matrix"]).optional(),
+    unit: z.string().max(256).optional(),
+    folder: z.string().max(256).optional(),
+    minImports: z.number().int().min(1).optional(),
     nodeId: z.string().min(1).optional().describe("Call graph node id, as returned by get_view_state or query_call_graph."),
     depth: z.number().int().min(1).max(5).optional().describe("Traversal depth for set_depth."),
     path: z.string().min(1).optional().describe("Absolute file path for open_file."),
@@ -95,6 +104,12 @@ export interface ControlViewResult {
 
 function buildAction(params: ControlViewParams): SkeinViewAction | string {
     switch (params.action) {
+        case "search":
+            return params.query === undefined ? "search requires query" : { action: "search", query: params.query };
+        case "set_expanded":
+            return !params.nodeId || params.expanded === undefined ? "set_expanded requires nodeId and expanded" : { action: "set_expanded", nodeId: params.nodeId, expanded: params.expanded };
+        case "set_architecture":
+            return { action: "set_architecture", view: params.view, unit: params.unit, folder: params.folder, minImports: params.minImports };
         case "select":
         case "focus":
             return params.nodeId ? { action: params.action, nodeId: params.nodeId } : `${params.action} requires nodeId`;

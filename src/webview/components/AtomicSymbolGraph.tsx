@@ -1,7 +1,9 @@
+import { useSurfaceBridge } from "../utils/useSurfaceBridge";
 import React, { useMemo, useState } from "react";
 import type { IntraFileGraph, SymbolDependency, SymbolInfo } from "../../shared/types";
 
 interface AtomicSymbolGraphProps {
+  postMessage?: (message: import("../../shared/messages").WebviewToExtensionMessage) => void;
   symbols: SymbolInfo[];
   dependencies: SymbolDependency[];
   incomingDependencies?: SymbolDependency[]; // External calls TO these symbols
@@ -28,6 +30,7 @@ interface TreeNode {
  * Like VS Code file explorer but for symbols
  */
 export const AtomicSymbolGraph: React.FC<AtomicSymbolGraphProps> = ({
+  postMessage,
   symbols,
   dependencies,
   incomingDependencies = [],
@@ -47,6 +50,25 @@ export const AtomicSymbolGraph: React.FC<AtomicSymbolGraphProps> = ({
   });
 
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const surface = useSurfaceBridge({
+    mode: "symbol", nodes: symbols.map(symbol => ({ id: symbol.id, label: symbol.name })), post: postMessage,
+    state: { expandedNodeIds: [...expandedNodes], analysis: { nodes: symbols.length, edges: dependencies.length, stale: false } },
+    apply: action => {
+      if (action.action !== "select" && action.action !== "focus") return "unsupported-view-action";
+      setSelectedNode(action.nodeId);
+      // Reveal ancestors before the next paint so hidden members become visible.
+      const next = new Set(expandedNodes);
+      let target = symbols.find(symbol => symbol.id === action.nodeId);
+      const visited = new Set<string>();
+      while (target?.parentSymbolId && !visited.has(target.parentSymbolId)) {
+        visited.add(target.parentSymbolId); next.add(target.parentSymbolId);
+        target = symbols.find(symbol => symbol.id === target!.parentSymbolId);
+      }
+      setExpandedNodes(next);
+      if (action.action === "focus") requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-symbol-id="${CSS.escape(action.nodeId)}"]`)?.scrollIntoView?.({ block: "center" }));
+      return undefined;
+    },
+  });
 
   // Set of symbol IDs that participate in cycles
   const cycleNodeSet = useMemo(() => {
@@ -167,7 +189,8 @@ export const AtomicSymbolGraph: React.FC<AtomicSymbolGraphProps> = ({
   };
 
   const handleNodeClick = (node: TreeNode) => {
-    setSelectedNode(node.id);
+    surface.select(node.id);
+              setSelectedNode(node.id);
     onNodeClick(node.id, node.line);
   };
 
@@ -242,11 +265,13 @@ export const AtomicSymbolGraph: React.FC<AtomicSymbolGraphProps> = ({
       }
       
       // Select and navigate to the target
+      surface.select(depId);
       setSelectedNode(depId);
       onNodeClick(depId, targetNode.line);
     } else {
       // External symbol - navigate to it (parent component will handle loading the file)
       // Use line 1 as default for external symbols
+      surface.select(depId);
       setSelectedNode(depId);
       onNodeClick(depId, 1);
     }
@@ -262,6 +287,7 @@ export const AtomicSymbolGraph: React.FC<AtomicSymbolGraphProps> = ({
       <div key={node.id}>
         {/* Main node */}
         <button
+          data-symbol-id={node.id}
           style={{
             paddingTop: '6px',
             paddingBottom: '6px',

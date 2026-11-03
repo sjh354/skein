@@ -75,6 +75,17 @@ export interface SkeinViewSelections {
   architecture?: SkeinSelection;
 }
 
+/** Bounded state of the rendered surface; detailed analysis stays in query tools. */
+export interface SkeinSurfaceState {
+  nodeIds: string[];
+  nodeIdsTruncated?: boolean;
+  expandedNodeIds: string[];
+  search?: { query: string; matches: string[]; total: number };
+  architecture?: { revision?: string; unit?: string; folder?: string; view?: string; minImports?: number };
+  analysis?: { revision?: string; nodes: number; edges: number; stale: boolean };
+  diagnostics?: { total: number; truncated: boolean; items: Array<{ id: string; kind: string; status: string }> };
+}
+
 export interface SkeinViewSnapshot {
   mode: SkeinViewMode;
   /** File the graph view is showing (absolute path). */
@@ -89,6 +100,7 @@ export interface SkeinViewSnapshot {
   expandAll: boolean;
   layout?: SkeinLayout;
   views?: SkeinViewSelections;
+  surface?: SkeinSurfaceState;
 }
 
 /** One extension window's snapshot. */
@@ -142,6 +154,9 @@ export const EMPTY_VIEW_SNAPSHOT: SkeinViewSnapshot = {
 // ---------------------------------------------------------------------------
 
 export type SkeinViewAction =
+  | { action: "search"; query: string }
+  | { action: "set_expanded"; nodeId: string; expanded: boolean }
+  | { action: "set_architecture"; view?: "graph" | "matrix"; unit?: string; folder?: string; minImports?: number }
   | { action: "select"; nodeId: string }
   | { action: "focus"; nodeId: string }
   | { action: "set_depth"; depth: number }
@@ -171,6 +186,9 @@ export interface SkeinCommandResult {
 }
 
 const ACTION_NAMES: ReadonlySet<string> = new Set<SkeinViewAction["action"]>([
+  "search",
+  "set_expanded",
+  "set_architecture",
   "select",
   "focus",
   "set_depth",
@@ -318,6 +336,32 @@ function parseSnapshot(value: Record<string, unknown>): SkeinViewSnapshot | null
   if (layout) snapshot.layout = layout;
   const views = parseViewSelections(value.views);
   if (views) snapshot.views = views;
+  if (isRecord(value.surface)) {
+    const surface = value.surface;
+    const strings = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 10000) : [];
+    snapshot.surface = { nodeIds: strings(surface.nodeIds), expandedNodeIds: strings(surface.expandedNodeIds) };
+    if (surface.nodeIdsTruncated === true) snapshot.surface.nodeIdsTruncated = true;
+    if (isRecord(surface.search) && typeof surface.search.query === "string" && typeof surface.search.total === "number") {
+      snapshot.surface.search = { query: surface.search.query.slice(0, 256), matches: strings(surface.search.matches).slice(0, 100), total: surface.search.total };
+    }
+    if (isRecord(surface.architecture)) {
+      const a = surface.architecture;
+      snapshot.surface.architecture = {};
+      for (const key of ["revision", "unit", "folder", "view"] as const) {
+        if (typeof a[key] === "string") snapshot.surface.architecture[key] = a[key];
+      }
+      if (typeof a.minImports === "number") snapshot.surface.architecture.minImports = a.minImports;
+    }
+    if (isRecord(surface.analysis) && typeof surface.analysis.nodes === "number" && typeof surface.analysis.edges === "number") {
+      snapshot.surface.analysis = { nodes: surface.analysis.nodes, edges: surface.analysis.edges, stale: surface.analysis.stale === true,
+        ...(typeof surface.analysis.revision === "string" ? { revision: surface.analysis.revision } : {}) };
+    }
+    if (isRecord(surface.diagnostics) && Array.isArray(surface.diagnostics.items) && typeof surface.diagnostics.total === "number") {
+      const items = surface.diagnostics.items.filter(isRecord).filter(item => typeof item.id === "string" && typeof item.kind === "string" && typeof item.status === "string")
+        .slice(0, 100).map(item => ({ id: String(item.id), kind: String(item.kind), status: String(item.status) }));
+      snapshot.surface.diagnostics = { total: surface.diagnostics.total, truncated: surface.diagnostics.truncated === true, items };
+    }
+  }
   return snapshot;
 }
 
@@ -420,6 +464,17 @@ function parseAction(value: unknown): SkeinViewAction | null {
   if (!isRecord(value) || typeof value.action !== "string") return null;
   if (!ACTION_NAMES.has(value.action)) return null;
   switch (value.action) {
+    case "search":
+      return typeof value.query === "string" && value.query.length <= 256 ? { action: "search", query: value.query } : null;
+    case "set_expanded":
+      return typeof value.nodeId === "string" && typeof value.expanded === "boolean" ? { action: "set_expanded", nodeId: value.nodeId, expanded: value.expanded } : null;
+    case "set_architecture": {
+      if (value.view !== undefined && value.view !== "graph" && value.view !== "matrix") return null;
+      if (value.unit !== undefined && typeof value.unit !== "string") return null;
+      if (value.folder !== undefined && typeof value.folder !== "string") return null;
+      if (value.minImports !== undefined && (!Number.isSafeInteger(value.minImports) || Number(value.minImports) < 1)) return null;
+      return { action: "set_architecture", view: value.view as "graph" | "matrix" | undefined, unit: value.unit as string | undefined, folder: value.folder as string | undefined, minImports: value.minImports as number | undefined };
+    }
     case "select":
     case "focus":
       return typeof value.nodeId === "string" && value.nodeId.length > 0

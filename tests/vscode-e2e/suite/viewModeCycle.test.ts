@@ -64,7 +64,7 @@ suite('View Mode Cycle E2E Tests', () => {
     assert.strictEqual(contextValue, 'file', 'Should start in file mode');
 
     // Cycle to list mode
-    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.setViewModeList');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     contextValue = await vscode.commands.executeCommand(
@@ -74,7 +74,7 @@ suite('View Mode Cycle E2E Tests', () => {
     assert.strictEqual(contextValue, 'list', 'Should cycle to list mode');
 
     // Cycle to symbol mode
-    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.setViewModeSymbol');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     contextValue = await vscode.commands.executeCommand(
@@ -84,7 +84,7 @@ suite('View Mode Cycle E2E Tests', () => {
     assert.strictEqual(contextValue, 'symbol', 'Should cycle to symbol mode');
 
     // Cycle back to file mode
-    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.setViewModeFile');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     contextValue = await vscode.commands.executeCommand(
@@ -107,9 +107,9 @@ suite('View Mode Cycle E2E Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Cycle to symbol mode (file → list → symbol)
-    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.setViewModeList');
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.setViewModeSymbol');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Verify we're in symbol mode
@@ -146,7 +146,7 @@ suite('View Mode Cycle E2E Tests', () => {
     const expectedModes: Array<'file' | 'list' | 'symbol'> = ['list', 'symbol', 'file'];
 
     for (const expectedMode of expectedModes) {
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand(`skein.setViewMode${expectedMode[0].toUpperCase()}${expectedMode.slice(1)}`);
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       const contextValue = await vscode.commands.executeCommand(
@@ -161,7 +161,7 @@ suite('View Mode Cycle E2E Tests', () => {
     }
   });
 
-  test('backward compatibility: toggleViewMode calls cycleViewMode', async function () {
+  test('explicit list command switches from file view', async function () {
     this.timeout(20000);
 
     // Open a test file
@@ -181,7 +181,7 @@ suite('View Mode Cycle E2E Tests', () => {
     assert.strictEqual(contextValue, 'file', 'Should start in file mode');
 
     // Call toggleViewMode (should cycle to list)
-    await vscode.commands.executeCommand('skein.toggleViewMode');
+    await vscode.commands.executeCommand('skein.setViewModeList');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     contextValue = await vscode.commands.executeCommand(

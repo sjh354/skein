@@ -3,7 +3,8 @@ import type { IndexerStatusSnapshot } from "../analyzer/IndexerStatus";
 import { Spider } from "../analyzer/Spider";
 import { SUPPORTED_SOURCE_FILE_REGEX } from "../shared/constants";
 import type { CallGraphWebviewCommand } from "../shared/callgraph-types";
-import type { SkeinViewSnapshot } from "../shared/viewState";
+import { randomUUID } from "node:crypto";
+import type { SkeinViewAction, SkeinViewSnapshot, SkeinSurfaceState, SkeinViewSelections } from "../shared/viewState";
 import type {
   ExtensionToWebviewMessage,
   GraphData,
@@ -107,6 +108,25 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   private _viewStateObserver: ((message: CallGraphWebviewCommand) => void) | null = null;
   private _disposePromise: Promise<void> | null = null;
   private _isDisposing = false;
+  private surfaceStates: Partial<Record<SkeinViewSnapshot["mode"], SkeinSurfaceState>> = {};
+  private surfaceSelections: SkeinViewSelections = {};
+  private surfaceUserActionObserver?: () => void;
+  private surfacePending = new Map<string, (result: true | string) => void>();
+
+  public setSurfaceUserActionObserver(observer: () => void): void { this.surfaceUserActionObserver = observer; }
+
+  public async controlSurface(action: SkeinViewAction): Promise<true | string> {
+    if (!this._view) return "view-not-available";
+    const id = randomUUID();
+    return new Promise<true | string>((resolve) => {
+      const timer = setTimeout(() => { this.surfacePending.delete(id); resolve("view-not-responding"); }, 2000);
+      this.surfacePending.set(id, result => { clearTimeout(timer); this.surfacePending.delete(id); resolve(result); });
+      void this._view!.webview.postMessage({ command: "surfaceCommand", mode: this._stateManager.viewMode, id, action }).then(delivered => {
+        if (!delivered) this.surfacePending.get(id)?.("view-not-available");
+      }, () => this.surfacePending.get(id)?.("view-not-available"));
+    });
+  }
+
   private readonly _activeDrillDowns = new Set<Promise<void>>();
   private readonly _activeGraphUpdates = new Set<Promise<void>>();
   private readonly _activeMessages = new Set<Promise<unknown>>();
@@ -129,13 +149,14 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   /** What the graph tab currently shows, published to `.skein/state.json`. */
   public getViewStateSnapshot(): { snapshot: SkeinViewSnapshot; graphVersion: number } {
     const mode = this._stateManager.viewMode;
-    const views: NonNullable<SkeinViewSnapshot["views"]> = {};
+    const views: NonNullable<SkeinViewSnapshot["views"]> = { ...this.surfaceSelections };
     const selectedSymbolId = this._stateManager.selectedSymbolId;
-    if (selectedSymbolId) views.symbol = { nodeId: selectedSymbolId };
+    if (selectedSymbolId && !views.symbol) views.symbol = { nodeId: selectedSymbolId };
     const snapshot: SkeinViewSnapshot = {
       mode,
       hiddenFilters: [],
       expandAll: this._graphState.getExpandAll(),
+      surface: this.surfaceStates[mode],
       ...(Object.keys(views).length > 0 ? { views } : {}),
     };
     if (mode === "callgraph" && this._callGraphViewService) {
@@ -166,6 +187,8 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     if (snapshot.filePath !== undefined) {
       void this._stateManager.setCurrentFilePath(snapshot.filePath);
     }
+    this.surfaceSelections = { ...snapshot.views };
+    if (snapshot.surface) this.surfaceStates[snapshot.mode] = snapshot.surface;
     const symbolId = snapshot.views?.symbol?.nodeId;
     if (symbolId) this._stateManager.selectedSymbolId = symbolId;
   }
@@ -293,6 +316,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
 
   private async disposeServices(): Promise<void> {
     this._isDisposing = true;
+    for (const settle of this.surfacePending.values()) settle("view-not-available");
     this._editorPanel?.dispose();
     this._drillDownSeq++;
     this._graphState.abortAndClearExpansionControllers();
@@ -1012,6 +1036,19 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     const messageListener = webviewView.webview.onDidReceiveMessage(
       async (message: WebviewToExtensionMessage) => {
         if (this._isDisposing) return;
+        if (message.command === "surfaceState") {
+          this.surfaceStates[message.mode] = message.state;
+          if (message.mode !== "callgraph") {
+            if (message.selection) this.surfaceSelections[message.mode] = message.selection;
+            else delete this.surfaceSelections[message.mode];
+          }
+          if (message.userInitiated) this.surfaceUserActionObserver?.();
+          return;
+        }
+        if (message.command === "surfaceResult") {
+          this.surfacePending.get(message.id)?.(message.reason ?? true);
+          return;
+        }
         const operation = this._messageDispatcher.handle(message);
         this._activeMessages.add(operation);
         try { await operation; }
@@ -1112,31 +1149,6 @@ export class GraphProvider implements vscode.WebviewViewProvider {
 
 
 
-
-  /**
-   * Cycle through view modes: file → list → symbol → file
-   * Kept for backward compatibility
-   * @returns The new view mode
-   */
-  public async toggleViewMode(): Promise<{
-    mode: "file" | "list" | "symbol";
-    message: string;
-  }> {
-    const currentMode = this._stateManager.viewMode;
-
-    // Cycle: file → list → symbol → file
-    if (currentMode === "file") {
-      await this.setViewModeList();
-      return { mode: "list", message: "Switched to List View" };
-    } else if (currentMode === "list") {
-      await this.setViewModeSymbol();
-      return { mode: "symbol", message: "Switched to Symbol View" };
-    } else {
-      // currentMode === "symbol"
-      await this.setViewModeFile();
-      return { mode: "file", message: "Switched to File View" };
-    }
-  }
 
   /**
    * Switch directly to file view mode

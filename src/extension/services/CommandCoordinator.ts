@@ -8,7 +8,6 @@ export interface CommandCoordinatorDependencies {
   forceReindex(): Promise<void>;
   expandAllNodes(): Promise<{ expanded: boolean; message: string }>;
   refreshGraph(): Promise<void>;
-  toggleViewMode(): Promise<{ mode: "file" | "list" | "symbol"; message: string }>;
   setViewModeFile(): Promise<void>;
   setViewModeList(): Promise<void>;
   setViewModeSymbol(): Promise<void>;
@@ -45,10 +44,6 @@ export class CommandCoordinator {
 
   async handleRefreshGraph(): Promise<void> {
     await this.provider.refreshGraph();
-  }
-
-  async handleToggleViewMode(): Promise<void> {
-    await this.provider.toggleViewMode();
   }
 
   async handleSetViewModeFile(): Promise<void> {

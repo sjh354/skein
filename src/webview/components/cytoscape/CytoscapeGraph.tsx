@@ -285,6 +285,8 @@ interface CytoscapeGraphProps {
 /**
  * Full-height Cytoscape graph container for the live call graph webview.
  */
+import { useSurfaceBridge } from "../../utils/useSurfaceBridge";
+
 export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraphProps>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
@@ -330,6 +332,20 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
 
   // Positions survive save-driven refreshes and depth changes; a new root or an
   // explicit re-layout rebuilds them (DESIGN 3.2).
+  useSurfaceBridge({
+    mode: "callgraph", nodes: graphNodes.map(node => ({ id: node.id, label: node.name })), post: postMessageFn,
+    state: { expandedNodeIds: [], analysis: { nodes: graphNodes.length, edges: graphEdges.length, stale: isLoading } },
+    apply: action => {
+      if (action.action !== "select" && action.action !== "focus") return "unsupported-view-action";
+      const cy = cyRef.current;
+      if (!cy || cy.getElementById(action.nodeId).empty()) return "node-not-found";
+      selectNode(cy, action.nodeId);
+      setSelectedNodeId(action.nodeId); setSelectedEdgeId(undefined);
+      reportSelection(action.nodeId, false);
+      if (action.action === "focus") cy.fit(cy.getElementById(action.nodeId), 60);
+      return undefined;
+    },
+  });
   const positionsRef = useRef<Map<string, Point>>(new Map());
   const viewportRef = useRef<{ zoom: number; pan: Point } | null>(null);
   const lastRootRef = useRef<string | null>(null);

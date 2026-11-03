@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { glob } from 'glob';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { run, suiteGlob } from '../vscode-e2e/suite/index';
+import { run, suiteGlob, suiteIgnore } from '../vscode-e2e/suite/index';
 
 describe('suiteGlob', () => {
   let testsRoot: string;
@@ -19,7 +19,7 @@ describe('suiteGlob', () => {
   beforeAll(() => {
     testsRoot = mkdtempSync(path.join(tmpdir(), 'e2e-suite-glob-'));
     mkdirSync(path.join(testsRoot, 'suite'));
-    for (const file of ['architectureView.test.js', 'callGraph.test.js', 'index.js']) {
+    for (const file of ['architectureView.test.js', 'callGraph.test.js', 'viewStateRestore.test.js', 'changeHistory.test.js', 'index.js']) {
       writeFileSync(path.join(testsRoot, 'suite', file), '');
     }
   });
@@ -29,7 +29,7 @@ describe('suiteGlob', () => {
   });
 
   const select = async (env: NodeJS.ProcessEnv) =>
-    (await glob(suiteGlob(env), { cwd: testsRoot, posix: true })).sort((a, b) => a.localeCompare(b));
+    (await glob(suiteGlob(env), { cwd: testsRoot, posix: true, ignore: suiteIgnore(env) })).sort((a, b) => a.localeCompare(b));
 
   it('runs every suite without E2E_SUITE_GLOB', async () => {
     expect(suiteGlob({})).toBe('**/**.test.js');
@@ -42,6 +42,11 @@ describe('suiteGlob', () => {
 
   it('runs only the suites matched by E2E_SUITE_GLOB', async () => {
     expect(await select({ E2E_SUITE_GLOB: '**/architectureView.test.js' })).toEqual(['suite/architectureView.test.js']);
+  });
+
+  it('keeps restart/sandbox suites available to the dedicated runners', async () => {
+    expect(await select({ E2E_SUITE_GLOB: 'suite/viewStateRestore.test.js' })).toEqual(['suite/viewStateRestore.test.js']);
+    expect(await select({ E2E_SUITE_GLOB: 'suite/changeHistory.test.js' })).toEqual(['suite/changeHistory.test.js']);
   });
 
   it('accepts Windows separators', async () => {

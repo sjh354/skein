@@ -386,7 +386,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
   },
   get_view_state: {
     summary:
-      "Returns the graph tab the user is looking at: view mode, file, selection, call graph root and depth, filters, and the graph version.",
+      "Returns the graph tab the user is looking at: mode, per-view selections, call graph root/depth, filters, graph version, and bounded rendered surface state with exact node IDs, expansions, search results, analysis counts and architecture diagnostic references.",
     lines: [
       "WHEN: before answering a question about what is on screen, or before controlling the view, so commands can be pinned to the graph the user sees.",
       "RETURNS: available=false with reason state-file-missing when the VS Code extension has not published a view for this workspace yet - this tool never reads the index as a substitute for the screen.",
@@ -395,7 +395,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
   },
   control_view: {
     summary:
-      "Drives the user's graph tab: select or focus a call graph node, change depth, open a file, toggle a filter, or expand/collapse the dependency graph.",
+      "Drives the user's graph tab: search rendered nodes, select/focus nodes, change call depth, open a file, toggle a filter, expand/collapse individual dependency nodes or architecture groups, and set architecture graph/matrix, unit, folder or minimum imports.",
     lines: [
       "WHEN: the user asked to move or highlight something in the graph they are looking at.",
       "WHY: the same command queue the UI uses, so a human interaction always wins: a command queued before the user's last action is rejected with reason user-action-superseded.",

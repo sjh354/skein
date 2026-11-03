@@ -10,6 +10,14 @@ export function suiteGlob(env: NodeJS.ProcessEnv = process.env): string {
   return env.E2E_SUITE_GLOB?.trim().replaceAll('\\', '/') || '**/**.test.js';
 }
 
+/** These suites need the isolated workspaces/restarts owned by verify-*.mjs. */
+export function suiteIgnore(env: NodeJS.ProcessEnv = process.env): string[] {
+  return env.E2E_SUITE_GLOB?.trim() ? [] : [
+    '**/viewState.test.js', '**/viewStateRestore.test.js',
+    '**/changeHistory.test.js', '**/changeRecovery.test.js', '**/refactor.test.js',
+  ];
+}
+
 export async function run(): Promise<void> {
   const reporter = process.env.E2E_MOCHA_REPORTER || 'spec';
   const reporterOptions = process.env.E2E_MOCHA_REPORT_FILE
@@ -30,7 +38,7 @@ export async function run(): Promise<void> {
   const testsRoot = path.resolve(__dirname, '..');
 
   return new Promise((resolve, reject) => {
-    glob(suiteGlob(), { cwd: testsRoot })
+    glob(suiteGlob(), { cwd: testsRoot, ignore: suiteIgnore() })
       .then((files) => {
         // A mistyped glob would run 0 tests and pass.
         if (files.length === 0) throw new Error(`No E2E suite matches "${suiteGlob()}"`);

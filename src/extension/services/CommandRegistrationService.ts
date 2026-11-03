@@ -30,7 +30,6 @@ export class CommandRegistrationService {
       this.registerForceReindexCommand(),
       this.registerExpandAllCommand(),
       this.registerRefreshGraphCommand(),
-      this.registerToggleViewModeCommand(), // Backward compatibility
       this.registerSetViewModeFileCommand(),
       this.registerSetViewModeListCommand(),
       this.registerSetViewModeSymbolCommand(),
@@ -103,19 +102,6 @@ export class CommandRegistrationService {
         await this.commandCoordinator.handleRefreshGraph();
       },
       'Skein: Refresh failed'
-    );
-  }
-  /**
-   * Register toggleViewMode command for backward compatibility
-   * Toggles between file and symbol views (skips list view)
-   */
-  private registerToggleViewModeCommand(): vscode.Disposable {
-    return this.registerProviderCommand(
-      'skein.toggleViewMode',
-      async () => {
-        await this.commandCoordinator.handleToggleViewMode();
-      },
-      'Skein: Toggle view mode failed'
     );
   }
   private registerSetViewModeFileCommand(): vscode.Disposable {

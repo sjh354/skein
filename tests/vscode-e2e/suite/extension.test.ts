@@ -614,7 +614,7 @@ suite('Additional Commands', () => {
     }
   });
 
-  test('Should execute toggleViewMode command', async function() {
+  test('Should execute explicit list view command', async function() {
     this.timeout(10000);
     
     const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -630,7 +630,7 @@ suite('Additional Commands', () => {
       await waitForViewMode('file');
       
       // Toggle view mode (file-level <-> symbol-level)
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
       
       assert.ok(true, 'ToggleViewMode command executed successfully');
@@ -820,7 +820,7 @@ suite('Symbol-Level Analysis', () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Toggle to symbol-level view
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Symbol-level analysis executed');
@@ -845,7 +845,7 @@ suite('Symbol-Level Analysis', () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Toggle to symbol-level view
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Class-level analysis executed');
@@ -869,7 +869,7 @@ suite('Symbol-Level Analysis', () => {
       await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       assert.ok(true, 'Mixed imports/exports analyzed');
@@ -900,7 +900,7 @@ suite('Visual Verification', () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Toggle to symbol-level view to see color-coded symbols
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Note: Visual verification of colors requires manual testing or browser automation
@@ -927,7 +927,7 @@ suite('Visual Verification', () => {
       await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: solid arrows = calls, dashed arrows = references
@@ -954,7 +954,7 @@ suite('Visual Verification', () => {
       await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: recursive edges should show "cycle" badge
@@ -981,7 +981,7 @@ suite('Visual Verification', () => {
       await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: breadcrumb should show "Project > symbols > functions.ts"
@@ -1008,7 +1008,7 @@ suite('Visual Verification', () => {
       await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: arrow functions should show contextual names like "map callback", "onClick handler"
@@ -1036,7 +1036,7 @@ suite('Visual Verification', () => {
       await vscode.commands.executeCommand('skein.showGraph');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Visual verification: external symbols should have opacity: 0.5 and dashed edges per FR-022
@@ -1421,7 +1421,7 @@ suite('Multiple Node Operations', () => {
       await vscode.commands.executeCommand('skein.showGraph');
       await vscode.commands.executeCommand('skein.refreshGraph');
       await vscode.commands.executeCommand('skein.expandAllNodes');
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       
       await new Promise(resolve => setTimeout(resolve, 3000));
       
@@ -1485,9 +1485,9 @@ suite('Multiple Node Operations', () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Toggle to symbol-level
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeList');
       await waitForViewMode('list');
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await waitForViewMode('symbol');
       
       // Expand all in symbol-level mode

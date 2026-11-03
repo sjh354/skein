@@ -138,6 +138,17 @@ When the extension is installed, use these tools in Copilot Agent mode without c
 
 The graph-context tool is available as `#graphContext`. Other native references include `#graphDeps`, `#graphFindRefs`, `#graphCallers`, `#graphImpact`, `#graphCodemap`, `#graphTrace`, `#graphDeadCode`, and `#graphQuery`.
 
+### Shared graph view control
+
+`skein_get_view_state` reads the current window, graph version, per-view selections (`views`) and bounded rendered state (`surface`). Use the exact node IDs it returns with `skein_control_view`:
+
+- `search` searches loaded nodes by ID/name and focuses the first match; use `skein_graph_context` for whole-project search.
+- `select` / `focus` target a node in the current view.
+- `set_expanded` changes one file dependency node or architecture group.
+- `set_architecture` changes `view` (`graph`/`matrix`), `unit`, `folder`, or `minImports`; navigate one level per call.
+
+`surface` includes analysis counts/freshness and architecture diagnostic references. Detailed analysis and diagnostic evidence remain in the query tools. Pin commands with `windowId` and `graphVersion`; unavailable views and invalid nodes return explicit rejection reasons. Use the direct view-mode commands or toolbar; `skein.toggleViewMode` has been removed.
+
 ### MCP server
 
 The MCP server exposes 31 graph-analysis tools. Enable it in VS Code with `skein.enableMcpServer`, or point a client at the built bundle with `node <extension>/dist/mcpServer.mjs`.
