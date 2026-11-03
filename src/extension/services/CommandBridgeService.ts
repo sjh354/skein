@@ -13,6 +13,7 @@ import {
   deleteCommandRequest,
   parseCommandRequest,
   pruneCommandFiles,
+  readCommandResult,
   writeCommandResult,
   type SkeinCommandRequest,
   type SkeinCommandResult,
@@ -20,6 +21,7 @@ import {
 import {
   deleteChangeRequest,
   parseChangeRequest,
+  readChangeResult,
   writeChangeResult,
   type SkeinChangeRequest,
   type SkeinChangeResult,
@@ -106,14 +108,20 @@ export class CommandBridgeService implements vscode.Disposable {
   }
 
   private async execute(command: QueuedCommand): Promise<void> {
+    // A result file means an earlier attempt already ran the command and only
+    // the request cleanup failed; re-running undo/redo would apply it twice.
     if (command.kind === "change") {
-      const result = await this.options.change.handleRequest(command.change);
-      await writeChangeResult(this.root, result);
+      if (!(await readChangeResult(this.root, command.id))) {
+        const result = await this.options.change.handleRequest(command.change);
+        await writeChangeResult(this.root, result);
+      }
       await deleteChangeRequest(this.root, command.id);
       return;
     }
-    const result = await this.options.view.handleCommand(command.view);
-    await writeCommandResult(this.root, result);
+    if (!(await readCommandResult(this.root, command.id))) {
+      const result = await this.options.view.handleCommand(command.view);
+      await writeCommandResult(this.root, result);
+    }
     await deleteCommandRequest(this.root, command.id);
   }
 

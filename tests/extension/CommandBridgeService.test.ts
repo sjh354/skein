@@ -12,6 +12,7 @@ import {
   createChangeId,
   readChangeResult,
   writeChangeRequest,
+  writeChangeResult,
 } from "@/shared/change";
 
 vi.mock("vscode", () => ({}));
@@ -113,6 +114,27 @@ describe("CommandBridgeService", () => {
     expect(
       await readFile(path.join(root, ".skein", "commands", `${request.id}.request.json`), "utf8"),
     ).toContain("window-2");
+  });
+
+  it("does not re-run a command that already has a result", async () => {
+    const request = {
+      id: createChangeId(),
+      kind: "change" as const,
+      createdAt: Date.now(),
+      command: { action: "change_undo" as const },
+    };
+    await writeChangeRequest(root, request);
+    await writeChangeResult(root, {
+      id: request.id,
+      status: "applied",
+      completedAt: Date.now(),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(change.handleRequest).not.toHaveBeenCalled();
+    expect(await readChangeResult(root, request.id)).not.toBeNull();
+    await expect(
+      stat(path.join(root, ".skein", "commands", `${request.id}.request.json`)),
+    ).rejects.toThrow();
   });
 
   it("ignores malformed and unknown request files", async () => {
