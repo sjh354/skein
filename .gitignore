@@ -234,3 +234,6 @@ skills-lock.json
 
 # Local-only Remotion promo video project
 /promo-video/
+
+# Change-history E2E sandbox (generated per run)
+tests/fixtures/change-sandbox/
