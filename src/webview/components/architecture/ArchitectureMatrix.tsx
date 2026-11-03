@@ -143,7 +143,15 @@ export function ArchitectureMatrix(props: Readonly<ArchitectureMatrixProps>): Re
     if (!paint) return;
     paintRef.current = null;
     const renderedCells = shownCells.length;
-    requestAnimationFrame(() => callbacks.current.onPaint({ renderedCells, paintMs: performance.now() - paint.started, cause: paint.cause }));
+    // A hidden or occluded webview stops requestAnimationFrame: report on a timer too, once.
+    let reported = false;
+    const report = () => {
+      if (reported) return;
+      reported = true;
+      callbacks.current.onPaint({ renderedCells, paintMs: performance.now() - paint.started, cause: paint.cause });
+    };
+    requestAnimationFrame(report);
+    setTimeout(report, 250);
   });
 
   /** Scrolls the least needed to show a cell next to the headers. */
