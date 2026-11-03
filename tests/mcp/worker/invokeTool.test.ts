@@ -16,6 +16,7 @@ const executors = vi.hoisted(() => {
     "executeResolveModulePath", "executeScanDeadCode", "executeTraceFunctionExecution",
     "executeVerifyDependencyUsage", "executeQueryNaturalLanguage", "executeGenerateWiki",
     "executeExploreArchitecture",
+    "executeDiagnoseStructure",
   ];
   return Object.fromEntries(names.map((name) => [name, vi.fn(async () => ({ ok: name }))]));
 });
@@ -87,6 +88,7 @@ describe("invokeTool", () => {
       ["graph_context", "executeGraphContext", { question: "q" }],
       ["query_natural_language", "executeQueryNaturalLanguage", { question: "q" }],
       ["explore_architecture", "executeExploreArchitecture", { from: "api", to: "db" }],
+      ["diagnose_structure", "executeDiagnoseStructure", { kind: "responsibility" }],
     ] as const) {
       expect((await call(tool, params)).type).toBe("result");
       expect(executors[executor]).toHaveBeenCalledTimes(1);

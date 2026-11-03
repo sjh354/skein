@@ -605,4 +605,76 @@ describe("ChangeService", () => {
     expect(result.ok).toBe(true);
     expect(fileAfterContent(task.plan.files[0])).not.toBeNull();
   });
+
+  it("blocks a change the architecture guard reports for a new rule violation", async () => {
+    let calls = 0;
+    service = new ChangeService({
+      root,
+      logger,
+      host,
+      sleep: async () => undefined,
+      architectureGuard: {
+        async check() {
+          calls += 1;
+          return {
+            status: "blocked",
+            checkedAt: 1,
+            revision: "r",
+            findings: [{ id: "dependency:rule:x", title: "rule", paths: [appPath], value: 1, baseline: "new" }],
+          };
+        },
+      },
+    });
+    const task = await plan();
+    const result = await service.apply(task.plan.id);
+    expect(result).toMatchObject({ ok: false, reason: "architecture-blocked" });
+    expect(calls).toBe(1);
+    expect(host.appliedCount).toBe(0);
+    expect(await fs.readFile(appPath, "utf8")).toContain("alpha");
+  });
+
+  it("records not-configured when the workspace has no architecture rules", async () => {
+    service = new ChangeService({
+      root,
+      logger,
+      host,
+      sleep: async () => undefined,
+      architectureGuard: { async check() { return { status: "not-configured", checkedAt: 1, findings: [] }; } },
+    });
+    const task = await plan();
+    const result = await service.apply(task.plan.id);
+    expect(result.task?.status).toBe("succeeded");
+    expect(result.task?.verification?.architecture).toMatchObject({ status: "not-configured", findings: [] });
+  });
+
+  it("fails verification when the guard finds a confirmed violation after apply", async () => {
+    let calls = 0;
+    service = new ChangeService({
+      root,
+      logger,
+      host,
+      sleep: async () => undefined,
+      architectureGuard: {
+        async check() {
+          calls += 1;
+          return {
+            status: "passed",
+            checkedAt: calls,
+            revision: "r",
+            findings: calls === 1
+              ? []
+              : [{ id: "dependency:rule:x", title: "rule", paths: [appPath], value: 1, baseline: "new" }],
+          };
+        },
+      },
+    });
+    const task = await plan();
+    const result = await service.apply(task.plan.id);
+    expect(result.task?.status).toBe("verification-failed");
+    expect(result.task?.verification?.reason).toBe("architecture-violation");
+    expect(result.task?.verification?.architecture).toMatchObject({
+      status: "failed",
+      findings: [{ id: "dependency:rule:x" }],
+    });
+  });
 });

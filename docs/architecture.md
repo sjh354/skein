@@ -175,6 +175,14 @@ Rows 1–2 are outlined. The red cell, `core` → `shared`, has 6 pairs; its mir
 
 **How to fix what it shows.** [A rule violation](#a-rule-violation), [unmatched files](#unmatched-files).
 
+### Structure diagnostics panel
+
+**What it is for.** Show the five areas with their evidence and limits: responsibility concentration, duplicated implementation, feature placement, over-abstraction and dependency problems.
+
+**How to read it.** The summary counts `confirmed` (a declared rule is broken) and `candidates` (needs a reader). Each area's line has its count; hover it for new, worsened and excepted counts. Open a result to read its metrics, limits and file locations. `candidate` is never a confirmed violation.
+
+**How to fix what it shows.** A confirmed result names its rule: fix the import or record an [exception](#exceptions). A candidate is a review prompt; check the evidence before changing code.
+
 ### Roles legend
 
 **What it is for.** Tell what each unit is (`function`, `frontend`, `library`…), so that rules can target units by role (`{ "role": "function" }` in an element) and the graph can show one kind of unit. A role says nothing about what the code does: it comes from manifests and file names only (see [Roles](#roles)).
@@ -333,6 +341,7 @@ The view and the MCP server build the same graph: for the same community mode an
 | Groups | `skein.communityMode` setting | `explore_architecture` (summary) |
 | One level down | Double-click a unit or folder | `folder` |
 | One group's files and edges | Double-click a group without sub-folders | `group` |
+| Five structure diagnostics | *Structure diagnostics* panel | `skein_diagnose_structure` |
 | File pairs behind an edge | Click the edge | `from` and `to` |
 | Matrix | *Graph \| Matrix* switch | `view: "matrix"` |
 | Dependents by group | **Dependents by group** action | — (use `find_referencing_files` or `get_impact_analysis`) |
@@ -383,13 +392,16 @@ A unit matching several roles takes the first in the table; the other matches st
 
 ## The config file
 
-`skein.architecture.json` sits at the workspace root. It has three optional top-level keys. Do not mix up `rules` and `roles`:
+`skein.architecture.json` sits at the workspace root. It has optional top-level keys. Do not mix up `rules` and `roles`:
 
 | Key | Answers | Effect |
 | --- | --- | --- |
 | `elements` | Which files belong together? | Names sets of files for the rules |
 | `rules` | Which imports are allowed? | Violations in the view, `check-architecture` exit code |
 | `roles` | What is each unit? | Badge `[role]` instead of `[role?]`, legend counts, `role` selectors of elements |
+| `profiles` and `areas` | Which direction may an area import? | One generated `profile:<area>` rule per area |
+| `exceptions` | Which violations are accepted on purpose? | Recorded with a reason, not counted as new |
+| `diagnostics` | How sensitive are the five diagnostics? | Threshold overrides; the defaults are below |
 
 A file without `rules` checks nothing. Rules are your annotation: the tool only compares import pairs with them.
 
@@ -447,6 +459,59 @@ A rule that could never report is refused: `noCycles` on an element without `eac
 
 `roles` maps unit keys or package names to a role; `*` matches any characters and the first match wins. It only replaces the inferred role: it is not a rule. Its keys are unit keys or package names, never element names.
 
+### Profiles and areas
+
+A profile names the layers of one area, most dependent first. A file may import its own layer or a lower one; an import of a higher layer is a `confirmed` violation of the generated rule `profile:<area>`.
+
+```json
+"profiles": {
+  "frontend": { "layers": [["ui"], ["application"], ["domain"], ["infrastructure"]] }
+},
+"areas": {
+  "web": { "path": ["frontend/"], "profile": "frontend", "strict": false, "severity": "error" }
+}
+```
+
+The names in `layers` are element names from the same file. `strict: true` also reports an import of a file in no layer of the profile; the default accepts it, so third-party and shared code needs no layer. An area rule cannot have the same name as a declared rule. Use `exceptions` for a known upward import, not `severity: "off"`, which hides every violation of the area.
+
+### Exceptions
+
+An exception accepts one violation with its reason; the view and MCP report it as `excepted`, not as new, and it does not fail `check-architecture`.
+
+```json
+"exceptions": [
+  { "rule": "frontend-not-backend", "source": "frontend/src/legacy.ts", "target": "backend/src/api.ts",
+    "reason": "Removed with the legacy checkout", "until": "2026-12-31" },
+  { "diagnostic": "responsibility:src/analyzer/Spider.ts", "reason": "Facade kept until the split lands" }
+]
+```
+
+`rule` exceptions name the exact file pair. `diagnostic` exceptions name the stable id of a structure diagnostic. `until` is the last accepted day (inclusive); an expired exception is no longer applied and the violation becomes new again. The baseline and exceptions are different: the baseline adopts existing debt without a reason, an exception records why one case is allowed.
+
+### Diagnostics
+
+The five diagnostics are reported by `skein_diagnose_structure` and in the view's *Structure diagnostics* panel. `confirmed` means a declared rule is broken; `candidate` is evidence for review and never blocks a change.
+
+| Area | Evidence | Default |
+| --- | --- | --- |
+| Responsibility concentration | lines, imports, importers | 400 lines, 15 imports, 30 importers |
+| Duplicated implementation | normalised token shingles across files | 20-token shingles, 85% containment |
+| Feature placement | imports up the area profile | declared profile rules |
+| Over-abstraction | one-call wrappers, one-implementation interfaces | reported as candidates |
+| Dependency problems | declared rules, unit cycles, heavy unit pairs | 10 file pairs |
+
+Override a threshold under `diagnostics.thresholds`; the full shape is in the JSON schema. These are defaults, not a quality score: a candidate that a reader accepts is still a candidate.
+
+### Baseline version 2
+
+`check-architecture` reads version 1 and 2 baselines. Version 2 adds the accepted value of each structure diagnostic, so a later larger value is reported as `worsened`:
+
+```json
+{ "version": 2, "violations": [], "diagnostics": [{ "id": "responsibility:src/big.ts", "value": 1.4 }] }
+```
+
+Version 1 keeps working unchanged; a baseline with no diagnostic values is written as version 1.
+
 ### Write the file for your workspace
 
 1. Open the Architecture view (or call `explore_architecture` with `level: "units"`) and note the unit keys.
@@ -472,6 +537,7 @@ The config is validated before anything runs; each error names its JSON path. A 
 ## Limits
 
 - **Static imports only.** Dynamic imports the analyzer resolves count; runtime-only use does not.
+- **Change gate.** With `skein.architecture.json`, applying a rename/move/extract/inline checks the touched files before and after. A new or worsened `confirmed` violation blocks the apply; `candidate` diagnostics never block. Without rules nothing is checked and verification records `not-configured`.
 - **Units and folder levels need `path` mode.** `louvain` gives one flat level of communities; their ids change with the code, so match them by `key`.
 - **Groups drawn per level**: the 50 largest; *Show more groups* draws up to 150 for the session. Header totals, *Find*, the matrix, dependents and rules still cover every group.
 - **Edges drawn**: at most 3 × N down edges per level (N = groups of the level), the strongest; upward, cycle and rule-breaking edges always. *Min. imports per edge* above 1 shows edges by weight instead, and then hides every edge below it.

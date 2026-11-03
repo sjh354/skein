@@ -197,6 +197,208 @@
           "unknown"
         ]
       }
+    },
+    "profiles": {
+      "description": "Named layer orders over elements: profiles used by areas",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[\\w.-]{1,64}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "layers": {
+            "minItems": 2,
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[\\w.-]{1,64}$"
+              }
+            },
+            "description": "Element names by layer, most dependent first; a file of a layer must not import a layer above it"
+          }
+        },
+        "required": [
+          "layers"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "areas": {
+      "description": "Folders with a profile: each area checks its own imports",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[\\w.-]{1,64}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "minItems": 1,
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 512
+                }
+              }
+            ]
+          },
+          "profile": {
+            "type": "string",
+            "pattern": "^[\\w.-]{1,64}$"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "off"
+            ]
+          },
+          "strict": {
+            "description": "Also report imports of files in no layer of the profile",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "profile"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "exceptions": {
+      "description": "Accepted violations, each with its reason and optional last day",
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rule": {
+            "description": "Rule name, or profile:<area>",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "diagnostic": {
+            "description": "Stable structure diagnostic id",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "until": {
+            "description": "Last accepted day (YYYY-MM-DD)",
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "diagnostics": {
+      "description": "Thresholds of the five structure diagnostics",
+      "type": "object",
+      "properties": {
+        "thresholds": {
+          "type": "object",
+          "properties": {
+            "responsibility": {
+              "type": "object",
+              "properties": {
+                "loc": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                },
+                "fanOut": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                },
+                "fanIn": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                }
+              },
+              "additionalProperties": false
+            },
+            "duplication": {
+              "type": "object",
+              "properties": {
+                "minTokens": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                },
+                "shingleSize": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                },
+                "similarity": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 1
+                },
+                "maxResults": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                }
+              },
+              "additionalProperties": false
+            },
+            "dependency": {
+              "type": "object",
+              "properties": {
+                "heavyPairs": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                },
+                "maxResults": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

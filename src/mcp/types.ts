@@ -11,6 +11,7 @@
 import * as nodePath from "node:path";
 import { z } from "zod/v4";
 import { COMMUNITY_MODES } from "../shared/graph-types";
+import { DIAGNOSTIC_KINDS } from "../shared/diagnostics-model";
 import type { Dependency, DependencyType } from "../analyzer/types";
 import type { OutOfRootReport } from "../analyzer/utils/workspaceBoundary";
 import {
@@ -119,7 +120,8 @@ export type McpToolName =
   | "scan_dead_code" // NEW: Workspace-wide dead code scan
   | "query_natural_language" // Natural language query over the call graph
   | "explore_architecture" // Grouped architecture summary, group boundary, edge evidence
-  | "check_architecture"; // Declared architecture rules checked against the imports
+  | "check_architecture" // Declared architecture rules checked against the imports
+  | "diagnose_structure"; // The five structure diagnostics: confirmed rule violations and review candidates
 
 // ============================================================================
 // Zod Schemas for Tool Parameters
@@ -762,6 +764,23 @@ export const CheckArchitectureParamsSchema = z.object({
 }).strict();
 export type CheckArchitectureParams = z.infer<typeof CheckArchitectureParamsSchema>;
 
+export const DiagnoseStructureParamsSchema = z.object({
+  kind: z.enum(DIAGNOSTIC_KINDS).optional()
+    .describe("One of the five areas: responsibility, duplication, placement, abstraction, dependency"),
+  status: z.enum(["confirmed", "candidate"]).optional()
+    .describe("confirmed: a declared rule is broken; candidate: evidence for review, never a confirmed violation"),
+  area: z.string().min(1).max(128).optional().describe("Only diagnostics of this declared area"),
+  maxFiles: z.number().int().min(1).max(PAGINATION_LIMITS.MAX_OFFSET).optional()
+    .describe("Analyse only the first maxFiles source files (default: all)"),
+  limit: z.number().int().min(1).max(500).optional().describe("Diagnostics per page (default: 50)"),
+  offset: GraphToolOffsetSchema,
+  revision: z.string().regex(/^[0-9a-f]{64}$/).optional()
+    .describe("diagnostics revision of the previous response; the call fails if the code, rules or baseline changed since"),
+  response_format: z.enum(["json", "markdown", "toon"]).optional()
+    .describe("Output format: 'json', 'markdown', or 'toon' (default: toon)"),
+}).strict();
+export type DiagnoseStructureParams = z.infer<typeof DiagnoseStructureParamsSchema>;
+
 // NEW: Schema for scan_dead_code (workspace-wide dead code scan)
 export const ScanDeadCodeParamsSchema = z.object({
   scopePath: FilePathSchema.optional().describe(
@@ -809,6 +828,7 @@ export const toolSchemas: Record<McpToolName, z.ZodType<unknown>> = {
   scan_dead_code: ScanDeadCodeParamsSchema,
   explore_architecture: ExploreArchitectureParamsSchema,
   check_architecture: CheckArchitectureParamsSchema,
+  diagnose_structure: DiagnoseStructureParamsSchema,
   query_natural_language: QueryNaturalLanguageParamsSchema,
 };
 

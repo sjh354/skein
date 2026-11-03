@@ -30,6 +30,7 @@ import {
   type ArchitectureSummaryMessage,
   type ArchitectureWebviewCommand,
 } from "../../../shared/architecture-types";
+import { DIAGNOSTIC_KIND_LABELS, type DiagnosticKind, type StructureDiagnosticsResult } from "../../../shared/diagnostics-model";
 import { buildArchitectureStylesheet } from "../cytoscape/CytoscapeTheme";
 import {
   applyMinImports,
@@ -533,6 +534,69 @@ const ZOOM_STEP = 1.25;
 
 const SEVERITY_COLOR = { error: "var(--vscode-errorForeground)", warning: "var(--vscode-editorWarning-foreground)", off: undefined } as const;
 
+const DIAGNOSTIC_BADGE = { confirmed: "confirmed", candidate: "candidate" } as const;
+
+/** The five structure diagnostics: counts per area, then each result with its evidence and limits. */
+function DiagnosticsPanel({ result, error, onOpen }: Readonly<{
+  result?: StructureDiagnosticsResult;
+  error?: string;
+  onOpen: (relativePath: string) => void;
+}>) {
+  if (result === undefined || error !== undefined) {
+    return <output style={{ ...bannerStyle, display: "block", color: "var(--vscode-errorForeground)" }}>Structure diagnostics not run: {error ?? "no result"}</output>;
+  }
+  const { totals, diagnostics } = result;
+  const count = (kind: DiagnosticKind) => totals[kind].confirmed + totals[kind].candidate;
+  const kinds = Object.keys(DIAGNOSTIC_KIND_LABELS) as DiagnosticKind[];
+  return (
+    <details open={totals.confirmed + totals.candidate > 0}>
+      <summary style={{ cursor: "pointer" }}>
+        Structure diagnostics: {totals.confirmed} confirmed, {totals.candidate} candidates
+        {diagnostics.length < totals.confirmed + totals.candidate && ` (${diagnostics.length} shown)`}
+      </summary>
+      <div style={{ color: "var(--vscode-descriptionForeground)" }}>
+        {kinds.map((kind) => (
+          <span key={kind} title={`${DIAGNOSTIC_KIND_LABELS[kind]}: ${totals[kind].new} new, ${totals[kind].worsened} worsened, ${totals[kind].excepted} excepted`}>
+            {" · "}{DIAGNOSTIC_KIND_LABELS[kind]}: {count(kind)}
+          </span>
+        ))}
+      </div>
+      <ul aria-label="Structure diagnostics" style={{ listStyle: "none", padding: 0, margin: "2px 0", maxHeight: 180, overflow: "auto" }}>
+        {diagnostics.map((diagnostic) => (
+          <li key={diagnostic.id}>
+            <details>
+              <summary style={{ cursor: "pointer" }} title={diagnostic.id}>
+                <span style={{ color: diagnostic.status === "confirmed" ? "var(--vscode-errorForeground)" : undefined }}>
+                  {DIAGNOSTIC_BADGE[diagnostic.status]}
+                </span>
+                {" · "}{diagnostic.title}{" · "}{diagnostic.baseline}
+                {diagnostic.area !== undefined && ` · ${diagnostic.area}`}
+              </summary>
+              <ul style={{ margin: "2px 0", paddingLeft: 18 }}>
+                {diagnostic.evidence.map((evidence) => (
+                  <li key={evidence.label}>{evidence.label}: {evidence.value}</li>
+                ))}
+                {diagnostic.limits.map((limit) => (
+                  <li key={limit} style={{ color: "var(--vscode-descriptionForeground)" }}>{limit}</li>
+                ))}
+              </ul>
+              {diagnostic.locations.filter((location) => location.path !== "").slice(0, 5).map((location) => (
+                <button
+                  key={`${diagnostic.id}:${location.path}:${location.line ?? 0}`}
+                  type="button" onClick={() => onOpen(location.path)}
+                  style={{ padding: 0, border: "none", background: "none", font: "inherit", color: "var(--vscode-textLink-foreground)", cursor: "pointer" }}
+                >
+                  {location.path}{location.line === undefined ? "" : `:${location.line}`}
+                </button>
+              ))}
+            </details>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 /**
  * The declared rules (skein.architecture.json): "N violations of M rules (K new)" or "All N rules pass", then each
  * rule with its count; a rule with violations opens its file pairs in the evidence panel.
@@ -586,6 +650,7 @@ interface SummaryHeaderProps {
   onRefresh: () => void;
   onRule: (rule: ArchitectureRuleSummary) => void;
   onCycle: () => void;
+  onOpen: (relativePath: string) => void;
 }
 
 /** Show more groups is offered while the cap is below MAX_RENDERED_GROUPS. */
@@ -617,7 +682,7 @@ function SummaryDetails({ summary, isolated }: Readonly<{ summary: ArchitectureS
   );
 }
 
-function SummaryHeader({ summary, level, onShowMore, unit, minImports, onRefresh, onRule, onCycle }: Readonly<SummaryHeaderProps>) {
+function SummaryHeader({ summary, level, onShowMore, unit, minImports, onRefresh, onRule, onCycle, onOpen }: Readonly<SummaryHeaderProps>) {
   const { context } = summary;
   const isolated = level.isolatedGroups?.length ?? 0;
   const unitsLevel = summary.units !== undefined && unit === null;
@@ -640,6 +705,8 @@ function SummaryHeader({ summary, level, onShowMore, unit, minImports, onRefresh
         <SummaryDetails summary={summary} isolated={isolated} />
       </div>
       {summary.rules && <RulesPanel rules={summary.rules} onRule={onRule} />}
+      {summary.diagnostics && <DiagnosticsPanel result={summary.diagnostics} onOpen={onOpen} />}
+      {!summary.diagnostics && summary.diagnosticsError !== undefined && <DiagnosticsPanel error={summary.diagnosticsError} onOpen={onOpen} />}
       {context.truncated && (
         <div style={bannerStyle}>Only the first {context.maxFiles} files were analysed (maxFiles).</div>
       )}
@@ -2148,6 +2215,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
             unit={unit} minImports={minImports} onRefresh={refresh}
             onRule={(rule) => actionsRef.current.openRule(rule)}
             onCycle={() => actionsRef.current.showCycle()}
+            onOpen={(relativePath) => actionsRef.current.openFile(relativePath)}
           />
           <GraphControls
             summary={drawn}

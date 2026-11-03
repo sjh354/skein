@@ -110,7 +110,7 @@ The Architecture view and the MCP tool `explore_architecture` report the same co
 
 ### Architecture rules
 
-Declare your intended architecture in `skein.architecture.json` at the workspace root: `elements` name sets of files, `rules` say what each may import, and `roles` declare what each unit is. The view lists each rule with its violations; the `check_architecture` MCP tool reports new `error` violations, supports a baseline for existing code, and can gate CI. See [the config file](docs/architecture.md#the-config-file) for a complete example.
+Declare your intended architecture in `skein.architecture.json` at the workspace root: `elements` name sets of files, `rules` say what each may import, and `roles` declare what each unit is. `profiles`/`areas` add per-area layer directions and `exceptions` record known cases with a reason. The view lists each rule with its violations and the five structure diagnostics; the `check_architecture` MCP tool reports new `error` violations, supports a baseline for existing code, and can gate CI, while `skein_diagnose_structure` reports confirmed rule breaks and review candidates. See [the config file](docs/architecture.md#the-config-file) for a complete example.
 
 ### Unused dependencies and impact analysis
 

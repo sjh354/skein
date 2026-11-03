@@ -364,6 +364,16 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "LIMITS: import relations only (static analysis), no rule on symbols or calls; violations paginated by offset/limit (default 50) with totals; analyses every source file on each call, so pass the previous context.revision with an offset: the call fails if the code, rules or baseline changed. Pair it with skein_explore_architecture to see the units and edges the rules refer to.",
     ],
   },
+  diagnose_structure: {
+    summary:
+      "Runs the five structure diagnostics: responsibility concentration, duplicated implementation, feature placement, over-abstraction and dependency problems.",
+    lines: [
+      "WHEN: reviewing a project's structure, before a refactor, or after adopting skein.architecture.json profiles and exceptions.",
+      "WHY: reuses the architecture graph, units and declared rules; confirmed means a declared rule is broken, candidate means the evidence is shown and a reader decides.",
+      "RETURNS: profile thresholds, declared areas and profiles, diagnostic counts by kind (confirmed, candidate, new, worsened, excepted), the page of diagnostics with stable ids, locations, evidence, limits and baseline state, plus resolved baseline entries and the limits of the analysis.",
+      "LIMITS: static imports and text metrics only; runtime wiring, reflection and semantic responsibility are outside the analysis. Candidates are never used to block a change. Analyses every source file on each call, so pass the previous revision with an offset: the call fails if the code, rules or baseline changed.",
+    ],
+  },
   get_session_stats: {
     summary:
       "Reports how large this session's TOON responses were against their JSON equivalent, plus real token usage.",

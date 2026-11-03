@@ -134,6 +134,25 @@ export interface ChangeFileVerification {
   after: ChangeDiagnosticSample;
 }
 
+/** One confirmed structure violation the change checker saw, with the value compared after apply. */
+export interface ChangeArchitectureFinding {
+  id: string;
+  title: string;
+  rule?: string;
+  paths: string[];
+  value: number;
+  baseline: string;
+}
+
+/** What the architecture guard saw around one change; `blocked` stops the apply. */
+export interface ChangeArchitectureSnapshot {
+  status: "passed" | "blocked" | "not-configured" | "config-error" | "unavailable";
+  checkedAt: number;
+  revision?: string;
+  findings: ChangeArchitectureFinding[];
+  message?: string;
+}
+
 export interface ChangeVerification {
   status: "passed" | "failed" | "incomplete" | "not-run";
   checkedAt: number;
@@ -141,7 +160,12 @@ export interface ChangeVerification {
   files: ChangeFileVerification[];
   /** Project test execution is not wired in step 5 (DESIGN 8.4). */
   tests: { status: "not-run"; reason: string };
-  architecture: { status: "not-run"; reason: string };
+  architecture: { status: "not-run"; reason: string } | ChangeArchitectureSnapshot | {
+    status: "failed";
+    checkedAt: number;
+    findings: ChangeArchitectureFinding[];
+    message?: string;
+  };
 }
 
 export interface ChangePlan {
@@ -490,6 +514,42 @@ function parseDiagnosticSample(value: unknown): ChangeDiagnosticSample | null {
   return { errors: value.errors, warnings: value.warnings, messages };
 }
 
+function parseFindings(value: unknown): ChangeArchitectureFinding[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item) || typeof item.id !== "string" || typeof item.title !== "string" || !isFiniteNumber(item.value)) return [];
+    return [{
+      id: item.id,
+      title: item.title,
+      ...(typeof item.rule === "string" ? { rule: item.rule } : {}),
+      paths: Array.isArray(item.paths) ? item.paths.filter((entry): entry is string => typeof entry === "string") : [],
+      value: item.value,
+      baseline: typeof item.baseline === "string" ? item.baseline : "new",
+    }];
+  });
+}
+
+function parseArchitecture(value: unknown): ChangeVerification["architecture"] {
+  if (!isRecord(value)) return { status: "not-run", reason: "step-5" };
+  if (value.status === "not-run") {
+    return { status: "not-run", reason: typeof value.reason === "string" ? value.reason : "step-5" };
+  }
+  const status = value.status;
+  if (status !== "passed" && status !== "not-configured" && status !== "config-error" && status !== "unavailable" && status !== "failed") {
+    return { status: "not-run", reason: "step-5" };
+  }
+  if (!isFiniteNumber(value.checkedAt)) return { status: "not-run", reason: "step-5" };
+  const findings = parseFindings(value.findings);
+  if (status === "failed") return { status, checkedAt: value.checkedAt, findings, ...(typeof value.message === "string" ? { message: value.message } : {}) };
+  return {
+    status,
+    checkedAt: value.checkedAt,
+    findings,
+    ...(typeof value.revision === "string" ? { revision: value.revision } : {}),
+    ...(typeof value.message === "string" ? { message: value.message } : {}),
+  };
+}
+
 function parseVerification(value: unknown): ChangeVerification | undefined {
   if (!isRecord(value)) return undefined;
   const status = value.status;
@@ -517,7 +577,7 @@ function parseVerification(value: unknown): ChangeVerification | undefined {
     checkedAt: value.checkedAt,
     files,
     tests: { status: "not-run", reason: "step-5" },
-    architecture: { status: "not-run", reason: "step-5" },
+    architecture: parseArchitecture(value.architecture),
   };
   if (typeof value.reason === "string") verification.reason = value.reason;
   return verification;

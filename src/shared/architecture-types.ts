@@ -20,11 +20,14 @@ import type {
   DependentFile,
   DependentGroup,
 } from "./architecture-model";
+import type { StructureDiagnosticsResult } from "./diagnostics-model";
 
 /** Groups drawn per level (per unit in path mode) until Show more groups; the largest first. */
 export const DEFAULT_RENDERED_GROUPS = 50;
 /** Groups drawn per level once Show more groups was clicked; beyond, they are counted in hiddenGroups. */
 export const MAX_RENDERED_GROUPS = 150;
+/** Diagnostics sent with the summary: counts cover every result. */
+export const MAX_RENDERED_DIAGNOSTICS = 200;
 
 /** The units level of a path-mode summary: what `graph-it architecture --level units` reports, plus the unit of each group. */
 export type ArchitectureUnitLevel = Omit<ArchitectureUnits, "context"> & {
@@ -82,6 +85,10 @@ export interface ArchitectureSummaryMessage extends ArchitectureOverview {
   units?: ArchitectureUnitLevel;
   /** With a skein.architecture.json at the workspace root: its rules checked against this level. */
   rules?: ArchitectureRulesView;
+  /** The five structure diagnostics of this build, at most MAX_RENDERED_DIAGNOSTICS items. */
+  diagnostics?: StructureDiagnosticsResult;
+  /** Why the diagnostics could not run (a refused config or an analysis failure). */
+  diagnosticsError?: string;
   /** Groups drawn per level (per unit in path mode), largest first: DEFAULT_RENDERED_GROUPS until Show more groups. */
   maxGroups?: number;
   /** Drawn groups (the unassigned files included, id 0) with no drawn edge to a group of their level: drawn apart, below the graph. */

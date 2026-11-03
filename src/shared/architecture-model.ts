@@ -205,7 +205,7 @@ export interface ArchitectureMatrix<Id extends number | string = number | string
 // Declared rules (skein.architecture.json)
 // ---------------------------------------------------------------------------
 
-export const ARCHITECTURE_RULE_KINDS = ["forbid", "allowOnly", "noCycles"] as const;
+export const ARCHITECTURE_RULE_KINDS = ["forbid", "allowOnly", "noCycles", "profile"] as const;
 export type ArchitectureRuleKind = (typeof ARCHITECTURE_RULE_KINDS)[number];
 
 export interface ArchitectureRuleSummary {
@@ -231,6 +231,8 @@ export interface ArchitectureCheckTotals {
   newErrors: number;
   warnings: number;
   resolved: number;
+  /** Violations an exception in the config accepts. */
+  excepted?: number;
 }
 
 // ---------------------------------------------------------------------------

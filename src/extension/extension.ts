@@ -15,6 +15,7 @@ import { CommandBridgeService } from './services/CommandBridgeService';
 import { ChangePreviewProvider } from './services/ChangePreviewProvider';
 import { ChangeService } from './services/ChangeService';
 import { VSCodeChangeHost } from './services/VSCodeChangeHost';
+import { createArchitectureChangeGuard } from './services/ArchitectureChangeGuard';
 import { registerChangeCommands } from './services/ChangeCommands';
 import { EditorEventsService } from './services/EditorEventsService';
 import { LmToolsService } from './services/LmToolsService';
@@ -178,6 +179,15 @@ export function activate(context: vscode.ExtensionContext) {
                 root: workspaceFolder.uri.fsPath,
                 logger: log,
                 host,
+                architectureGuard: createArchitectureChangeGuard({
+                    root: workspaceFolder.uri.fsPath,
+                    analyzeFile: async (filePath) => {
+                        const spider = provider.getSpiderForLmTools();
+                        if (!spider) throw new Error('The analyzer is not ready.');
+                        return spider.analyzeFromIndex(filePath);
+                    },
+                    logger: log,
+                }),
             });
             changeService = service;
             disposables.push(

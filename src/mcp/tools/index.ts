@@ -20,6 +20,7 @@ export {
 } from "./graph";
 export {
     executeCheckArchitecture,
+    executeDiagnoseStructure,
     executeExploreArchitecture
 } from "./architecture";
 export {
