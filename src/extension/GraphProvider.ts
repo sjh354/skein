@@ -123,7 +123,13 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     }) };
   }
 
-  private readonly postToViews = (message: unknown): Promise<boolean> => this.webviews.post(message);
+  private readonly postToViews = (message: unknown): Promise<boolean> => {
+    // The E2E driver simulates user clicks: run it in one surface, not in both.
+    if (typeof message === "object" && message !== null && "type" in message && message.type === "architectureControls") {
+      return Promise.resolve(this._view?.webview.postMessage(message) ?? false);
+    }
+    return this.webviews.post(message);
+  };
 
   public setSurfaceUserActionObserver(observer: () => void): void { this.surfaceUserActionObserver = observer; }
 

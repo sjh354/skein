@@ -45,7 +45,7 @@ function resolvePreferredWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
     return vscode.workspace.workspaceFolders?.[0];
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     // Initialize logging system
     const outputChannel = extensionLoggerManager.getOutputChannel();
     extensionLoggerManager.initialize(outputChannel);
@@ -218,7 +218,7 @@ export function activate(context: vscode.ExtensionContext) {
             });
             commandBridge = bridge;
             disposables.push(bridge);
-            void bridge.start().catch((err: unknown) => {
+            void (viewStateStart ?? Promise.resolve()).then(() => bridge.start()).catch((err: unknown) => {
                 log.warn('Command bridge failed to start:', err);
             });
         }
@@ -319,6 +319,8 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(...disposables);
+    // Clients must not issue view commands before the previous session has been restored.
+    await viewStateStart;
 }
 
 export async function deactivate() {

@@ -186,6 +186,10 @@ describe("GraphProvider", () => {
     const panel = view(true); const editor = view(false);
     provider.resolveWebviewView(panel as any); provider.resolveWebviewView(editor as any);
     const dispatch = vi.spyOn((provider as any)._messageDispatcher, "handle").mockResolvedValue(undefined);
+    panel.webview.postMessage.mockClear(); editor.webview.postMessage.mockClear();
+    getService<any>(graphProviderServiceTokens.architectureViewService).setControls({ view: "matrix" });
+    expect(editor.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "architectureControls", view: "matrix" }));
+    expect(panel.webview.postMessage).not.toHaveBeenCalled();
     const receivePanel = panel.webview.onDidReceiveMessage.mock.calls[0][0];
     const receiveEditor = editor.webview.onDidReceiveMessage.mock.calls[0][0];
     const report = { command: "architectureDetailRendered", viewport: "1@10,20" };
