@@ -20,8 +20,8 @@
 | Call Graph 전용 webview 번들 | `dist/callgraph.js`는 어떤 런타임 코드도 로드하지 않음 | `esbuild.js`의 `callgraphWebview`만 참조 | **제거** |
 | Architecture View | `ArchitectureGraph` + `ArchitectureViewService` | `viewMode === "architecture"`, `skein_explore_architecture` | 유지 |
 | 역참조·미사용 필터·전체 펼침 | 파일 모드 메뉴 | `package.json` `view/title` | 유지 |
-| `skein.toggleViewMode` | `skein.setViewMode{File,List,Symbol,Architecture}` + 툴바 | `CommandRegistrationService` | 유지(하위 호환 명령, 제거는 수동 확인 후) |
-| Copilot 언어 모델 도구 | MCP와 별도로 VS Code 안에서 동작 | `LmToolsService`, `package.json` `languageModelTools` | 유지(제품 결정) |
+| `skein.toggleViewMode` | `skein.setViewMode{File,List,Symbol,Architecture}` + 툴바 | `CommandRegistrationService` | 제거(2026-11-03 사용자 결정: 사용 중인 연결 없음) |
+| Copilot 언어 모델 도구 | MCP와 별도로 VS Code 안에서 동작 | `LmToolsService`, `package.json` `languageModelTools` | 유지(2026-11-03 사용자 지원 지속 결정) |
 | CLI·위키·Review Gate·Branch Watch | 이미 제거됨 | `git log --grep 'remove the CLI'`, 남은 참조 없음 | 완료 |
 
 ## 이번 단계에서 제거한 것
@@ -36,6 +36,6 @@
 ## 남은 수동 확인
 
 - [ ] 패널과 에디터 탭이 같은 분석 세션을 공유하고, 한쪽에서 바꾼 선택·배치가 다른 쪽에 반영되는가
-- [ ] `skein.toggleViewMode`를 실제로 쓰는 사용자 키바인딩이 없는가 (있다면 제거 대신 유지)
-- [ ] Copilot 언어 모델 도구를 제품 표면에서 유지할지 최종 결정
+- [x] `skein.toggleViewMode` 제거 결정 및 등록·기여·구현 제거
+- [x] Copilot 언어 모델 도구 계속 지원 결정, 기존 구현 유지
 - [ ] 삭제한 렌더러·모듈의 대체 화면이 실제 VS Code에서 동일하게 동작하는가

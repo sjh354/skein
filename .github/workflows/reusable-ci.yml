@@ -92,6 +92,15 @@ jobs:
           xvfb-run -a npm run test:vscode:vsix | tee "$E2E_LOG" || E2E_EXIT=$?
           exit $E2E_EXIT
 
+      - name: Run isolated state and change E2E tests (Linux)
+        if: inputs.run-e2e && runner.os == 'Linux'
+        env:
+          VSCODE_TEST_VERSION: ${{ inputs.vscode-version || 'stable' }}
+        run: |
+          xvfb-run -a npm run test:viewstate
+          xvfb-run -a npm run test:change
+          xvfb-run -a npm run test:refactor
+
       - name: Debug E2E report location (Linux)
         if: always() && inputs.run-e2e && runner.os == 'Linux'
         run: |

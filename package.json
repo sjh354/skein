@@ -150,12 +150,6 @@
         "category": "Skein"
       },
       {
-        "command": "skein.toggleViewMode",
-        "title": "Toggle View Mode (File ↔ Symbol)",
-        "icon": "$(split-vertical)",
-        "category": "Skein"
-      },
-      {
         "command": "skein.setViewModeFile",
         "title": "Switch to Graph View",
         "icon": "$(type-hierarchy-sub)",

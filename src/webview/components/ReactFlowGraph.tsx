@@ -1,3 +1,5 @@
+import { useSurfaceBridge } from "../utils/useSurfaceBridge";
+import type { WebviewToExtensionMessage } from "../../shared/messages";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
@@ -73,6 +75,7 @@ if (
 }
 
 interface ReactFlowGraphProps {
+  postMessage?: (message: WebviewToExtensionMessage) => void;
   data: GraphData;
   currentFilePath: string;
   onNodeClick: (path: string, line?: number) => void;
@@ -286,7 +289,7 @@ function useExpandedNodes(params: {
     [], // No callback in deps - prevents re-render cascade
   );
 
-  return { expandedNodes, toggleExpandedNode, handleExpandRequest };
+  return { expandedNodes, setExpandedNodes, toggleExpandedNode, handleExpandRequest };
 }
 
 function useAutoFitView(params: {
@@ -349,6 +352,7 @@ function useAutoFitView(params: {
 
 // Inner component that uses ReactFlow hooks
 const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
+  postMessage,
   data,
   currentFilePath,
   onNodeClick,
@@ -400,7 +404,7 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     () => Object.freeze({ file: FileNode, symbol: SymbolNode } as const),
     [],
   );
-  const { expandedNodes, toggleExpandedNode, handleExpandRequest } =
+  const { expandedNodes, setExpandedNodes, toggleExpandedNode, handleExpandRequest } =
     useExpandedNodes({
       expandAll,
       currentFilePath,
@@ -490,8 +494,8 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     onDrillDown,
     onFindReferences,
     onToggleParents,
-    onToggle: toggleExpandedNode,
-    onExpandRequest: handleExpandRequest,
+    onToggle: path => { surface.markUserAction(); toggleExpandedNode(path); },
+    onExpandRequest: path => { surface.markUserAction(); handleExpandRequest(path); },
     onHighlight: handleHighlight,
   });
 
@@ -501,8 +505,8 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     onDrillDown,
     onFindReferences,
     onToggleParents,
-    onToggle: toggleExpandedNode,
-    onExpandRequest: handleExpandRequest,
+    onToggle: path => { surface.markUserAction(); toggleExpandedNode(path); },
+    onExpandRequest: path => { surface.markUserAction(); handleExpandRequest(path); },
     onHighlight: handleHighlight,
   };
 
@@ -984,6 +988,24 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
   }, []);
 
   // Store callback in ref to avoid re-render cascade (per copilot-instructions.md)
+  const surface = useSurfaceBridge({
+    mode, nodes: data.nodes.map(id => ({ id, label: data.nodeLabels?.[id] })), post: postMessage,
+    state: { expandedNodeIds: [...expandedNodes], analysis: { nodes: data.nodes.length, edges: data.edges.length, stale: isReanalyzing } },
+    syncExpanded: ids => setExpandedNodes(new Set(ids)),
+    clearSelection: () => setNodes(nodes.map(node => ({ ...node, selected: false }))),
+    apply: action => {
+      if (action.action === "set_expanded") {
+        setExpandedNodes(previous => { const next = new Set(previous); if (action.expanded) next.add(action.nodeId); else next.delete(action.nodeId); return next; });
+        if (action.expanded) onExpandNode?.(action.nodeId);
+      } else if (action.action === "select" || action.action === "focus") {
+        const rendered = nodes.find(node => node.id === action.nodeId);
+        if (!rendered) return "node-not-visible";
+        setNodes(nodes.map(node => ({ ...node, selected: node.id === action.nodeId })));
+        if (action.action === "focus") fitView({ nodes: [{ id: action.nodeId }], duration: 300 });
+      } else return "unsupported-view-action";
+      return undefined;
+    },
+  });
   const onNodeClickRef = React.useRef(onNodeClick);
   React.useEffect(() => {
     onNodeClickRef.current = onNodeClick;
@@ -992,8 +1014,9 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
   // Handle node click
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const line = node.data?.line;
+    surface.select(node.id);
     onNodeClickRef.current(node.id, line);
-  }, []); // No callback in deps - prevents re-render cascade
+  }, [surface.select]);
 
   return (
     <div
@@ -1005,7 +1028,7 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
         nodes={mode === 'file' ? presentation.nodes : nodes}
         edges={mode === 'file' ? presentation.edges : edges}
         onEdgeClick={mode === 'file' ? handleFileEdgeClick : undefined}
-        onPaneClick={mode === 'file' ? clearFileFocus : undefined}
+        onPaneClick={mode === 'file' ? () => { clearFileFocus(); surface.select(undefined); } : undefined}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}

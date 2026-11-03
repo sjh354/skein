@@ -7,7 +7,6 @@ function createProviderMock(overrides: Partial<CommandCoordinatorDependencies> =
     forceReindex: vi.fn(),
     expandAllNodes: vi.fn().mockResolvedValue({ expanded: true, message: "ok" }),
     refreshGraph: vi.fn(),
-    toggleViewMode: vi.fn().mockResolvedValue({ mode: "file", message: "ok" }),
     setViewModeFile: vi.fn(),
     setViewModeList: vi.fn(),
     setViewModeSymbol: vi.fn(),
@@ -42,7 +41,6 @@ describe("CommandCoordinator", () => {
   it.each([
     ["handleExpandAll", "expandAllNodes"],
     ["handleRefreshGraph", "refreshGraph"],
-    ["handleToggleViewMode", "toggleViewMode"],
     ["handleSetViewModeFile", "setViewModeFile"],
     ["handleSetViewModeList", "setViewModeList"],
     ["handleSetViewModeSymbol", "setViewModeSymbol"],

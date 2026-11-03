@@ -62,7 +62,7 @@ suite('Symbol Double-Click Highlight E2E Tests', () => {
     // Switch to symbol mode if not already
     const contextValue = await vscode.commands.executeCommand('getContext', 'skein.viewMode');
     if (contextValue !== 'symbol') {
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
@@ -94,7 +94,7 @@ suite('Symbol Double-Click Highlight E2E Tests', () => {
     // Ensure symbol mode
     const contextValue = await vscode.commands.executeCommand('getContext', 'skein.viewMode');
     if (contextValue !== 'symbol') {
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
@@ -120,7 +120,7 @@ suite('Symbol Double-Click Highlight E2E Tests', () => {
     // Ensure symbol mode
     const contextValue = await vscode.commands.executeCommand('getContext', 'skein.viewMode');
     if (contextValue !== 'symbol') {
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      await vscode.commands.executeCommand('skein.setViewModeSymbol');
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 

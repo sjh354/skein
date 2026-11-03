@@ -198,6 +198,7 @@ test('Python import extraction completeness', async () => {
 
 **Commands**:
 - `npm run test:vscode` - Run from source (development mode)
+  - The general suite excludes restart/sandbox-only suites. Run `test:viewstate`, `test:change`, and `test:refactor` separately; each script owns its workspace and restart order. Linux PR CI runs all three after the general suite.
 - `npm run test:vscode:vsix` - Run from packaged .vsix (production mode, **required before release**)
 
 **Characteristics**:

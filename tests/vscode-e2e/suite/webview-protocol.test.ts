@@ -40,6 +40,13 @@ suite('Webview Protocol - Context Value Side Effects', () => {
   // View Mode Context Value Tests
   // ============================================================================
   suite('View Mode Context Values', () => {
+    setup(async function () {
+      this.timeout(15000);
+      // Restoring the previous session's mode is intentional; tests start explicitly in file mode.
+      await vscode.commands.executeCommand('skein.graphView.focus');
+      await vscode.commands.executeCommand('skein.setViewModeFile');
+      await waitForViewMode('file');
+    });
     test('Should initialize viewMode context to "file" on graph open', async function() {
       this.timeout(15000);
       
@@ -114,8 +121,8 @@ suite('Webview Protocol - Context Value Side Effects', () => {
       assert.match((await getContextKey<string>('skein.architectureRevision')) ?? '', /^[0-9a-f]{64}$/);
       assert.ok(((await getContextKey<number>('skein.architectureGroupCount')) ?? 0) > 0);
 
-      // toggleViewMode (File <-> Symbol) never cycles through Architecture: it leaves it for file.
-      await vscode.commands.executeCommand('skein.toggleViewMode');
+      // Explicit file mode leaves Architecture.
+      await vscode.commands.executeCommand('skein.setViewModeFile');
       await waitForViewMode('file');
     });
   });

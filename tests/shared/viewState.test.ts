@@ -214,3 +214,29 @@ describe('user priority and staleness', () => {
     ).toBe(false);
   });
 });
+
+describe('extended surface state', () => {
+  it('round-trips selections, bounded analysis and diagnostic references', () => {
+    const surface = {
+      nodeIds: ['group-1'], expandedNodeIds: ['group-1'],
+      search: { query: 'core', matches: ['group-1'], total: 1 },
+      architecture: { revision: 'r1', view: 'matrix', minImports: 2 },
+      analysis: { revision: 'r1', nodes: 2, edges: 1, stale: true },
+      diagnostics: { total: 1, truncated: false, items: [{ id: 'd1', kind: 'dependency', status: 'candidate' }] },
+    };
+    const parsed = parseViewState(JSON.stringify(state({ surface, views: { file: { nodeId: 'file' }, list: { nodeId: 'symbol' }, architecture: { nodeId: 'group-1' } } })));
+    expect(parsed?.surface).toEqual(surface);
+    expect(parsed?.views?.architecture?.nodeId).toBe('group-1');
+  });
+  it.each([
+    { action: 'search', query: 'core' },
+    { action: 'set_expanded', nodeId: 'group-1', expanded: false },
+    { action: 'set_architecture', view: 'matrix', minImports: 2 },
+  ])('round-trips the $action command', command => {
+    const request = { id: 'extended', createdAt: 1, command };
+    expect(parseCommandRequest(JSON.stringify(request))?.command).toEqual(command);
+  });
+  it('rejects malformed architecture controls', () => {
+    expect(parseCommandRequest(JSON.stringify({ id: 'bad', createdAt: 1, command: { action: 'set_architecture', minImports: -1 } }))).toBeNull();
+  });
+});

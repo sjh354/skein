@@ -178,6 +178,35 @@ describe("GraphProvider", () => {
     provider = new GraphProvider(extensionUri, mockContext);
   });
 
+  it("reports geometry only from the active surface and follows a real user click", async () => {
+    const view = (sidebar: boolean) => ({
+      ...(sidebar ? { show: vi.fn() } : {}), onDidDispose: vi.fn(),
+      webview: { postMessage: vi.fn().mockResolvedValue(true), asWebviewUri: vi.fn(), options: {}, html: "", cspSource: "test-csp", onDidReceiveMessage: vi.fn().mockReturnValue({ dispose: vi.fn() }) },
+    });
+    const panel = view(true); const editor = view(false);
+    provider.resolveWebviewView(panel as any); provider.resolveWebviewView(editor as any);
+    const dispatch = vi.spyOn((provider as any)._messageDispatcher, "handle").mockResolvedValue(undefined);
+    panel.webview.postMessage.mockClear(); editor.webview.postMessage.mockClear();
+    getService<any>(graphProviderServiceTokens.architectureViewService).setControls({ view: "matrix" });
+    expect(editor.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "architectureControls", view: "matrix" }));
+    expect(panel.webview.postMessage).not.toHaveBeenCalled();
+    const receivePanel = panel.webview.onDidReceiveMessage.mock.calls[0][0];
+    const receiveEditor = editor.webview.onDidReceiveMessage.mock.calls[0][0];
+    const report = { command: "architectureDetailRendered", viewport: "1@10,20" };
+    await receivePanel(report); expect(dispatch).not.toHaveBeenCalled();
+    await receiveEditor(report); expect(dispatch).toHaveBeenCalledWith(report);
+    dispatch.mockClear();
+    await receivePanel({ command: "surfaceState", mode: "file", userInitiated: true, state: { nodeIds: ["file"], expandedNodeIds: [] }, selection: { nodeId: "file" } });
+    await receivePanel(report); expect(dispatch).toHaveBeenCalledWith(report);
+    editor.webview.postMessage.mockClear();
+    await receivePanel({ command: "surfaceState", mode: "file", state: { nodeIds: ["file"], expandedNodeIds: ["file"] }, selection: { nodeId: "file" } });
+    expect(editor.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ command: "surfaceSync", state: expect.objectContaining({ expandedNodeIds: ["file"] }) }));
+    dispatch.mockClear(); await receiveEditor(report); expect(dispatch).not.toHaveBeenCalled();
+    (provider as any)._stateManager.selectedSymbolId = "old-root";
+    await receivePanel({ command: "surfaceState", mode: "symbol", state: { nodeIds: [], expandedNodeIds: [] } });
+    expect(provider.getViewStateSnapshot().snapshot.views?.symbol).toBeUndefined();
+  });
+
   it("should initialize Spider on creation", () => {
     // Spider is now constructed via SpiderBuilder, so we verify Spider was created
     // by checking that the spider service is available in the container

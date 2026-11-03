@@ -944,6 +944,8 @@ const App: React.FC = () => {
         {/* Symbol List View for List Mode (dedicated mode) */}
         {viewMode === "list" && symbolData && (
           <SymbolCardView
+            mode="list"
+            postMessage={message => vscode?.postMessage(message)}
             filePath={currentFilePath}
             symbols={symbolData.symbols}
             dependencies={symbolData.dependencies}
@@ -972,6 +974,7 @@ const App: React.FC = () => {
         {(viewMode === "file" ||
           (viewMode === "symbol" && symbolViewMode === "graph")) && (
           <ReactFlowGraph
+            postMessage={message => vscode?.postMessage(message)}
             key={`${normalizePath(currentFilePath)}:${resetToken}:${viewMode}`}
             data={graphData}
             currentFilePath={currentFilePath}
@@ -1005,6 +1008,7 @@ const App: React.FC = () => {
         {/* Atomic Viz Style Symbol Graph */}
         {viewMode === "symbol" && symbolViewMode === "atomic" && symbolData && (
           <AtomicSymbolGraph
+            postMessage={message => vscode?.postMessage(message)}
             filePath={currentFilePath}
             symbols={symbolData.symbols}
             dependencies={symbolData.dependencies}
@@ -1017,6 +1021,8 @@ const App: React.FC = () => {
         {/* Symbol List View */}
         {viewMode === "symbol" && symbolViewMode === "list" && symbolData && (
           <SymbolCardView
+            mode="symbol"
+            postMessage={message => vscode?.postMessage(message)}
             filePath={currentFilePath}
             symbols={symbolData.symbols}
             dependencies={symbolData.dependencies}

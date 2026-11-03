@@ -382,7 +382,7 @@ flowchart LR
 - 변경 계획 생성·조회·취소·적용·검증 결과 조회
 - 이력 조회·되돌리기·다시 적용
 
-4단계에서 구현한 표면은 `skein_get_view_state`(조회)와 `skein_control_view`(명령)다. 명령은 `select`, `focus`, `set_depth`, `open_file`, `set_filter`, `set_expand_all`이고, 선택·깊이·필터는 호출 그래프 탭이 열려 있을 때만 적용된다. 5·6단계에서 `skein_plan_change`(`kind`: `rename`·`move`·`extract`·`inline`)·`skein_apply_change`·`skein_get_change_plan`·`skein_list_change_history`·`skein_undo_change`·`skein_redo_change`를 추가했다. 검색과 프로필·진단 명령은 해당 단계에서 추가한다.
+4단계에서 구현한 표면은 `skein_get_view_state`(조회)와 `skein_control_view`(명령)다. 명령은 `select`, `focus`, `set_depth`, `open_file`, `set_filter`, `set_expand_all`이고, 선택·깊이·필터는 호출 그래프 탭이 열려 있을 때만 적용된다. 5·6단계에서 `skein_plan_change`(`kind`: `rename`·`move`·`extract`·`inline`)·`skein_apply_change`·`skein_get_change_plan`·`skein_list_change_history`·`skein_undo_change`·`skein_redo_change`를 추가했다. 7단계에서 `skein_diagnose_structure`를 추가했다. 후속 연결 작업에서 `skein_control_view`에 `search`·`set_expanded`·`set_architecture`를 추가했다. `search`는 현재 화면에 로드된 노드를 대상으로 하며, 전체 인덱스 검색은 `skein_graph_context`가 담당한다. 파일·리스트·심벌·아키텍처 선택은 `views`에 게시한다. `surface`에는 제한된 노드 ID·펼침·검색 결과와 분석 요약·진단 참조를 게시하며 상세 결과를 중복 저장하지 않는다. 새 화면 명령은 렌더러 상태 반영 뒤 게시와 응답을 거친다.
 
 노드 ID는 프로젝트와 그래프 버전에 연결한다. 오래된 참조나 여러 프로젝트의 참조를 혼동하지 않는다. 큰 조회 결과는 범위·개수·페이지를 제한하고 누락 여부를 표시한다.
 
@@ -583,7 +583,7 @@ Graph-It-Live를 기반 후보로 채택하고 최소 동작 검증 후 포크·
 
 - 7단계 결과: `skein.architecture.json`에 `profiles`(레이어 순서)·`areas`(영역별 프로필)·`exceptions`(이유·만료가 있는 명시적 허용)·`diagnostics`(임계값)를 추가했고, 영역마다 `profile:<area>` 규칙을 생성한다. 레이어 역방향 import는 확정 위반, 프로필 `strict`에서는 레이어 밖 import도 위반이 된다. 기준선은 v1 호환을 유지하면서 v2에 진단별 안정 ID와 허용값을 기록해 값이 커지면 `worsened`로 판정한다. `src/analyzer/diagnostics/structureDiagnostics.ts`가 책임 집중·중복 구현·기능 배치·과도한 추상화·의존성 문제의 다섯 진단을 계산하고, 선언 규칙에서 나온 결과만 `confirmed`, 나머지는 근거·한계가 붙은 `candidate`로 둔다. MCP에는 `skein_diagnose_structure`를 추가했고, Architecture view에는 진단 패널을 붙였다. 변경 경로는 `architectureGuard`로 적용 전 확정 신규·악화 위반을 차단하고, 적용 후 재검사해 새 위반이면 `verification-failed`로 남긴다. 후보는 차단에 쓰지 않으며, 설정이 없으면 `not-configured`, 검사 불가는 `incomplete`로 기록한다. `npm run test:diagnostics`가 다섯 진단·프로필·예외·기준선 v2·변경 차단·MCP 페이징·웹뷰 패널의 단위 검증을 실행한다. 남은 확인은 실제 화면의 프로필·진단 패널, 대표 저장소의 진단 성능, 예외 만료·기준선 갱신 UX, Dart 프로젝트의 실제 위반 사례다.
 
-- 8단계 결과: 대체표(`docs/verification/step8-replacement-table.md`)를 코드·테스트 근거로 작성했다. 런타임 로더가 없던 Call Graph 전용 번들(`src/webview/callgraph/index.tsx` → `dist/callgraph.js`), 위키/HTML 내보내기 잔재(`HtmlExporter`), 대체된 `useGraphData`·`clusterUtils`, 삭제된 CLI·Review Gate 보조 모듈(`removedNameImporters`·`workspaceText`), LLM 팩토리·클라이언트, 미사용 배럴(`src/shared/index.ts`)을 제거했다. 직접 의존성 `vis-network`·`ajv`도 제거했다. `QueryEngine`은 테스트용 주입 지점만 남기고 자동 LLM 호출 경로가 없음을 확인했다. 분석 캐시는 `<workspace>/.skein/cache/`, 세션 통계는 `~/.skein/stats/`로 통합했고 기존 `.graph-it/cache/`는 첫 실행에서 한 번 이동한다. `.vscodeignore`에 `.skein/**`와 제거된 번들을 추가하고, `skein.architecture.json`의 없는 `src/cli` 요소, 원작자 SonarCloud·Snyk 설정, CI의 오래된 경로 필터를 정리했다. `npm test` 4,302개, `npm run test:diagnostics` 465개, `test:viewstate`·`test:change`·`test:refactor`, 프로덕션 빌드와 VSIX 패키징(32개 파일·9.89MB·WASM 8개)이 통과했다. 전체 `test:vscode`는 188개 통과·3개 대기·7개 실패였고, 실패는 모두 변경 전 기준선과 같은 범주(샌드박스 미지정, phase 1 없이 phase 2 실행, 픽스처 기준값)로 새 실패가 없었다. 남은 확인은 패널/에디터 탭 동등성, `skein.toggleViewMode` 사용 여부, Copilot 언어 모델 도구 유지 결정, 4~7단계 수동 항목이다. 수용 기준 기록은 `docs/verification/step8-acceptance.md`에 있다.
+- 8단계 결과: 대체표(`docs/verification/step8-replacement-table.md`)를 코드·테스트 근거로 작성했다. 런타임 로더가 없던 Call Graph 전용 번들(`src/webview/callgraph/index.tsx` → `dist/callgraph.js`), 위키/HTML 내보내기 잔재(`HtmlExporter`), 대체된 `useGraphData`·`clusterUtils`, 삭제된 CLI·Review Gate 보조 모듈(`removedNameImporters`·`workspaceText`), LLM 팩토리·클라이언트, 미사용 배럴(`src/shared/index.ts`)을 제거했다. 직접 의존성 `vis-network`·`ajv`도 제거했다. `QueryEngine`은 테스트용 주입 지점만 남기고 자동 LLM 호출 경로가 없음을 확인했다. 분석 캐시는 `<workspace>/.skein/cache/`, 세션 통계는 `~/.skein/stats/`로 통합했고 기존 `.graph-it/cache/`는 첫 실행에서 한 번 이동한다. `.vscodeignore`에 `.skein/**`와 제거된 번들을 추가하고, `skein.architecture.json`의 없는 `src/cli` 요소, 원작자 SonarCloud·Snyk 설정, CI의 오래된 경로 필터를 정리했다. `npm test` 4,302개, `npm run test:diagnostics` 465개, `test:viewstate`·`test:change`·`test:refactor`, 프로덕션 빌드와 VSIX 패키징(32개 파일·9.89MB·WASM 8개)이 통과했다. 전체 `test:vscode`는 188개 통과·3개 대기·7개 실패였고, 실패는 모두 변경 전 기준선과 같은 범주(샌드박스 미지정, phase 1 없이 phase 2 실행, 픽스처 기준값)로 새 실패가 없었다. 남은 확인은 패널/에디터 탭 동등성,  4~7단계 수동 항목이다. 수용 기준 기록은 `docs/verification/step8-acceptance.md`에 있다.
 
 - 물리 기반(force-directed) 자유 배치는 3.1 화면 통합과 전체 단계가 끝난 뒤 적용할 후속 후보로 둔다. 지금은 fCoSE와 폴더·파일 묶음을 유지한다.
 - 후속 후보(단계 8 이후): `graph_context` 결과 순위에 Personalized PageRank를 약하게 섞는다. 질의에 맞은 파일을 시드로 삼아 import 그래프에서 구조적 중요도를 계산하고, 기존 점수와 순위 결합(RRF)으로 보정한다. 참고는 [Graphweft](https://github.com/ThisaST/graphweft)(MIT)의 알고리즘 설명이며 코드는 가져오지 않고 직접 구현한다. 구조 신호가 항상 검색을 개선하는 것은 아니므로(Graphweft 자체 벤치마크에서 그래프만 쓴 hit@5가 grep보다 낮음) 정답 파일을 라벨링한 질의 집합으로 hit@1·hit@5·MRR을 기존 방식과 비교해 개선이 확인될 때만 켠다. 임베딩 기반 시맨틱 검색은 런타임·모델 크기 부담으로 이 후보에 포함하지 않는다.
@@ -663,3 +663,12 @@ flowchart LR
 | LLM 클라이언트 제거·주입 지점 유지 | 자동 LLM 호출 금지 원칙을 코드에 반영하고, `QueryEngine`의 테스트용 주입 지점만 남긴다 |
 | 패널·에디터 탭 병행 유지 | 실제 화면 확인 전에는 제거하지 않고 같은 `App`과 분석 세션을 공유한다 |
 
+
+
+### 2026-11-03 화면 연동 보완 결정
+
+- `skein.toggleViewMode`는 사용자 확인에 따라 제거한다. 직접 모드 전환 명령과 툴바를 사용한다.
+- Copilot 네이티브 언어 모델 도구는 MCP와 함께 계속 지원한다.
+- `state.json`은 화면 상태와 제한된 분석 참조를 전달한다. 노드 ID는 최대 10,000개, 검색 일치 ID와 진단 참조는 각각 최대 100개다. 전체 분석 데이터·진단 근거는 기존 페이징 조회 도구로 읽는다.
+- 패널과 에디터 탭은 하나의 확장 분석 세션을 공유한다. 분석 결과는 두 화면에 전달하고, 실제 사용자 선택·펼침·호출 그래프 배치/뷰포트는 다른 화면에 반영한다. 수신한 상태를 사용자 입력으로 다시 게시하지 않으며, 새로 열린 화면은 최근 결과를 받는다.
+- 수동 수용 검증은 `docs/HANDOFF.md`의 묶음 순서로 진행하며, 실제 관찰 전에는 완료로 표시하지 않는다.

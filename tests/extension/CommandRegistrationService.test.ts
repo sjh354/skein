@@ -76,7 +76,6 @@ function createCommandCoordinatorMock(): CommandCoordinator {
     handleForceReindex: vi.fn(),
     handleExpandAll: vi.fn(),
     handleRefreshGraph: vi.fn(),
-    handleToggleViewMode: vi.fn(),
     handleSetViewModeFile: vi.fn(),
     handleSetViewModeList: vi.fn(),
     handleSetViewModeSymbol: vi.fn(),
@@ -117,13 +116,13 @@ describe('CommandRegistrationService', () => {
 
     const disposables = service.registerAll();
 
-    expect(disposables).toHaveLength(15); // getContext is shared; filter commands share one disposable
-    expect(registerCommand).toHaveBeenCalledTimes(16);
+    expect(disposables).toHaveLength(14); // getContext is shared; filter commands share one disposable
+    expect(registerCommand).toHaveBeenCalledTimes(15);
     expect(registeredHandlers.has('skein.showGraph')).toBe(true);
     expect(registeredHandlers.has('skein.forceReindex')).toBe(true);
     expect(registeredHandlers.has('skein.expandAllNodes')).toBe(true);
     expect(registeredHandlers.has('skein.refreshGraph')).toBe(true);
-    expect(registeredHandlers.has('skein.toggleViewMode')).toBe(true); // Backward compat
+    expect(registeredHandlers.has('skein.toggleViewMode')).toBe(false);
     expect(registeredHandlers.has('skein.setViewModeFile')).toBe(true);
     expect(registeredHandlers.has('skein.setViewModeList')).toBe(true);
     expect(registeredHandlers.has('skein.setViewModeSymbol')).toBe(true);
@@ -199,7 +198,6 @@ describe('CommandRegistrationService', () => {
     ['skein.forceReindex', 'handleForceReindex'],
     ['skein.expandAllNodes', 'handleExpandAll'],
     ['skein.refreshGraph', 'handleRefreshGraph'],
-    ['skein.toggleViewMode', 'handleToggleViewMode'],
     ['skein.setViewModeFile', 'handleSetViewModeFile'],
     ['skein.setViewModeList', 'handleSetViewModeList'],
     ['skein.setViewModeSymbol', 'handleSetViewModeSymbol'],

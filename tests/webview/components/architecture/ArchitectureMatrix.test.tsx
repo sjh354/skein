@@ -49,6 +49,20 @@ describe("ArchitectureMatrix", () => {
     expect(screen.getByText(/1 cycle$/)).toBeTruthy();
   });
 
+  it("reports the paint when requestAnimationFrame never runs, as in a hidden webview", () => {
+    const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 0);
+    vi.useFakeTimers();
+    try {
+      const { onPaint } = setup(small);
+      act(() => vi.advanceTimersByTime(250));
+      expect(onPaint).toHaveBeenCalledWith(expect.objectContaining({ cause: "matrix", renderedCells: expect.any(Number) }));
+    }
+    finally {
+      vi.useRealTimers();
+      frame.mockRestore();
+    }
+  });
+
   it("labels each cell for screen readers, writes counts once zoomed in, and states the formula", () => {
     setup(small);
     expect(screen.getByRole("button", { name: "g001 imports g000: 4 file pairs" }).textContent).toBe("");

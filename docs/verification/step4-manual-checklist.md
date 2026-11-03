@@ -144,7 +144,12 @@ npm run test:viewstate # phase 1 → phase 2
 - [ ] 파일·리스트·아키텍처 뷰에서 선택한 대상이 `state.json`의 `views`에 게시되는가
 - [ ] 게시되지 않는다면, 해당 뷰에 선택 상태가 있는지 확인한다
 
-현재 `views.symbol`만 게시된다. 파일·리스트·아키텍처 뷰는 선택 상태를 공유 저장소로 보내지 않으므로, 필요하면 각 뷰의 선택 모델을 먼저 추가해야 한다.
+2026-11-03 각 화면의 선택을 `views.file/list/symbol/architecture`에 게시하도록 연결했다. 실제 클릭과 MCP 선택이 같은 ID로 게시되는지 확인한다. 최상위 `selection`은 마지막 콜 그래프 선택을 보존한다. `surface`에는 현재 화면의 노드 ID·펼침·검색·분석 요약이 있다.
+
+- [ ] `search`의 첫 일치 대상이 화면에서 선택·포커스되고 `surface.search`에 ID와 전체 일치 개수가 게시되는가
+- [ ] 파일 그래프 `set_expanded`가 지정 노드만 펼치고 접는가
+- [ ] 아키텍처 `set_architecture`의 graph/matrix·unit·folder·minImports가 실제 화면에 반영되는가
+- [ ] 아키텍처 `surface.analysis.revision`과 상세 진단 조회의 revision을 비교해 다른 분석을 혼동하지 않는가
 
 ## 4. 기록 양식
 
@@ -167,5 +172,5 @@ npm run test:viewstate # phase 1 → phase 2
 - [ ] M1~M4에서 화면 변화 확인
 - [ ] M5에서 배치·뷰포트가 눈으로 복원되는지 확인
 - [ ] M6~M8에서 실제 클릭·두 창·Codex 흐름 확인
-- [ ] M10의 다른 뷰 선택 게시 필요 여부 결정
+- [ ] M10의 다른 뷰 선택·검색·아키텍처 조작이 실제 화면과 공유 상태에서 일치
 - [ ] blocker 0건

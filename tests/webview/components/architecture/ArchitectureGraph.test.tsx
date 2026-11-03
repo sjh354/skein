@@ -1776,3 +1776,60 @@ describe("ArchitectureGraph: declared architecture rules", () => {
     expect(screen.getByText(/Architecture rules not checked: .*unknown element "x"/)).toBeTruthy();
   });
 });
+
+describe('architecture MCP surface', () => {
+  it('lets a new explicit control supersede a delayed peer snapshot', () => {
+    const postMessage = vi.fn(); render(<ArchitectureGraph postMessage={postMessage} />);
+    act(() => window.dispatchEvent(new MessageEvent('message', { data: { command: 'surfaceSync', mode: 'architecture', state: { nodeIds: [], expandedNodeIds: [], architecture: { view: 'graph', minImports: 1 } }, selection: { nodeId: 'group-1' } } })));
+    send({ type: 'architectureControls', view: 'matrix' });
+    send(summary);
+    expect(lastOf(postMessage, 'surfaceState').state.architecture.view).toBe('matrix');
+    expect(postMessage.mock.calls.some(([m]) => m.command === 'architectureMatrix')).toBe(true);
+    act(() => window.dispatchEvent(new MessageEvent('message', { data: { command: 'surfaceSync', mode: 'architecture', updatedAt: 1, state: { nodeIds: [], expandedNodeIds: [], architecture: { view: 'graph', minImports: 1 } } } })));
+    expect(lastOf(postMessage, 'surfaceState').state.architecture.view).toBe('matrix');
+  });
+
+  afterEach(cleanup);
+  const command = (action: unknown) => act(() => window.dispatchEvent(new MessageEvent('message', { data: { command: 'surfaceCommand', mode: 'architecture', id: 'mcp', action } })));
+  it('publishes the revision and switches graph/matrix and edge threshold', () => {
+    const postMessage = vi.fn(); render(<ArchitectureGraph postMessage={postMessage} />); send(summary);
+    command({ action: 'set_architecture', view: 'matrix', minImports: 2 });
+    const state = lastOf(postMessage, 'surfaceState');
+    expect(state.state.architecture).toMatchObject({ revision: 'r1', view: 'matrix', minImports: 2 });
+    expect(state.state.analysis.stale).toBe(false);
+    expect(lastOf(postMessage, 'surfaceResult')).toEqual({ command: 'surfaceResult', id: 'mcp', reason: undefined });
+  });
+  it('selects a rendered group by its exact ID and rejects unknown groups', () => {
+    const postMessage = vi.fn(); render(<ArchitectureGraph postMessage={postMessage} />); send(summary);
+    command({ action: 'select', nodeId: 'group-1' });
+    expect(lastOf(postMessage, 'surfaceState').selection.nodeId).toBe('group-1');
+    act(() => window.dispatchEvent(new MessageEvent('message', { data: { command: 'surfaceSync', mode: 'architecture', updatedAt: Date.now() + 1, state: { nodeIds: ['group-1'], expandedNodeIds: [] } } })));
+    expect(lastOf(postMessage, 'surfaceState').selection).toBeUndefined();
+    expect(helpers.markNodes).toHaveBeenLastCalledWith(cy.instance, 'selected', expect.objectContaining({ length: 0 }));
+    command({ action: 'select', nodeId: 'group-missing' });
+    expect(lastOf(postMessage, 'surfaceResult').reason).toBe('node-not-found');
+  });
+});
+
+describe('architecture viewport during relayout', () => {
+  afterEach(cleanup);
+  it('keeps the viewport when a stale redraw must lay out the same structure again', () => {
+    const postMessage = vi.fn();
+    const fresh = { ...summary, groups: summary.groups.map(group => ({ ...group, key: `viewport-${group.key}` })) };
+    render(<ArchitectureGraph postMessage={postMessage} />); send(fresh);
+    const originalAdd = cy.instance.add;
+    const add = vi.spyOn(cy.instance, 'add').mockImplementation(elements => {
+      // A second surface/font measurement invalidated the cached boxes, without a structure change.
+      for (const element of elements) if (typeof element.data.width === 'number') element.data.width += 20;
+      originalAdd(elements);
+    });
+    const layout = vi.spyOn(cy.instance, 'layout');
+    cy.instance.fit.mockClear();
+    try {
+      send({ ...fresh, stale: true });
+      expect(layout).toHaveBeenCalled();
+      expect(cy.instance.fit).not.toHaveBeenCalled();
+      expect(lastOf(postMessage, 'architectureDetailRendered').viewport).toBe('1@0,0');
+    } finally { add.mockRestore(); layout.mockRestore(); }
+  });
+});

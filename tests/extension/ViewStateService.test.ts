@@ -6,6 +6,7 @@ import { ViewStateService } from '../../src/extension/services/ViewStateService'
 import { CommandBridgeService } from '../../src/extension/services/CommandBridgeService';
 import {
   createCommandId,
+  normalizeAreaKey,
   deleteCommandRequest,
   listCommandRequests,
   readCommandResult,
@@ -51,6 +52,7 @@ describe('ViewStateService', () => {
     setFilter: ReturnType<typeof vi.fn>;
     setExpandAll: ReturnType<typeof vi.fn>;
     hasNode: ReturnType<typeof vi.fn>;
+    controlSurface: ReturnType<typeof vi.fn>;
   };
   let service: ViewStateService;
   let bridge: CommandBridgeService;
@@ -66,6 +68,7 @@ describe('ViewStateService', () => {
       setFilter: vi.fn(async () => true),
       setExpandAll: vi.fn(async () => true),
       hasNode: vi.fn(() => true),
+      controlSurface: vi.fn(async () => true),
     };
     service = new ViewStateService({ root, logger, host, pollIntervalMs: 10 });
     await service.start();
@@ -145,7 +148,7 @@ describe('ViewStateService', () => {
     expect(host.setDepth).not.toHaveBeenCalled();
   });
 
-  it('rejects view commands while another view mode is showing', async () => {
+  it('rejects call-graph depth commands while another view mode is showing', async () => {
     host.read.mockReturnValue({ snapshot: snapshot({ mode: 'file' }), graphVersion: 4 });
     await waitFor(
       () => readViewState(root).then((state) => (state?.mode === 'file' ? state : null)),
@@ -155,7 +158,7 @@ describe('ViewStateService', () => {
     const request = {
       id: createCommandId(),
       createdAt: Date.now(),
-      command: { action: 'select' as const, nodeId: 'n1' },
+      command: { action: 'set_depth' as const, depth: 2 },
     };
     await writeCommandRequest(root, request);
 
@@ -184,7 +187,7 @@ describe('ViewStateService', () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     await writeViewState(root, {
       schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
-      workspaceRoot: root,
+      workspaceRoot: normalizeAreaKey(root),
       updatedAt: 1,
       lastUserActionAt: 0,
       graphVersion: 9,
@@ -216,7 +219,7 @@ describe('ViewStateService', () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     await writeViewState(root, {
       schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
-      workspaceRoot: root,
+      workspaceRoot: normalizeAreaKey(root),
       updatedAt: 1,
       lastUserActionAt: 0,
       graphVersion: 9,
@@ -287,4 +290,21 @@ describe('ViewStateService', () => {
     expect(state.graphVersion).toBe(4);
     expect(await listCommandRequests(root)).toEqual([]);
   });
+  it('routes non-callgraph selection to the renderer and preserves the last callgraph selection', async () => {
+    host.read.mockReturnValue({ snapshot: snapshot({ mode: 'file', views: { file: { nodeId: 'file-node' } } }), graphVersion: 4 });
+    const result = await service.handleCommand({ id: createCommandId(), createdAt: Date.now(), command: { action: 'select', nodeId: 'file-node' } });
+    expect(result.status).toBe('applied');
+    expect(host.controlSurface).toHaveBeenCalledWith({ action: 'select', nodeId: 'file-node' });
+    expect(host.select).not.toHaveBeenCalled();
+    expect(result.state?.views?.file?.nodeId).toBe('file-node');
+  });
+
+  it('rejects an in-flight renderer command if a real user acts before it completes', async () => {
+    host.read.mockReturnValue({ snapshot: snapshot({ mode: 'file' }), graphVersion: 4 });
+    host.controlSurface.mockImplementation(async () => { service.markUserAction(); return true; });
+    const result = await service.handleCommand({ id: createCommandId(), createdAt: Date.now() - 1000, command: { action: 'search', query: 'core' } });
+    expect(result.status).toBe('rejected');
+    expect(result.reason).toBe('user-action-superseded');
+  });
+
 });

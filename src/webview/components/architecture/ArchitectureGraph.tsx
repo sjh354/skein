@@ -8,6 +8,7 @@
  * extension answers with the cached summary or a build, so no message can arrive early.
  */
 
+import { useSurfaceBridge } from "../../utils/useSurfaceBridge";
 import cytoscape from "cytoscape";
 import type { ElkNode } from "elkjs/lib/elk-api";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -354,7 +355,7 @@ const sameEnds = (left: EvidenceEnds, right: EvidenceEnds) =>
   && left.rule === right.rule;
 
 interface ArchitectureGraphProps {
-  postMessage: (message: ArchitectureWebviewCommand) => void;
+  postMessage: (message: ArchitectureWebviewCommand | import("../../../shared/messages").SurfaceStateMessage | import("../../../shared/messages").SurfaceResultMessage) => void;
 }
 
 const MODE_WORDING = {
@@ -1209,6 +1210,8 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
   const minImportsRef = useRef(minImports);
   minImportsRef.current = minImports;
   const [shownEdges, setShownEdges] = useState(0);
+  const [layoutVersion, setLayoutVersion] = useState(0);
+  const layoutPending = useRef(false);
   /** Role whose units alone are drawn at the units level; null draws them all. */
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const roleFilterRef = useRef(roleFilter);
@@ -1580,6 +1583,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
   const markSelected = (cy: cytoscape.Core, node: cytoscape.NodeSingular | undefined) => {
     setSelection(node ? selectionOf(node) : null);
     selectedIdRef.current = node?.id() ?? null;
+    surface.select(node?.id(), node?.data("relativePath"));
     markNodes(cy, "selected", node ?? cy.collection());
     const live = document.getElementById(LIVE_REGION);
     if (live) live.textContent = node ? describeNode(node) : "";
@@ -1660,6 +1664,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
   };
   /** A double click enters a unit, a folder holding sub-folders, or a group (its files). */
   const dbltap = (target: cytoscape.SingularElementArgument) => {
+    surface.markUserAction();
     if (target.isNode() && target.data("unitKey") !== undefined) selectUnit(target.data("unitKey"));
     else if (target.isNode() && target.data("folder") !== undefined) enterFolder(target.data("folder"));
     else if (isGroup(target)) enter(target.data("groupId"));
@@ -1853,6 +1858,53 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     controlCanvas(message);
     controlSelection(message);
   };
+  const surface = useSurfaceBridge({
+    mode: "architecture",
+    clearSelection: () => {
+      setSelection(null); selectedIdRef.current = null;
+      const cy = cyRef.current;
+      if (cy) markNodes(cy, "selected", cy.collection());
+    },
+    nodes: Array.from(cyRef.current?.nodes() ?? []).map(node => ({ id: node.id(), label: String(node.data("label") ?? "") })),
+    getNodes: () => Array.from(cyRef.current?.nodes() ?? []).map(node => ({ id: node.id(), label: String(node.data("label") ?? "") })),
+    post: message => { if (message.command === "surfaceState" || message.command === "surfaceResult") postMessage(message); },
+    state: {
+      expandedNodeIds: [...expansions.keys()].map(id => `group-${id}`),
+      architecture: { revision: summary?.revision, unit: unit ?? undefined, folder, view, minImports },
+      ...(summary ? { analysis: { revision: summary.revision, nodes: summary.totals.files, edges: summary.totals.fileEdges, stale: summary.stale } } : {}),
+      ...(summary?.diagnostics ? { diagnostics: { total: summary.diagnostics.totals.confirmed + summary.diagnostics.totals.candidate,
+        truncated: summary.diagnostics.totals.confirmed + summary.diagnostics.totals.candidate > 100,
+        items: summary.diagnostics.diagnostics.slice(0, 100).map(({ id, kind, status }) => ({ id, kind, status })) } } : {}),
+    },
+    apply: action => {
+      const cy = cyRef.current;
+      if (!cy || !summary) return "view-not-available";
+      if (action.action === "set_architecture") {
+        if (action.unit !== undefined && action.unit !== "" && !summary.units?.units.some(u => u.key === action.unit)) return "node-not-found";
+        if (action.unit !== undefined && action.folder !== undefined) return "one-navigation-per-command";
+        if (action.folder && !drawn?.groups.some(group => group.key === action.folder)) return "node-not-found";
+        // Navigation returns early in the UI driver; apply orthogonal controls explicitly.
+        if (action.view !== undefined) controlMatrix({ type: "architectureControls", view: action.view });
+        if (action.minImports !== undefined) setMinImports(action.minImports);
+        if (action.unit !== undefined) selectUnit(action.unit === "" ? null : action.unit);
+        if (action.folder !== undefined) { if (action.folder === "") upOneFolder(); else enterFolder(action.folder); }
+      } else if (action.action === "select" || action.action === "focus") {
+        const node = cy.getElementById(action.nodeId);
+        if (!node.isNode()) return "node-not-found";
+        pinnedRef.current = node;
+        markNodes(cy, "selected", node);
+        setSelection(selectionOf(node));
+        selectedIdRef.current = node.id();
+        if (action.action === "focus") cy.fit(node, 60);
+      } else if (action.action === "set_expanded") {
+        const node = cy.getElementById(action.nodeId);
+        if (!isGroup(node) || node.data("unitKey") !== undefined) return "unsupported-node-kind";
+        const id = Number(node.data("groupId"));
+        if (action.expanded) enter(id); else collapse(id);
+      } else return "unsupported-view-action";
+      return undefined;
+    },
+  });
   const receive = (message: ArchitectureExtensionMessage) => {
     switch (message.type) {
       case "architectureSummary":
@@ -1877,6 +1929,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
         reset();
         return post({ command: "architectureMounted" });
       case "architectureControls":
+        surface.markUserAction();
         return control(message);
     }
   };
@@ -2002,12 +2055,15 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     const elk = elkRef.current;
     if (!cy || !elk || !summary || !source || !drawn) return;
     const run = ++layoutRunRef.current;
+    layoutPending.current = true;
     // Shown again by any render: only a pending ELK layout hides the canvas.
     cy.container()?.style.removeProperty("visibility");
     const previous = renderedRef.current.summary;
     const freshRevision = previous?.revision !== summary.revision;
     // A new level re-fits like a new revision; a page, a collapse or a stale mark keeps the viewport.
     const freshLevel = freshRevision || renderedRef.current.unit !== unit || renderedRef.current.folder !== folder;
+    const shape = (value: ArchitectureSummaryMessage | null) => JSON.stringify({ groups: value?.groups, edges: value?.groupEdges });
+    const changedShape = shape(previous) !== shape(drawn);
     if (freshRevision) filePositions.clear();
     // A page, a collapse or a stale mark redraws the same graph: keep what was tapped.
     const pinnedIds = new Set(freshLevel ? [] : (pinnedRef.current?.map((element) => element.id()) ?? []));
@@ -2024,7 +2080,11 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     const orphans = cy.nodes().filter((node) => !node.isChild());
     const finish = (fit: boolean) => {
       settleLayout(cy, orphans);
-      if (fit) fitAll(cy);
+      if (fit && focusRef.current === null) fitAll(cy);
+      else if (fit) {
+        const focused = cy.getElementById(`group-${focusRef.current}`);
+        if (focused.nonempty()) cy.fit(focusGroup(cy, focused), 30);
+      }
       // The same level laid out again (Show more groups): what was found or tapped stays in view.
       if (fit && !freshLevel && pinnedRef.current?.length) cy.center(pinnedRef.current);
       // Measured after the min-imports and role filters, which run in later effects.
@@ -2033,12 +2093,14 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
         applyRoleFilter(cy, roleFilterRef.current);
       }
       actionsRef.current.showBands(cy);
+      layoutPending.current = false;
+      setLayoutVersion(value => value + 1);
       if (previous === drawn) return;
       postMessageRef.current(renderedReport(cy, summary, drawn, unit, folder, actionsRef.current.chrome()));
     };
     const laidOut = () => {
       packIsolatedGroups(cy);
-      finish(true);
+      finish(freshLevel || changedShape);
     };
     const restored = restorePositions(cy, groupNodes(cy));
     if (!restored && summary.units) {
@@ -2086,7 +2148,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
 
   // Before the highlight effects, so their report stays the last message of a render.
   useEffect(() => {
-    if (!summary) return;
+    if (!summary || layoutPending.current) return;
     const { renderedFiles, groupLevelEdges, visibleGroups } = renderedRef.current;
     const focused = focusId === 0 ? "" : drawn?.groups.find((group) => group.id === focusId)?.key;
     postMessageRef.current({
@@ -2110,7 +2172,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
             `${row.querySelector("button")?.title} → ${row.parentElement?.closest("li")?.querySelector("button")?.title}`),
         },
     });
-  }, [summary, drawn, expansions, evidence, capReached, focusId, findMatches, found, query, view, minImports]);
+  }, [summary, drawn, expansions, evidence, capReached, focusId, findMatches, found, query, view, minImports, layoutVersion]);
 
   // The dependents highlight, drawn again on every render (the elements are new), then reported (E2E).
   const dependentMarks = useMemo(() => {
@@ -2145,7 +2207,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     if (!cy || !summary) return;
     setShownEdges(applyMinImports(cy, minImports));
     showFocus(cy, pinnedRef.current ?? cy.collection(), postMessageRef.current);
-  }, [summary, drawn, expansions, focusId, minImports]);
+  }, [summary, drawn, expansions, focusId, minImports, layoutVersion]);
 
   // The legend's role filter, then what is drawn once filtered (the units level's render report).
   useEffect(() => {
@@ -2209,7 +2271,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
         <StatePanel state={state} onRetry={refresh} onSettings={() => postMessageRef.current({ command: "architectureOpenSettings" })} />
       )}
       {!state && summary && drawn && (
-        <>
+        <div style={{ maxHeight: "50%", overflowY: "auto", flexShrink: 0 }}>
           <SummaryHeader
             summary={summary} level={drawn} onShowMore={() => actionsRef.current.showMoreGroups()}
             unit={unit} minImports={minImports} onRefresh={refresh}
@@ -2222,12 +2284,12 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
             unitsLevel={unitsLevel}
             shownEdges={shownEdges}
             query={query}
-            onQuery={setQuery}
+            onQuery={value => { surface.markUserAction(); setQuery(value); }}
             minImports={minImports}
-            onMinImports={setMinImports}
+            onMinImports={value => { surface.markUserAction(); setMinImports(value); }}
             capReached={capReached}
             view={view}
-            onView={(next) => actionsRef.current.switchView(next)}
+            onView={(next) => { surface.markUserAction(); actionsRef.current.switchView(next); }}
             findMatches={view === "matrix" ? matrixMatches.length : findMatches}
             found={found}
             onShowMore={() => actionsRef.current.showMoreGroups()}
@@ -2236,8 +2298,8 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
             summary={drawn}
             unit={unit}
             folders={folders}
-            onUnits={() => actionsRef.current.selectUnit(null)}
-            onLevel={(depth) => actionsRef.current.goTo(unit, folders.slice(0, depth))}
+            onUnits={() => { surface.markUserAction(); actionsRef.current.selectUnit(null); }}
+            onLevel={(depth) => { surface.markUserAction(); actionsRef.current.goTo(unit, folders.slice(0, depth)); }}
             expansions={expansions}
             focusId={focusId}
             onOverview={() => actionsRef.current.overview()}
@@ -2247,7 +2309,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
             view={view}
             />}
           />
-        </>
+        </div>
       )}
       <div ref={canvasAreaRef} style={{ position: "relative", flex: 1, minHeight: 0, visibility: state ? "hidden" : "visible" }}>
         {/* Hidden on a wrapper: the ELK layout shows and hides the container itself. */}

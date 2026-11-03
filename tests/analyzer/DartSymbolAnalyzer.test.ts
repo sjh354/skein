@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { normalizePath } from "@/shared/path";
 import { DartSymbolAnalyzer } from "@/analyzer/languages/DartSymbolAnalyzer";
 import { maskDart, parseDartDeclarations } from "@/analyzer/languages/dartSyntax";
 
@@ -125,7 +126,7 @@ describe("DartSymbolAnalyzer", () => {
 
   beforeAll(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "dart-symbols-"));
-    file = path.join(root, "lib/home.dart");
+    file = normalizePath(path.join(root, "lib/home.dart"));
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, SAMPLE);
   });

@@ -177,3 +177,23 @@ describe('skein_control_view', () => {
     expect(await listCommandRequests(root)).toEqual([]);
   });
 });
+
+describe('extended view commands', () => {
+  it.each<ControlViewParams>([
+    { action: 'search', query: 'core' },
+    { action: 'set_expanded', nodeId: 'group-1', expanded: false },
+    { action: 'set_architecture', view: 'matrix', minImports: 2 },
+  ])('queues $action through the window-targeted bridge', async params => {
+    await writeViewState(root, appliedState());
+    const answer = answerNextRequest();
+    const result = await executeControlView(root, params);
+    await answer;
+    expect(result.applied).toBe(true);
+    expect(result.windowId).toBe('w1');
+  });
+  it('does not enqueue incomplete expansion or search commands', async () => {
+    expect((await executeControlView(root, { action: 'search' })).applied).toBe(false);
+    expect((await executeControlView(root, { action: 'set_expanded', nodeId: 'n' })).applied).toBe(false);
+    expect(await listCommandRequests(root)).toEqual([]);
+  });
+});

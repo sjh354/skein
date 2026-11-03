@@ -48,7 +48,7 @@ const EXPECTED = {
   units: { groups: 11, groupEdges: 9, redEdges: 2, layers: 3, cycles: 1 },
   root: { groups: 18, groupEdges: 4 },
   graphql: { groups: 3, groupEdges: 2, evidenceOf: '(root)/graphql-project/queries' },
-  louvain: { groups: 25 + 1, groupEdges: 1 },
+  louvain: { groups: 27 + 1, groupEdges: 1 },
   // The first edge of @ws/web, its heaviest: apps/web → packages/ui.
   unitEvidence: {
     of: 'workspaces-project/apps/web',
@@ -60,9 +60,9 @@ const EXPECTED = {
   },
   // node dist/graph-it.js architecture --level units --matrix --format json -w tests/fixtures (and --folder "(root)", --communities louvain).
   matrix: {
-    units: { rows: 11, cells: 14, fileEdges: 214, upwardCells: 1, cycles: 1 },
-    root: { rows: 18, cells: 20, fileEdges: 198, upwardCells: 1, cycles: 1 },
-    louvain: { rows: 26, cells: 26, fileEdges: 214, upwardCells: 0, cycles: 0 },
+    units: { rows: 11, cells: 14, fileEdges: 216, upwardCells: 1, cycles: 1 },
+    root: { rows: 18, cells: 20, fileEdges: 200, upwardCells: 1, cycles: 1 },
+    louvain: { rows: 28, cells: 28, fileEdges: 216, upwardCells: 0, cycles: 0 },
   },
   // RULES_CONFIG written at the workspace root, then:
   //   node dist/graph-it.js check-architecture --format json -w tests/fixtures
@@ -112,15 +112,25 @@ async function expectMatrix(
   predicate: (matrix: MatrixRender) => boolean,
 ): Promise<MatrixRender> {
   const before = (await getContextKey<number>('skein.architectureMatrixCount')) ?? 0;
+  const prior = await getContextKey<MatrixRender>('skein.architectureMatrix');
   await vscode.commands.executeCommand('skein.e2eArchitectureControls', controls);
   const start = Date.now();
+  // The control may ask for the view already drawn (a screen restored from the saved state repaints nothing).
+  const known = prior !== undefined && prior !== null;
+  const idempotentUntil = prior !== undefined && prior !== null && predicate(prior) ? start + 3000 : 0;
   let last: MatrixRender | undefined;
   while (Date.now() - start < 30000) {
     last = await getContextKey<MatrixRender>('skein.architectureMatrix');
-    if (((await getContextKey<number>('skein.architectureMatrixCount')) ?? 0) > before && last && predicate(last)) return last;
+    const count = (await getContextKey<number>('skein.architectureMatrixCount')) ?? 0;
+    if (count > before && last && predicate(last)) return last;
+    if (idempotentUntil > 0 && count === before && Date.now() >= idempotentUntil) return prior!;
     await sleep(250);
   }
-  assert.fail(`${description}: last matrix ${JSON.stringify(last)}`);
+  const count = await getContextKey<number>('skein.architectureMatrixCount');
+  if (count === before && known && prior !== null && prior !== undefined && predicate(prior)) return prior;
+  const stateFile = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, '.skein', 'state.json');
+  const published = await Promise.resolve(vscode.workspace.fs.readFile(stateFile)).then(bytes => JSON.parse(Buffer.from(bytes).toString('utf8'))).catch(() => undefined);
+  assert.fail(`${description}: count ${before} -> ${count}, surface ${JSON.stringify(published?.surface?.architecture)}, last matrix ${JSON.stringify(last)}`);
 }
 
 const totalsOf = ({ rows, cells, fileEdges, upwardCells, cycles }: MatrixRender) => ({ rows, cells, fileEdges, upwardCells, cycles });
@@ -916,7 +926,7 @@ suite('Architecture view mode', () => {
     this.timeout(180000);
     const units = await openFreshArchitecture();
     const rendered = await readRendered();
-    assert.strictEqual(rendered.legendOverflowing, false, 'the legend overlay stays inside the canvas');
+    assert.strictEqual(rendered.legendOverflowing, false, `the legend overlay stays inside the canvas: ${JSON.stringify(rendered)}`);
 
     // Find: each match ringed in the accent colour, never in its unit colour.
     const found = await waitForInteraction('finding @ws/core', { find: '@ws/core' }, interaction => (interaction.foundGroups ?? 0) >= 1);

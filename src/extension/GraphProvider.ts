@@ -3,7 +3,8 @@ import type { IndexerStatusSnapshot } from "../analyzer/IndexerStatus";
 import { Spider } from "../analyzer/Spider";
 import { SUPPORTED_SOURCE_FILE_REGEX } from "../shared/constants";
 import type { CallGraphWebviewCommand } from "../shared/callgraph-types";
-import type { SkeinViewSnapshot } from "../shared/viewState";
+import { randomUUID } from "node:crypto";
+import type { SkeinViewAction, SkeinViewSnapshot, SkeinSurfaceState, SkeinViewSelections } from "../shared/viewState";
 import type {
   ExtensionToWebviewMessage,
   GraphData,
@@ -20,6 +21,7 @@ import {
   createGraphProviderServiceContainer,
   graphProviderServiceTokens,
 } from "./services/graphProviderServiceContainer";
+import { SharedWebviewHub } from "./services/SharedWebviewHub";
 import { GraphState } from "./services/GraphState";
 import type { GraphViewService } from "./services/GraphViewService";
 import { MessageDispatcher } from "./services/MessageDispatcher";
@@ -107,6 +109,42 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   private _viewStateObserver: ((message: CallGraphWebviewCommand) => void) | null = null;
   private _disposePromise: Promise<void> | null = null;
   private _isDisposing = false;
+  private readonly webviews = new SharedWebviewHub();
+  private surfaceStates: Partial<Record<SkeinViewSnapshot["mode"], SkeinSurfaceState>> = {};
+  private surfaceSelections: SkeinViewSelections = {};
+  private surfaceUserActionObserver?: () => void;
+  private surfacePending = new Map<string, (result: true | string) => void>();
+
+  private sharedWebviewHost(): Pick<vscode.WebviewView, "webview"> | undefined {
+    const view = this._view;
+    if (!view) return undefined;
+    return { webview: new Proxy(view.webview, {
+      get: (target, key) => key === "postMessage" ? this.postToViews : Reflect.get(target, key),
+    }) };
+  }
+
+  private readonly postToViews = (message: unknown): Promise<boolean> => {
+    // The E2E driver simulates user clicks: run it in one surface, not in both.
+    if (typeof message === "object" && message !== null && "type" in message && message.type === "architectureControls") {
+      return Promise.resolve(this._view?.webview.postMessage(message) ?? false);
+    }
+    return this.webviews.post(message);
+  };
+
+  public setSurfaceUserActionObserver(observer: () => void): void { this.surfaceUserActionObserver = observer; }
+
+  public async controlSurface(action: SkeinViewAction): Promise<true | string> {
+    if (!this._view) return "view-not-available";
+    const id = randomUUID();
+    return new Promise<true | string>((resolve) => {
+      const timer = setTimeout(() => { this.surfacePending.delete(id); resolve("view-not-responding"); }, 2000);
+      this.surfacePending.set(id, result => { clearTimeout(timer); this.surfacePending.delete(id); resolve(result); });
+      void this._view!.webview.postMessage({ command: "surfaceCommand", mode: this._stateManager.viewMode, id, action }).then(delivered => {
+        if (!delivered) this.surfacePending.get(id)?.("view-not-available");
+      }, () => this.surfacePending.get(id)?.("view-not-available"));
+    });
+  }
+
   private readonly _activeDrillDowns = new Set<Promise<void>>();
   private readonly _activeGraphUpdates = new Set<Promise<void>>();
   private readonly _activeMessages = new Set<Promise<unknown>>();
@@ -129,13 +167,14 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   /** What the graph tab currently shows, published to `.skein/state.json`. */
   public getViewStateSnapshot(): { snapshot: SkeinViewSnapshot; graphVersion: number } {
     const mode = this._stateManager.viewMode;
-    const views: NonNullable<SkeinViewSnapshot["views"]> = {};
+    const views: NonNullable<SkeinViewSnapshot["views"]> = { ...this.surfaceSelections };
     const selectedSymbolId = this._stateManager.selectedSymbolId;
-    if (selectedSymbolId) views.symbol = { nodeId: selectedSymbolId };
+    if (selectedSymbolId && !views.symbol && !this.surfaceStates.symbol) views.symbol = { nodeId: selectedSymbolId };
     const snapshot: SkeinViewSnapshot = {
       mode,
       hiddenFilters: [],
       expandAll: this._graphState.getExpandAll(),
+      surface: this.surfaceStates[mode],
       ...(Object.keys(views).length > 0 ? { views } : {}),
     };
     if (mode === "callgraph" && this._callGraphViewService) {
@@ -166,6 +205,8 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     if (snapshot.filePath !== undefined) {
       void this._stateManager.setCurrentFilePath(snapshot.filePath);
     }
+    this.surfaceSelections = { ...snapshot.views };
+    if (snapshot.surface) this.surfaceStates[snapshot.mode] = snapshot.surface;
     const symbolId = snapshot.views?.symbol?.nodeId;
     if (symbolId) this._stateManager.selectedSymbolId = symbolId;
   }
@@ -293,6 +334,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
 
   private async disposeServices(): Promise<void> {
     this._isDisposing = true;
+    for (const settle of this.surfacePending.values()) settle("view-not-available");
     this._editorPanel?.dispose();
     this._drillDownSeq++;
     this._graphState.abortAndClearExpansionControllers();
@@ -403,7 +445,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
         },
       },
       onIndexingComplete: () => this._refreshAfterIndexing(),
-      viewProvider: () => this._view,
+      viewProvider: () => this.sharedWebviewHost(),
       updateGraph: this.updateGraph.bind(this),
       handleDrillDown: this.handleDrillDown.bind(this),
       handleFileChange: this.handleFileChange.bind(this),
@@ -466,7 +508,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
         const effectiveMode = filterActive
           ? this._configSnapshot.unusedDependencyMode
           : "none";
-        this._view.webview.postMessage({
+        this.postToViews({
           command: "updateFilter",
           filterUnused: filterActive,
           unusedDependencyMode: effectiveMode,
@@ -552,7 +594,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
       total?: number,
       message?: string,
     ): void => {
-      this._view?.webview.postMessage({
+      this.postToViews({
         command: "expansionProgress",
         nodeId,
         status,
@@ -572,7 +614,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
           signal: abortController.signal,
           onBatch: async (batch, totals) => {
             if (!this._view) return;
-            this._view.webview.postMessage({
+            this.postToViews({
               command: "expandedGraph",
               nodeId,
               data: batch,
@@ -587,7 +629,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      this._view.webview.postMessage(result);
+      this.postToViews(result);
       sendProgress("completed", result.data.nodes.length);
     } catch (e) {
       if (abortController.signal.aborted) {
@@ -631,7 +673,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     try {
       const result =
         await this.nodeInteractionService.getReferencingFiles(nodeId, knownNodes);
-      this._view.webview.postMessage(result);
+      this.postToViews(result);
     } catch (e) {
       log.error("Error finding referencing files:", e);
     }
@@ -854,7 +896,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
       `[GraphProvider] Sending symbolGraph message: ${symbolGraph.symbolData.symbols.length} symbols, ${symbolGraph.symbolData.dependencies.length} dependencies, ${symbolGraph.edges.length} edges`,
     );
 
-    this._view.webview.postMessage(response);
+    this.postToViews(response);
     log.debug(
       "Sent symbol graph with",
       symbolGraph.nodes.length, "nodes and",
@@ -896,7 +938,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
 
     this._stateManager.selectedSymbolId = entry.rootNodeId;
     const sg = entry.result;
-    this._view.webview.postMessage({
+    this.postToViews({
       command: 'symbolGraph',
       filePath: entry.rootNodeId,
       isRefresh,
@@ -960,7 +1002,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     const targetUri = resource ?? vscode.window.activeTextEditor?.document.uri;
     if (this._editorPanel) {
       this._view = this._editorPanel;
-      this._callGraphViewService?.setSidebarWebview(this._editorPanel);
+      this._callGraphViewService?.setSidebarWebview(this.sharedWebviewHost() ?? null);
       this._editorPanel.reveal(undefined, true);
       void this.showGraphStartingPoint(targetUri);
       return;
@@ -996,12 +1038,13 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     _context?: vscode.WebviewViewResolveContext,
     _token?: vscode.CancellationToken,
   ) {
+    const removePeer = this.webviews.add(webviewView.webview);
     const isSidebarView = "show" in webviewView;
     if (isSidebarView) this._sidebarView = webviewView;
     this._view = this._editorPanel ?? webviewView;
 
     // Share the active webview with CallGraphViewService so it can postMessage
-    this._callGraphViewService?.setSidebarWebview(this._view);
+    this._callGraphViewService?.setSidebarWebview(this.sharedWebviewHost() ?? null);
 
     webviewView.webview.options = this.webviewManager.getWebviewOptions();
     webviewView.webview.html = this.webviewManager.getHtmlForWebview(
@@ -1012,6 +1055,47 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     const messageListener = webviewView.webview.onDidReceiveMessage(
       async (message: WebviewToExtensionMessage) => {
         if (this._isDisposing) return;
+        const userInitiated = ("userInitiated" in message && message.userInitiated === true)
+          || ["callGraphFilterChanged", "callGraphDepthChanged", "switchViewMode"].includes(message.command);
+        if (userInitiated) this._view = webviewView;
+        // Panel and editor have different canvas sizes. Never combine their viewport reports.
+        if (this._view !== webviewView && [
+          "surfaceState", "callGraphReady", "callGraphSelectionChanged", "callGraphLayoutChanged",
+          "architectureRendered", "architectureResized", "architectureInteracted", "architectureDetailRendered",
+          "architectureMatrixRendered", "architectureDependentsRendered",
+        ].includes(message.command)) return;
+        if (message.command === "surfaceState") {
+          this.surfaceStates[message.mode] = message.state;
+          if (message.mode !== "callgraph") {
+            if (message.selection) this.surfaceSelections[message.mode] = message.selection;
+            else delete this.surfaceSelections[message.mode];
+          }
+          if (message.userInitiated) this.surfaceUserActionObserver?.();
+          // Async expansion pages arrive after the click. Mirror their committed state too.
+          // Passive reports were excluded above, so this cannot echo between surfaces.
+          if (message.mode !== "callgraph") await this.webviews.mirror(webviewView.webview, { ...message, command: "surfaceSync" });
+          return;
+        }
+        if (message.command === "surfaceResult") {
+          if (!message.reason) {
+            const mode = this._stateManager.viewMode;
+            const state = this.surfaceStates[mode];
+            if (state && mode !== "callgraph") await this.webviews.mirror(webviewView.webview, { command: "surfaceSync", updatedAt: Date.now(), mode, state, selection: this.surfaceSelections[mode] });
+            if (mode === "callgraph") await this.webviews.mirror(webviewView.webview, { type: "callGraphSelectNode", nodeId: this._callGraphViewService?.getSelectedNode()?.nodeId ?? "" });
+          }
+          this.surfacePending.get(message.id)?.(message.reason ?? true);
+          return;
+        }
+        if (message.command === "ready") await this.webviews.restore(webviewView.webview);
+        if (message.command === "callGraphSelectionChanged" && message.userInitiated) {
+          await this.webviews.mirror(webviewView.webview, { type: "callGraphSelectNode", nodeId: message.nodeId ?? "" });
+        }
+        if (message.command === "callGraphFilterChanged") {
+          await this.webviews.mirror(webviewView.webview, { type: "callGraphSetFilter", filterType: message.filterType, value: message.value, visible: message.visible });
+        }
+        if (message.command === "callGraphLayoutChanged" && message.userInitiated) {
+          await this.webviews.mirror(webviewView.webview, { type: "callGraphSyncLayout", layout: message.layout });
+        }
         const operation = this._messageDispatcher.handle(message);
         this._activeMessages.add(operation);
         try { await operation; }
@@ -1023,10 +1107,11 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     // remain alive so VS Code can recreate the view without reactivating extension.
     webviewView.onDidDispose(() => {
       messageListener.dispose();
+      removePeer();
       if (this._sidebarView === webviewView) this._sidebarView = undefined;
       if (this._view === webviewView) {
         this._view = this._editorPanel ?? this._sidebarView;
-        this._callGraphViewService?.setSidebarWebview(this._view ?? null);
+        this._callGraphViewService?.setSidebarWebview(this.sharedWebviewHost() ?? null);
         if (this._view && !this._isDisposing) void this.updateGraph();
       }
     });
@@ -1114,31 +1199,6 @@ export class GraphProvider implements vscode.WebviewViewProvider {
 
 
   /**
-   * Cycle through view modes: file → list → symbol → file
-   * Kept for backward compatibility
-   * @returns The new view mode
-   */
-  public async toggleViewMode(): Promise<{
-    mode: "file" | "list" | "symbol";
-    message: string;
-  }> {
-    const currentMode = this._stateManager.viewMode;
-
-    // Cycle: file → list → symbol → file
-    if (currentMode === "file") {
-      await this.setViewModeList();
-      return { mode: "list", message: "Switched to List View" };
-    } else if (currentMode === "list") {
-      await this.setViewModeSymbol();
-      return { mode: "symbol", message: "Switched to Symbol View" };
-    } else {
-      // currentMode === "symbol"
-      await this.setViewModeFile();
-      return { mode: "file", message: "Switched to File View" };
-    }
-  }
-
-  /**
    * Switch directly to file view mode
    */
   public async setViewModeFile(): Promise<void> {
@@ -1154,7 +1214,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     // Explicitly tell the webview to switch view mode. This is required when
     // transitioning from callgraph mode, because _sendGraphUpdate's updateGraph
     // message deliberately does NOT override viewMode when it is "callgraph".
-    await this._view.webview.postMessage({ command: "switchViewMode", mode: "file" });
+    await this.postToViews({ command: "switchViewMode", mode: "file" });
 
     // Switch to current file in file mode
     const editor = vscode.window.activeTextEditor;
@@ -1252,7 +1312,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     log.info("Switching to architecture view mode");
     await this._stateManager.setViewMode("architecture");
     await this._updateViewModeContext();
-    await this._view.webview.postMessage({ command: "switchViewMode", mode: "architecture" });
+    await this.postToViews({ command: "switchViewMode", mode: "architecture" });
   }
 
   /**
@@ -1283,7 +1343,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     const result = await this.nodeInteractionService?.getReferencingFiles(filePath);
 
     if (result && this._view) {
-      await this._view.webview.postMessage(result);
+      await this.postToViews(result);
     }
 
     // Set context to indicate reverse dependencies are visible
@@ -1311,7 +1371,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     log.info("Hiding reverse dependencies");
 
     // Post message to webview to clear reverse dependencies
-    await this._view.webview.postMessage({
+    await this.postToViews({
       command: "clearReverseDependencies",
     });
 
@@ -1350,11 +1410,11 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     };
 
     log.info("Sending setExpandAll message to webview:", newExpandAll);
-    this._view.webview.postMessage(message);
+    this.postToViews(message);
     log.debug("Toggled expandAll from", currentExpandAll, "to", newExpandAll);
     // Notify webview to show progress overlay when expanding a large graph
     if (newExpandAll) {
-      this._view.webview.postMessage({
+      this.postToViews({
         command: "expansionProgress",
         nodeId: "expandAll",
         status: "started",
@@ -1450,7 +1510,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
       // Deactivating filter - just update filter state in webview
       log.debug("Filter deactivated - updating filter state only");
       if (this._view) {
-        this._view.webview.postMessage({
+        this.postToViews({
           command: "updateFilter",
           filterUnused: false,
           unusedDependencyMode: "none",
@@ -1498,7 +1558,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     // The architecture view is workspace-wide: active-file updates only make sure
     // the webview (e.g. after a reload) shows that mode.
     if (this._stateManager.viewMode === "architecture") {
-      await this._view.webview.postMessage({ command: "switchViewMode", mode: "architecture" });
+      await this.postToViews({ command: "switchViewMode", mode: "architecture" });
       return;
     }
 
@@ -1524,7 +1584,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
         reason: "no-file-open",
         message: "Open a source file to visualize its dependencies",
       };
-      this._view.webview.postMessage(message);
+      this.postToViews(message);
       return;
     }
 
@@ -1600,7 +1660,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
         showCommunities: this._configSnapshot.showCommunities,
         communityMode: this._configSnapshot.communityMode,
       };
-      this._view.webview.postMessage(initialMessage);
+      this.postToViews(initialMessage);
       this._lastFileGraphMetadata = initialGraphData.nodeMetadata;
     this._lastFileGraphRoot = filePath;
 
@@ -1637,7 +1697,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
           communityMode: this._configSnapshot.communityMode,
         };
 
-        this._view.webview.postMessage(enrichedMessage);
+        this.postToViews(enrichedMessage);
       }
     } catch (error) {
       log.error("Failed to analyze file:", error);

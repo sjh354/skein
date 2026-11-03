@@ -33,6 +33,7 @@ import {
 export interface ViewStateHost {
     /** Current view mode, file, selection and filters. */
     read(): { snapshot: SkeinViewSnapshot; graphVersion: number };
+    controlSurface?(action: SkeinCommandRequest["command"]): Promise<true | string>;
     select(nodeId: string): Promise<boolean>;
     focus(nodeId: string): Promise<boolean>;
     setDepth(depth: number): Promise<boolean>;
@@ -196,6 +197,7 @@ export class ViewStateService implements vscode.Disposable {
 
     /** Executes one view command and persists the resulting state. */
     async handleCommand(request: SkeinCommandRequest): Promise<SkeinCommandResult> {
+        this.refreshFromHost();
         const base = { id: request.id, completedAt: Date.now() };
         if (isCommandSupersededByUser(request, this.window)) {
             return { ...base, status: "rejected", reason: "user-action-superseded" };
@@ -209,10 +211,13 @@ export class ViewStateService implements vscode.Disposable {
             if (outcome !== true) {
                 return { ...base, status: "rejected", reason: outcome, completedAt: Date.now() };
             }
+            if (isCommandSupersededByUser(request, this.window)) {
+                return { ...base, status: "rejected", reason: "user-action-superseded", completedAt: Date.now() };
+            }
             this.refreshFromHost();
             // The webview reports the selection asynchronously; keep the applied
             // node in the result so the caller sees what it selected.
-            if (request.command.action === "select") {
+            if (request.command.action === "select" && this.window.mode === "callgraph") {
                 this.window.selection = { nodeId: request.command.nodeId };
             }
             await this.persistState();
@@ -234,6 +239,10 @@ export class ViewStateService implements vscode.Disposable {
 
     private async runCommand(request: SkeinCommandRequest): Promise<true | string> {
         const action = request.command;
+        if (["search", "set_expanded", "set_architecture"].includes(action.action)
+            || ((action.action === "select" || action.action === "focus") && this.window.mode !== "callgraph")) {
+            return this.options.host.controlSurface?.(action) ?? "view-not-available";
+        }
         switch (action.action) {
             case "select":
                 if (this.window.mode !== "callgraph") return "view-not-available";
@@ -284,7 +293,8 @@ export class ViewStateService implements vscode.Disposable {
         if (snapshot.filePath !== undefined) this.window.filePath = snapshot.filePath;
         else delete this.window.filePath;
         if (snapshot.layout !== undefined) this.window.layout = snapshot.layout;
-        if (snapshot.views !== undefined) this.window.views = snapshot.views;
+        this.window.views = snapshot.views;
+        this.window.surface = snapshot.surface;
         // The dependency graph shares this file but has no call-graph state to
         // report. Keep the last call-graph snapshot instead of erasing it, so a
         // restart can restore depth, filters and selection and an agent can see
@@ -339,6 +349,7 @@ export class ViewStateService implements vscode.Disposable {
         if (window.callGraph !== undefined) snapshot.callGraph = { ...window.callGraph };
         if (window.layout !== undefined) snapshot.layout = window.layout;
         if (window.views !== undefined) snapshot.views = window.views;
+        if (window.surface !== undefined) snapshot.surface = window.surface;
         return snapshot;
     }
 
