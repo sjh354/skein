@@ -1792,6 +1792,9 @@ describe('architecture MCP surface', () => {
     const postMessage = vi.fn(); render(<ArchitectureGraph postMessage={postMessage} />); send(summary);
     command({ action: 'select', nodeId: 'group-1' });
     expect(lastOf(postMessage, 'surfaceState').selection.nodeId).toBe('group-1');
+    act(() => window.dispatchEvent(new MessageEvent('message', { data: { command: 'surfaceSync', mode: 'architecture', state: { nodeIds: ['group-1'], expandedNodeIds: [] } } })));
+    expect(lastOf(postMessage, 'surfaceState').selection).toBeUndefined();
+    expect(helpers.markNodes).toHaveBeenLastCalledWith(cy.instance, 'selected', expect.objectContaining({ length: 0 }));
     command({ action: 'select', nodeId: 'group-missing' });
     expect(lastOf(postMessage, 'surfaceResult').reason).toBe('node-not-found');
   });

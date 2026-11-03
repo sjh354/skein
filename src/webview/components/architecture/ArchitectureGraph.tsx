@@ -1860,6 +1860,11 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
   };
   const surface = useSurfaceBridge({
     mode: "architecture",
+    clearSelection: () => {
+      setSelection(null); selectedIdRef.current = null;
+      const cy = cyRef.current;
+      if (cy) markNodes(cy, "selected", cy.collection());
+    },
     nodes: Array.from(cyRef.current?.nodes() ?? []).map(node => ({ id: node.id(), label: String(node.data("label") ?? "") })),
     getNodes: () => Array.from(cyRef.current?.nodes() ?? []).map(node => ({ id: node.id(), label: String(node.data("label") ?? "") })),
     post: message => { if (message.command === "surfaceState" || message.command === "surfaceResult") postMessage(message); },

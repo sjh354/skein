@@ -1049,6 +1049,15 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     const messageListener = webviewView.webview.onDidReceiveMessage(
       async (message: WebviewToExtensionMessage) => {
         if (this._isDisposing) return;
+        const userInitiated = ("userInitiated" in message && message.userInitiated === true)
+          || ["callGraphFilterChanged", "callGraphDepthChanged", "switchViewMode"].includes(message.command);
+        if (userInitiated) this._view = webviewView;
+        // Panel and editor have different canvas sizes. Never combine their viewport reports.
+        if (this._view !== webviewView && [
+          "surfaceState", "callGraphReady", "callGraphSelectionChanged", "callGraphLayoutChanged",
+          "architectureRendered", "architectureResized", "architectureInteracted", "architectureDetailRendered",
+          "architectureMatrixRendered", "architectureDependentsRendered",
+        ].includes(message.command)) return;
         if (message.command === "surfaceState") {
           this.surfaceStates[message.mode] = message.state;
           if (message.mode !== "callgraph") {
