@@ -13,22 +13,25 @@
 
 ### 1단계 — MCP 왕복 (11개 검사)
 
-- `.skein/state.json`에 `mode`·`filePath`·`rootSymbolId`·`depth`·`graphVersion`이 게시된다
-- `skein_get_view_state`가 게시된 상태와 같은 루트/버전을 반환한다
+- `.skein/state.json`(스키마 2)에 `mode`·`filePath`·`rootSymbolId`·`depth`·`graphVersion`이 게시된다
+- 콜 그래프 노드 좌표·줌·팬(`layout`)이 게시되고, 재시작 후에도 유지된다
+- 창별 스냅샷(`windows`)과 `activeWindowId`가 게시되고, 명령은 활성 창으로 전달된다
+- `skein_get_view_state`가 게시된 상태와 같은 루트/버전을 반환하고 창 목록을 요약해 준다
 - `skein_control_view select`가 선택을 바꾸고 `state.json`에 반영된다
-- `set_depth 3`이 그래프를 재질의하고 `graphVersion`을 올린다
+- `set_depth`가 그래프를 재질의하고 `graphVersion`을 올린다
 - `set_filter`가 nodeType·edgeType 숨김을 게시하고 해제한다
 - `open_file`이 지정한 파일·줄·열로 에디터를 연다
 - 이전 `graphVersion`으로 보낸 명령이 `stale-graph-version`으로 거부된다
 - `set_expand_all`이 의존성 그래프 상태를 바꾼다
 - 확장이 없을 때 `extension-not-responding`으로 끝나고 요청 파일이 남지 않는다
 - 알 수 없는 `nodeId` 선택이 `node-not-found`로 거부된다
-- 다음 단계를 위해 depth 3·필터·선택 상태와 기준 파일을 남긴다
+- 다음 단계를 위해 depth 3·필터·선택·배치 상태와 기준 파일을 남긴다
 
 ### 2단계 — 재시작 복원 (2개 검사)
 
-- 재시작 직후 새 `state.json`이 게시되고, 뷰 모드가 `callgraph`가 아니어도 복원된 depth·필터·선택이 유지된다 (D3 수정)
-- 콜 그래프 탭을 다시 열면 depth 3·필터·선택이 실제로 복원된다
+- 재시작 직후 새 `state.json`이 게시되고, 뷰 모드가 `callgraph`가 아니어도 복원된 depth·필터·선택·배치가 유지된다
+- `graphVersion`이 재시작 후에도 이전 세션 값을 이어받고, 콜 그래프를 다시 그리면 증가한다
+- 콜 그래프 탭을 다시 열면 depth 3·필터·선택·배치가 실제로 복원된다
 
 ### 실행 방법
 
@@ -46,7 +49,7 @@ npm run test:viewstate # phase 1 → phase 2
 | D1 | `skein_get_view_state`·`skein_control_view` 응답의 경로 축약이 노드 ID와 파일 경로까지 바꿔, MCP가 돌려준 `selection.nodeId`·`filePath`를 그대로 명령에 쓸 수 없었다. 뷰 상태 도구를 경로 축약에서 제외해 수정 | 수정·재검증 완료 |
 | D2 | 존재하지 않는 `nodeId`로 `select`하면 `applied: true`를 반환하고 화면은 바뀌지 않았다. 현재 그래프의 노드 집합으로 검증해 `node-not-found`로 거부하도록 수정 | 수정·재검증 완료 |
 | D3 | 재시작 후 복원된 뷰 모드가 `callgraph`가 아니면 `state.json`에서 depth·필터·선택이 사라졌다. 모드와 무관하게 마지막 콜 그래프 스냅샷을 유지하도록 수정 | 수정·재검증 완료 |
-| D4 | 자동화 환경에서 1회, 확장 시작 시 워크스페이스 폴더를 찾지 못해 `.skein/state.json`이 생성되지 않았다. 재실행에서는 재현되지 않음 | 관찰 |
+| D4 | 자동화 환경에서 1회, 확장 시작 시 워크스페이스 폴더를 찾지 못해 `.skein/state.json`이 생성되지 않았다. 폴더가 나타나면 MCP·상태 서비스를 다시 초기화하도록 수정 | 수정·재검증 완료(재현 조건은 반복 확인 필요) |
 
 ## 3. 사용자가 직접 확인할 항목
 
@@ -96,10 +99,8 @@ npm run test:viewstate # phase 1 → phase 2
 
 - [ ] 그래프 노드를 몇 개 드래그하고 확대/축소한다
 - [ ] `Developer: Reload Window` 후 콜 그래프를 다시 연다
-- [ ] 깊이·필터·선택은 복원되는가 (자동 검증 완료)
-- [ ] **노드 배치와 뷰포트는 복원되지 않는 것을 확인**하고, 4단계 완료 기준에서 이것이 허용 가능한지 판단한다
-
-현재 구현은 위치를 저장하지 않는다. 이 항목은 결함 확인이 아니라 4단계 잔여 범위 결정이다.
+- [ ] 깊이·필터·선택이 복원되는가 (자동 검증 완료)
+- [ ] **노드 배치와 줌·팬이 이전 화면과 같은가** (좌표·뷰포트 저장은 자동 검증 완료, 픽셀 일치만 수동)
 
 ### M6. 실제 클릭 기반 사용자 우선
 
@@ -113,18 +114,20 @@ npm run test:viewstate # phase 1 → phase 2
 ### M7. 멀티루트·두 창
 
 - [ ] `File → Add Folder to Workspace`로 폴더를 추가하고 `Skein: Set Workspace Folder`로 전환
-- [ ] `get_view_state`의 `workspaceRoot`와 상태가 폴더별로 분리되는가
+- [ ] `get_view_state`의 `workspaceRoot`와 상태가 폴더별로 분리되는가 (영역별 `state.json`)
 - [ ] 같은 폴더를 `Duplicate Workspace`로 두 창에 열고, 양쪽에서 노드를 선택
-- [ ] 한쪽 선택이 다른 쪽 `state.json`을 덮어쓰는가
-- [ ] 이 혼선이 4단계에서 허용 가능한지, 영역 키·창 식별자를 지금 넣어야 하는지 판단
+- [ ] `get_view_state`의 `windows`에 두 창이 보이고, `windowId`로 각 창을 지정해 조작할 수 있는가
+- [ ] 한쪽 선택이 다른 쪽 스냅샷을 지우지 않는가 (창별 병합)
+- [ ] 실제 사용에서 혼선이 남아 있는지 판단
 
-자동화하지 않았다. 상태 키가 한 폴더 기준이고 창 식별자가 없는 것은 알려진 미구현이다.
+창별 스냅샷·잠금·명령 대상 지정은 구현·단위 검증했고, 실제 두 창 UAT는 남아 있다.
 
 ### M8. Codex 실제 호출
 
 - [ ] Codex에서 `skein_get_view_state`를 호출해 상태를 읽는다
 - [ ] 같은 응답의 `selection.nodeId` 또는 `callGraph.rootSymbolId`를 그대로 `select`에 넣는다
 - [ ] 같은 응답의 `filePath`를 그대로 `open_file`에 넣는다
+- [ ] 두 창이면 `windows`의 `windowId`를 `control_view`에 넘겨 대상을 지정할 수 있는가
 - [ ] Codex가 도구·인자를 스스로 고르는 흐름에서 혼동이 없는가
 
 자동화는 동일한 stdio 클라이언트로 검증했다. Codex 모델의 도구 선택 자체는 자동화할 수 없다.
@@ -135,6 +138,13 @@ npm run test:viewstate # phase 1 → phase 2
 - [ ] 사용자가 고정 탭을 기대하는 흐름에서 불편하지 않은가
 
 자동화는 파일·줄·열만 확인했다.
+
+### M10. 다른 뷰의 선택
+
+- [ ] 파일·리스트·아키텍처 뷰에서 선택한 대상이 `state.json`의 `views`에 게시되는가
+- [ ] 게시되지 않는다면, 해당 뷰에 선택 상태가 있는지 확인한다
+
+현재 `views.symbol`만 게시된다. 파일·리스트·아키텍처 뷰는 선택 상태를 공유 저장소로 보내지 않으므로, 필요하면 각 뷰의 선택 모델을 먼저 추가해야 한다.
 
 ## 4. 기록 양식
 
@@ -149,11 +159,13 @@ npm run test:viewstate # phase 1 → phase 2
 | M7 | | | | |
 | M8 | | | | |
 | M9 | | | | |
+| M10 | | | | |
 
 ## 5. 완료 판정
 
 - [ ] `npm run test:viewstate` 통과
 - [ ] M1~M4에서 화면 변화 확인
-- [ ] M5에서 위치 복원 미구현을 확인하고 4단계 잔여 범위 확정
-- [ ] M6~M7 결과로 경합·영역 규칙 범위 확정
+- [ ] M5에서 배치·뷰포트가 눈으로 복원되는지 확인
+- [ ] M6~M8에서 실제 클릭·두 창·Codex 흐름 확인
+- [ ] M10의 다른 뷰 선택 게시 필요 여부 결정
 - [ ] blocker 0건

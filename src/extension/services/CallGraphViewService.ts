@@ -26,7 +26,7 @@ import type {
   SupportedLang,
 } from "@/shared/callgraph-types";
 import { normalizePath } from "@/shared/path";
-import type { SkeinFilter, SkeinSelection, SkeinViewSnapshot } from "@/shared/viewState";
+import type { SkeinFilter, SkeinLayout, SkeinSelection, SkeinViewSnapshot } from "@/shared/viewState";
 import crypto from "node:crypto";
 import path from "node:path";
 import * as vscode from "vscode";
@@ -110,6 +110,8 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   private currentNeighbourhoodPaths = new Set<string>();
   /** IDs of the nodes currently rendered, for validating MCP commands. */
   private currentGraphNodeIds = new Set<string>();
+  /** Where the user left the graph, persisted in `.skein/state.json`. */
+  private layout: SkeinLayout | undefined;
   private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private saveListener: vscode.Disposable | null = null;
   /** Workspace root for which the DB has been fully indexed (null = not indexed yet). */
@@ -252,18 +254,31 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     return this.graphVersion;
   }
 
+  /** Marks the analysis behind the view as replaced (file change, re-index, redraw). */
+  public bumpGraphVersion(): number {
+    this.graphVersion += 1;
+    return this.graphVersion;
+  }
+
+  /** Last reported node positions and viewport. */
+  public getLayout(): SkeinLayout | undefined {
+    return this.layout ? { ...this.layout, positions: { ...this.layout.positions } } : undefined;
+  }
+
   /** True when the node is part of the graph currently rendered. */
   public hasNode(nodeId: string): boolean {
     return this.currentGraphNodeIds.has(nodeId);
   }
 
-  /** Applies the previous session's depth, filters and selection. */
-  public restoreView(snapshot: SkeinViewSnapshot): void {
+  /** Applies the previous session's depth, filters, selection and layout. */
+  public restoreView(snapshot: SkeinViewSnapshot, graphVersion?: number): void {
     if (snapshot.callGraph?.depth !== undefined) {
       this.currentDepth = Math.max(1, Math.min(MAX_DEPTH, Math.round(snapshot.callGraph.depth)));
     }
     this.hiddenFilters = [...snapshot.hiddenFilters];
     this.lastSelection = snapshot.selection;
+    this.layout = snapshot.layout;
+    if (graphVersion !== undefined) this.graphVersion = graphVersion;
   }
 
   /** Selects a node in the webview; false when the graph view is not mounted. */
@@ -654,8 +669,13 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   }
 
   private sendGraphToWebview(result: ReturnType<typeof queryNeighbourhood>): void {
-    this.graphVersion += 1;
+    this.bumpGraphVersion();
     this.currentGraphNodeIds = new Set(result.nodes.map((node) => node.id));
+    // A selection whose node left the new graph must not be advertised as usable
+    // (DESIGN 5.1: old ids are never silently remapped to another symbol).
+    if (this.lastSelection && !this.currentGraphNodeIds.has(this.lastSelection.nodeId)) {
+      this.lastSelection = undefined;
+    }
     // Buffer so we can replay if callGraphMounted fires after the initial postMessage
     // (race on first open: React may not have mounted its listener yet).
     this.pendingGraph = result;
@@ -683,6 +703,10 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       depth: result.depth,
       hiddenNodeCount: result.hiddenNodeCount,
       projectName: this.projectName,
+      ...(this.layout &&
+      (this.layout.rootSymbolId === undefined || this.layout.rootSymbolId === result.rootSymbolId)
+        ? { layout: this.layout }
+        : {}),
       timestamp: result.timestamp,
     });
     // A new graph resets the webview's filters, so restore the shared ones now
@@ -985,6 +1009,8 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       this.log(
         `[CallGraph] Filter changed: ${msg.filterType}=${msg.value} visible=${String(msg.visible)}`,
       );
+    } else if (msg.command === "callGraphLayoutChanged") {
+      this.layout = msg.layout;
     } else if (msg.command === "callGraphSelectionChanged") {
       this.lastSelection = msg.nodeId
         ? {

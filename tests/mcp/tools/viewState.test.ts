@@ -24,16 +24,24 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const appliedState = (graphVersion = 7) => ({
-  schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
-  workspaceRoot: root,
-  updatedAt: 1,
-  lastUserActionAt: 0,
-  graphVersion,
-  mode: 'callgraph' as const,
-  hiddenFilters: [],
-  expandAll: false,
-});
+const appliedState = (graphVersion = 7) => {
+  const window = {
+    windowId: 'w1',
+    updatedAt: 1,
+    lastUserActionAt: 0,
+    graphVersion,
+    mode: 'callgraph' as const,
+    hiddenFilters: [],
+    expandAll: false,
+  };
+  return {
+    schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
+    workspaceRoot: root,
+    ...window,
+    activeWindowId: 'w1',
+    windows: { w1: window },
+  };
+};
 
 /** Plays the extension: picks up the first request and answers it. */
 function answerNextRequest(status: 'applied' | 'rejected' = 'applied'): Promise<void> {
@@ -76,6 +84,10 @@ describe('skein_get_view_state', () => {
     const result = await executeGetViewState(root);
     expect(result.available).toBe(true);
     expect(result.state?.graphVersion).toBe(7);
+    expect(result.state?.windows).toBeUndefined();
+    expect(result.windows).toEqual([
+      { windowId: 'w1', updatedAt: 1, lastUserActionAt: 0, mode: 'callgraph', graphVersion: 7 },
+    ]);
   });
 });
 
@@ -107,6 +119,42 @@ describe('skein_control_view', () => {
     const result = await executeControlView(root, { action: 'select', nodeId: 'n1', timeoutMs: 100 });
     expect(result.applied).toBe(false);
     expect(result.reason).toBe('extension-not-responding');
+  });
+
+  it('targets the active window and rejects an unknown window id', async () => {
+    await writeViewState(root, appliedState());
+    const answer = (async () => {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const [request] = await listCommandRequests(root);
+        if (request) {
+          expect(request.targetWindowId).toBe('w1');
+          await writeCommandResult(root, {
+            id: request.id,
+            status: 'applied',
+            completedAt: Date.now(),
+            state: appliedState(),
+          });
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw new Error('no request was queued');
+    })();
+
+    const result = await executeControlView(root, { action: 'select', nodeId: 'n1' });
+    await answer;
+    expect(result.applied).toBe(true);
+    expect(result.windowId).toBe('w1');
+
+    const unknown = await executeControlView(root, {
+      action: 'select',
+      nodeId: 'n1',
+      windowId: 'missing',
+      timeoutMs: 100,
+    });
+    expect(unknown.applied).toBe(false);
+    expect(unknown.reason).toBe('window-not-found');
+    expect(await listCommandRequests(root)).toEqual([]);
   });
 
   it('refuses to open a file outside the workspace', async () => {

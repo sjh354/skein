@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -8,6 +8,7 @@ import {
   isCommandStale,
   isCommandSupersededByUser,
   listCommandRequests,
+  mergeViewState,
   parseCommandRequest,
   parseCommandResult,
   parseViewState,
@@ -59,7 +60,54 @@ describe('view state file', () => {
 
     const raw = await readFile(viewStatePath(root), 'utf8');
     expect(raw.endsWith('\n')).toBe(true);
-    expect(await readViewState(root)).toEqual(state());
+    const parsed = await readViewState(root);
+    expect(parsed).toMatchObject(state());
+    expect(parsed?.activeWindowId).toBe('legacy');
+    const { schemaVersion, workspaceRoot, ...windowState } = state();
+    void schemaVersion;
+    void workspaceRoot;
+    expect(parsed?.windows.legacy).toMatchObject(windowState);
+  });
+
+  it('merges two windows instead of letting the last writer erase the other', async () => {
+    const root = await tempRoot();
+    await mergeViewState(root, {
+      workspaceRoot: root,
+      windowId: 'window-a',
+      snapshot: { ...state(), mode: 'callgraph', selection: { nodeId: 'a' } },
+      graphVersion: 4,
+      lastUserActionAt: 0,
+    });
+    await mergeViewState(root, {
+      workspaceRoot: root,
+      windowId: 'window-b',
+      snapshot: { ...state(), mode: 'file', selection: { nodeId: 'b' } },
+      graphVersion: 5,
+      lastUserActionAt: 0,
+    });
+
+    const parsed = await readViewState(root);
+    expect(Object.keys(parsed?.windows ?? {}).sort()).toEqual(['window-a', 'window-b']);
+    expect(parsed?.activeWindowId).toBe('window-b');
+    expect(parsed?.mode).toBe('file');
+    expect(parsed?.windows['window-a']).toMatchObject({ mode: 'callgraph', graphVersion: 4 });
+    expect(parsed?.windows['window-b']).toMatchObject({ mode: 'file', graphVersion: 5 });
+  });
+
+  it('migrates a schema 1 state file to a legacy window', async () => {
+    const root = await tempRoot();
+    const legacy: Record<string, unknown> = { ...state(), schemaVersion: 1 };
+    delete legacy.windowId;
+    delete legacy.activeWindowId;
+    delete legacy.windows;
+    await mkdir(path.dirname(viewStatePath(root)), { recursive: true });
+    await writeFile(viewStatePath(root), JSON.stringify(legacy), 'utf8');
+
+    const parsed = await readViewState(root);
+    expect(parsed?.schemaVersion).toBe(SKEIN_STATE_SCHEMA_VERSION);
+    expect(parsed?.activeWindowId).toBe('legacy');
+    expect(parsed?.windows.legacy.mode).toBe('callgraph');
+    expect(parsed?.graphVersion).toBe(3);
   });
 
   it('returns null for a missing file, malformed JSON and an unknown schema', async () => {

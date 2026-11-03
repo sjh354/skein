@@ -10,6 +10,8 @@
  *   - webview → extension: discriminated union on `command`
  */
 
+import type { SkeinLayout } from "./viewState";
+
 // ---------------------------------------------------------------------------
 // Shared primitive types
 // ---------------------------------------------------------------------------
@@ -87,6 +89,7 @@ export interface SerializedCompoundNode {
  * Sent when the extension has resolved the neighbourhood graph for a symbol.
  * The webview initialises or refreshes the Cytoscape instance with this data.
  */
+
 export interface ShowCallGraphMessage {
   type: "showCallGraph";
   /** The ID of the root symbol (as defined in SerializedCallNode.id) */
@@ -100,6 +103,8 @@ export interface ShowCallGraphMessage {
   hiddenNodeCount?: number;
   /** Workspace folder name, shown in the detail panel's reference copy */
   projectName?: string;
+  /** Saved node positions and viewport for this root (restored after a restart). */
+  layout?: SkeinLayout;
   /** Unix ms — webview discards messages older than the last received */
   timestamp: number;
 }
@@ -253,6 +258,16 @@ export interface CallGraphSelectionChangedCommand {
   userInitiated: boolean;
 }
 
+/**
+ * Sent when the user (or a restore) changes node positions or the viewport.
+ * The extension persists it in `.skein/state.json` so a restart can restore it.
+ */
+export interface CallGraphLayoutChangedCommand {
+  command: "callGraphLayoutChanged";
+  layout: SkeinLayout;
+  userInitiated: boolean;
+}
+
 /** Discriminated union of all webview → extension messages for this feature */
 export type CallGraphWebviewCommand =
   | CallGraphMountedCommand
@@ -262,4 +277,5 @@ export type CallGraphWebviewCommand =
   | CallGraphReadyCommand
   | CallGraphFilterChangedCommand
   | CallGraphDepthChangedCommand
-  | CallGraphSelectionChangedCommand;
+  | CallGraphSelectionChangedCommand
+  | CallGraphLayoutChangedCommand;

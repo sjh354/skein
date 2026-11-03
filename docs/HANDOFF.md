@@ -63,11 +63,19 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 - `.github/workflows/`는 검증만 수행하고 배포·비밀 값을 쓰지 않는다. 필요 없는 워크플로는 제거한다.
 - Claude Code 프로젝트 상태(`~/.claude.json`, `~/.claude/projects/`)는 작업 폴더 경로를 기준으로 저장된다. 폴더를 `skein`으로 옮겼으므로 새 경로에서 처음 열 때 신뢰 확인을 다시 거친다.
 
-## 6. 4단계 남은 작업 (나중에 한 번에)
+## 6. 4단계 완료 후 남은 확인 (나중에 한 번에)
 
-4단계 자동 검증은 `npm run test:viewstate`로 추가했다. 실제 VS Code 확장 호스트에서 `dist/mcpServer.mjs` stdio 클라이언트로 왕복하고, 재시작 복원은 VS Code를 두 번 실행해 확인한다. D1(경로 축약이 노드 ID를 깨뜨림), D2(없는 노드 선택 수용), D3(모드가 `file`일 때 복원 상태 미게시)은 수정했고 자동 검증에 포함했다.
+4단계 코드 작업은 다음까지 반영했다.
 
-아래는 아직 남은 항목이다. 상세 수동 절차와 기록 양식은 `docs/verification/step4-manual-checklist.md`에 있다.
+- `state.json` 스키마 2: 창별 스냅샷(`windows`), 활성 창, 콜 그래프 배치(노드 좌표·줌·팬), 뷰별 선택, 스키마 1 자동 변환
+- 쓰기 병합과 `state.lock`: 같은 폴더를 두 창에서 열어도 서로의 스냅샷을 지우지 않음
+- `skein_control_view`의 `windowId` 대상 지정: 대상 창만 명령을 적용하고 나머지는 요청을 남겨 둠
+- 재시작 복원: 모드·파일·깊이·필터·선택·배치·`graphVersion` (memento가 아니라 `state.json` 기준)
+- `graphVersion` 통합: 콜 그래프 재드로우, 파일 변경, 의존성 재분석, 인덱스 재구축에서 증가하고 재시작 후 유지
+- 사라진 노드 선택 해제, 영역별 `state.json` 전환(`skein.setWorkspace`), 시작 시 워크스페이스 미탐지 재시도(D4)
+- `npm run test:viewstate`에 배치·창·버전 복원 검사 추가
+
+상세 수동 절차와 기록 양식은 `docs/verification/step4-manual-checklist.md`에 있다.
 
 ### 6.1 수동 확인 (원격 작업 후 실제 창에서)
 
@@ -75,25 +83,20 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 - [ ] `M2` `focus`가 뷰포트를 실제로 이동·확대하는가
 - [ ] `M3` `set_filter`가 캔버스에서 노드·엣지를 실제로 숨기는가 (nodeType·folder·edgeType)
 - [ ] `M4` `set_expand_all`이 의존성 그래프를 실제로 펼치고 접는가
-- [ ] `M5` 재시작 후 노드 배치·뷰포트가 복원되는가 (현재 미저장 → 4단계 잔여 범위 결정)
+- [ ] `M5` 재시작 후 노드 배치·줌·팬이 눈으로 같은 위치에 복원되는가
 - [ ] `M6` `timeoutMs`가 긴 명령 대기 중 실제 클릭하면 `user-action-superseded`로 거부되는가
-- [ ] `M7` 멀티루트 폴더 전환과 같은 폴더 두 창에서 상태가 섞이는가/덮어쓰는가
-- [ ] `M8` Codex가 `get_view_state`의 `nodeId`·`filePath`를 그대로 `control_view`에 넘기는가
+- [ ] `M7` 멀티루트 폴더 전환과 같은 폴더 두 창에서 상태가 분리되는가 (`windows`, `windowId` 대상 지정)
+- [ ] `M8` Codex가 `get_view_state`의 `nodeId`·`filePath`·`windowId`를 그대로 `control_view`에 넘기는가
 - [ ] `M9` `open_file`이 미리보기 탭으로 열리는 동작이 불편하지 않은가
+- [ ] `M10` 파일·리스트·아키텍처 뷰 선택을 `views`에 게시할 필요가 있는가
 
-### 6.2 코드 작업
+### 6.2 4단계 이후 코드 작업
 
-- [ ] `state.json`을 복원 단일 원본으로 전환: 모드·파일이 아직 VS Code memento(`globalState`/`workspaceState`)에 있다
-- [ ] 노드 배치·뷰포트 위치를 `state.json`에 저장하고 재시작 시 복원 (현재 `positionsRef` 메모리에만 있음)
-- [ ] 파일·리스트·심벌·아키텍처 뷰의 선택 상태 게시 (현재 `state.json`은 콜 그래프 중심)
-- [ ] `graphVersion` 통합: 의존성 그래프 재분석·파일 변경·인덱스 재구축에서도 증가, 재시작 후에도 유지, 사라진 노드 선택 처리 규칙
-- [ ] `graphVersion`이 0으로 초기화되는 재시작 동작 정리 (D3 이후 남은 관찰)
-- [ ] 멀티루트 영역별 상태 키와 영역 전환 시 분리·무효화
-- [ ] 창/프로세스 식별자: 같은 폴더를 두 창에서 열 때 `state.json` 마지막 쓰기 덮어쓰기 방지
-- [ ] DESIGN 10.1 검색 명령 추가
+- [ ] 파일·리스트·아키텍처 뷰가 선택을 공유 상태로 보내도록 각 뷰의 선택 모델 추가 (현재 `views.symbol`만 게시)
+- [ ] DESIGN 10.1 검색 명령 추가 (DESIGN은 해당 단계에서 추가한다고 명시)
 - [ ] 의존성 그래프 개별 노드 펼침/접기, 아키텍처 뷰 상태 조회·조작 (`set_expand_all` 외)
-- [ ] `state.json`에 분석 결과·진단·스키마 전환 추가 (현재 뷰 상태 + 스키마 버전만)
-- [ ] 자동화 환경에서 1회 관찰된 D4(시작 시 워크스페이스 폴더 미탐지 → 상태 파일 미생성) 재현 여부 확인
+- [ ] `state.json`에 분석 결과·진단 데이터 추가 (현재 뷰 상태·버전·스키마만)
+- [ ] D4(시작 시 워크스페이스 폴더 미탐지) 재현 조건 반복 확인
 
 ### 6.3 실행 명령
 

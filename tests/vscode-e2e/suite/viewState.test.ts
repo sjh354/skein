@@ -100,7 +100,7 @@ suite('View State MCP round trip (step 4, phase 1)', () => {
       (s) => (s.mode === 'callgraph' && typeof s.callGraph?.rootSymbolId === 'string' ? s : null),
       'call graph state publication',
     );
-    assert.strictEqual(state.schemaVersion, 1, 'schemaVersion');
+    assert.strictEqual(state.schemaVersion, 2, 'schemaVersion');
     assert.strictEqual(state.workspaceRoot, workspaceRoot, 'workspaceRoot');
     assert.ok(
       String(state.filePath).replaceAll('\\', '/').endsWith('symbols/functions.ts'),
@@ -111,6 +111,24 @@ suite('View State MCP round trip (step 4, phase 1)', () => {
     assert.strictEqual(state.expandAll, false, 'expandAll default');
     console.log(
       `[viewstate] published root=${state.callGraph.rootSymbolId} depth=${state.callGraph.depth} graphVersion=${state.graphVersion}`,
+    );
+  });
+
+  test('Publishes node positions and viewport layout', async function () {
+    this.timeout(60_000);
+    const state = await waitForPublished(
+      (s) =>
+        s.layout && Object.keys(s.layout.positions).length > 0 && typeof s.layout.zoom === 'number'
+          ? s
+          : null,
+      'layout publication',
+      20_000,
+    );
+    assert.ok(Object.keys(state.layout.positions).length > 0, 'positions');
+    assert.ok(state.layout.rootSymbolId, 'layout records its root');
+    assert.ok(typeof state.layout.zoom === 'number', 'zoom');
+    console.log(
+      `[viewstate] layout published: nodes=${Object.keys(state.layout.positions).length} zoom=${state.layout.zoom} root=${state.layout.rootSymbolId}`,
     );
   });
 
@@ -130,6 +148,13 @@ suite('View State MCP round trip (step 4, phase 1)', () => {
       'MCP should report the same root the extension published',
     );
     assert.strictEqual(result.data.state.graphVersion, published.graphVersion);
+    assert.strictEqual(result.data.state.windows, undefined, 'window map is summarized');
+    assert.ok(result.data.state.activeWindowId, 'active window id');
+    assert.ok(
+      Array.isArray(result.data.windows) && result.data.windows.length >= 1,
+      'window summaries',
+    );
+    assert.ok(result.data.windows[0].windowId, 'window summary id');
   });
 
   test('select: agent command changes the selection and is published', async function () {

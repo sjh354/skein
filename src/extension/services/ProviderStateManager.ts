@@ -77,8 +77,11 @@ export class ProviderStateManager {
     private readonly defaultIndexingDelay: number
   ) {
     this.lastActiveFilePath = this.context.workspaceState?.get('lastActiveFilePath');
-    this._viewMode = this.context.globalState.get('viewMode', 'file');
-    this._currentFilePath = this.context.workspaceState?.get('currentFilePath');
+    // `.skein/state.json` is the source of truth for the view mode and file
+    // (ViewStateService restores them on activation). The memento writes below
+    // stay for older clients, but they are no longer read.
+    this._viewMode = 'file';
+    this._currentFilePath = undefined;
   }
 
   loadConfiguration(): ProviderConfigSnapshot {

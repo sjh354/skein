@@ -16,12 +16,14 @@ import {
     deleteCommandFiles,
     readCommandResult,
     readViewState,
+    summarizeWindows,
     writeCommandRequest,
     type SkeinCommandRequest,
     type SkeinCommandResult,
     type SkeinFilterType,
     type SkeinViewAction,
     type SkeinViewState,
+    type SkeinWindowSummary,
 } from "../../shared/viewState";
 
 export const GetViewStateSchema = z.object({});
@@ -32,7 +34,10 @@ export interface GetViewStateResult {
     /** False when the extension has not written a state file for this workspace yet. */
     available: boolean;
     reason?: "state-file-missing" | "workspace-not-configured";
-    state?: SkeinViewState;
+    /** The active window's snapshot (top-level fields are kept for compatibility). */
+    state?: Omit<SkeinViewState, "windows">;
+    /** Other VS Code windows that published state for the same folder. */
+    windows?: SkeinWindowSummary[];
 }
 
 const ActionSchema = z.enum([
@@ -62,6 +67,11 @@ export const ControlViewSchema = z.object({
         .int()
         .optional()
         .describe("Pin the command to the graphVersion you read; the command is rejected if the graph has changed."),
+    windowId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Target VS Code window from get_view_state; defaults to the most recent writer."),
     timeoutMs: z
         .number()
         .int()
@@ -78,6 +88,8 @@ export interface ControlViewResult {
     applied: boolean;
     status: SkeinCommandResult["status"];
     reason?: string;
+    /** Window the command was sent to (absent when no state file existed). */
+    windowId?: string;
     state?: SkeinViewState;
 }
 
@@ -120,7 +132,9 @@ export async function executeGetViewState(rootDir: string | undefined): Promise<
     if (!rootDir) return { available: false, reason: "workspace-not-configured" };
     const state = await readViewState(rootDir);
     if (!state) return { available: false, reason: "state-file-missing" };
-    return { available: true, state };
+    const { windows, ...active } = state;
+    void windows;
+    return { available: true, state: active, windows: summarizeWindows(state) };
 }
 
 /** Queues a command and waits for the extension to apply it. */
@@ -139,12 +153,19 @@ export async function executeControlView(
         return { applied: false, status: "error", reason: "path-outside-workspace" };
     }
 
+    const state = await readViewState(rootDir);
+    if (params.windowId && state && !state.windows[params.windowId]) {
+        return { applied: false, status: "error", reason: "window-not-found", windowId: params.windowId };
+    }
+    const targetWindowId = params.windowId ?? state?.activeWindowId;
+
     const request: SkeinCommandRequest = {
         id: createCommandId(),
         createdAt: Date.now(),
         command: action,
     };
     if (params.graphVersion !== undefined) request.graphVersion = params.graphVersion;
+    if (targetWindowId !== undefined) request.targetWindowId = targetWindowId;
 
     await writeCommandRequest(rootDir, request);
 
@@ -159,6 +180,7 @@ export async function executeControlView(
                     applied: result.status === "applied",
                     status: result.status,
                     reason: result.reason,
+                    windowId: targetWindowId,
                     state: result.state,
                 };
             }
@@ -167,6 +189,7 @@ export async function executeControlView(
                     applied: false,
                     status: "error",
                     reason: "extension-not-responding",
+                    windowId: targetWindowId,
                 };
             }
             await new Promise((resolve) => setTimeout(resolve, COMMAND_RESULT_POLL_MS));

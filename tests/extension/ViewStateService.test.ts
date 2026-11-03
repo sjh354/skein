@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ViewStateService } from '../../src/extension/services/ViewStateService';
 import {
   createCommandId,
+  deleteCommandRequest,
   listCommandRequests,
   readCommandResult,
   readViewState,
@@ -221,7 +222,50 @@ describe('ViewStateService', () => {
         mode: 'callgraph',
         hiddenFilters: [{ filterType: 'folder', value: 'src' }],
       }),
+      9,
     );
+  });
+
+  it('publishes the call-graph layout reported by the webview', async () => {
+    service.observeWebviewCommand({
+      command: 'callGraphLayoutChanged',
+      layout: {
+        positions: { n1: { x: 12, y: 34 } },
+        zoom: 1.5,
+        pan: { x: -5, y: 6 },
+        rootSymbolId: 'root',
+      },
+      userInitiated: true,
+    });
+
+    const state = await waitFor(
+      () => readViewState(root).then((value) => (value?.layout ? value : null)),
+      'layout publication',
+    );
+    expect(state.layout).toEqual({
+      positions: { n1: { x: 12, y: 34 } },
+      zoom: 1.5,
+      pan: { x: -5, y: 6 },
+      rootSymbolId: 'root',
+    });
+  });
+
+  it('leaves commands targeted at another window for that window', async () => {
+    const published = await waitFor(() => readViewState(root), 'published state');
+    const request = {
+      id: createCommandId(),
+      createdAt: Date.now(),
+      targetWindowId: 'another-window',
+      command: { action: 'select' as const, nodeId: 'n1' },
+    };
+    await writeCommandRequest(root, request);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(await readCommandResult(root, request.id)).toBeNull();
+    expect(host.select).not.toHaveBeenCalled();
+    expect((await listCommandRequests(root)).map((item) => item.id)).toContain(request.id);
+    expect(published.activeWindowId).not.toBe('another-window');
+    await deleteCommandRequest(root, request.id);
   });
 
   it('drops a request it cannot parse and keeps polling', async () => {

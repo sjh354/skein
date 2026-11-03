@@ -5,10 +5,12 @@
  * The extension is the only writer of the state file, so two processes never
  * edit it at once. Human interactions stamp `lastUserActionAt`; a queued
  * command older than that is rejected instead of moving the screen under the
- * user (DESIGN 10.2).
+ * user (DESIGN 10.2). Writes are merged per extension window under a lock, so
+ * two windows on the same folder no longer erase each other.
  */
 
 import * as vscode from "vscode";
+import { randomUUID } from "node:crypto";
 import type { CallGraphWebviewCommand } from "../../shared/callgraph-types";
 import {
     EMPTY_VIEW_SNAPSHOT,
@@ -18,15 +20,18 @@ import {
     isCommandStale,
     isCommandSupersededByUser,
     listCommandRequests,
+    mergeViewState,
+    normalizeAreaKey,
     pruneCommandFiles,
+    pruneWindowSnapshotsInFile,
     readViewState,
     writeCommandResult,
-    writeViewState,
     type SkeinCommandRequest,
     type SkeinCommandResult,
     type SkeinFilterType,
     type SkeinViewSnapshot,
     type SkeinViewState,
+    type SkeinWindowView,
 } from "../../shared/viewState";
 
 /** Commands and files the MCP server left behind by a crashed run are dropped after a day. */
@@ -41,7 +46,7 @@ export interface ViewStateHost {
     openFile(path: string, line?: number, character?: number): Promise<boolean>;
     setFilter(filterType: SkeinFilterType, value: string, visible: boolean): Promise<boolean>;
     setExpandAll(expandAll: boolean): Promise<boolean>;
-    /** False when the node is not in the graph currently rendered (optional for older hosts). */
+    /** False when the node is not in the graph currently rendered. */
     hasNode?(nodeId: string): boolean;
 }
 
@@ -50,22 +55,24 @@ export interface ViewStateServiceOptions {
     logger: { debug(message: string, ...args: unknown[]): void; warn(message: string, ...args: unknown[]): void };
     host: ViewStateHost;
     /** Called once with the previous session's view, before the first publish. */
-    onRestore?: (snapshot: SkeinViewSnapshot) => void;
+    onRestore?: (snapshot: SkeinViewSnapshot, graphVersion: number) => void;
     pollIntervalMs?: number;
 }
 
 export class ViewStateService implements vscode.Disposable {
-    private state: SkeinViewState;
+    private window: SkeinWindowView;
+    private workspaceRoot: string;
+    private readonly windowId = randomUUID();
     private lastPublished = "";
     private timer: ReturnType<typeof setInterval> | null = null;
     private writing = false;
     private disposed = false;
 
     constructor(private readonly options: ViewStateServiceOptions) {
-        this.state = {
+        this.workspaceRoot = options.root;
+        this.window = {
             ...EMPTY_VIEW_SNAPSHOT,
-            schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
-            workspaceRoot: options.root,
+            windowId: this.windowId,
             updatedAt: 0,
             lastUserActionAt: 0,
             graphVersion: 0,
@@ -73,17 +80,21 @@ export class ViewStateService implements vscode.Disposable {
     }
 
     async start(): Promise<void> {
-        await ensureSkeinWorkspace(this.options.root);
-        const restored = await readViewState(this.options.root);
-        if (restored && restored.workspaceRoot === this.options.root) {
-            this.state = {
-                ...restored,
-                graphVersion: 0,
+        await ensureSkeinWorkspace(this.workspaceRoot);
+        await pruneWindowSnapshotsInFile(this.workspaceRoot);
+        const restored = await readViewState(this.workspaceRoot);
+        const previous = restored ? this.previousWindow(restored) : undefined;
+        if (restored && previous && restored.workspaceRoot === normalizeAreaKey(this.workspaceRoot)) {
+            this.window = {
+                ...this.toSnapshot(previous),
+                windowId: this.windowId,
                 updatedAt: 0,
+                lastUserActionAt: previous.lastUserActionAt,
+                graphVersion: previous.graphVersion,
             };
-            this.options.onRestore?.(restored);
+            this.options.onRestore?.(this.toSnapshot(previous), previous.graphVersion);
         }
-        await pruneCommandFiles(this.options.root, STALE_COMMAND_MAX_AGE_MS);
+        await pruneCommandFiles(this.workspaceRoot, STALE_COMMAND_MAX_AGE_MS);
         this.publishOnce().catch((err: unknown) => this.logError("initial publish", err));
         this.timer = setInterval(
             () => void this.tick(),
@@ -92,9 +103,37 @@ export class ViewStateService implements vscode.Disposable {
         this.timer.unref?.();
     }
 
+    /** Switches the area whose state file this service owns (multi-root). */
+    async setRoot(root: string): Promise<void> {
+        if (normalizeAreaKey(root) === normalizeAreaKey(this.workspaceRoot)) return;
+        await this.persistState();
+        this.workspaceRoot = root;
+        await ensureSkeinWorkspace(root);
+        const restored = await readViewState(root);
+        const previous = restored ? this.previousWindow(restored) : undefined;
+        this.window = previous
+            ? {
+                  ...this.toSnapshot(previous),
+                  windowId: this.windowId,
+                  updatedAt: 0,
+                  lastUserActionAt: previous.lastUserActionAt,
+                  graphVersion: previous.graphVersion,
+              }
+            : {
+                  ...EMPTY_VIEW_SNAPSHOT,
+                  windowId: this.windowId,
+                  updatedAt: 0,
+                  lastUserActionAt: 0,
+                  graphVersion: 0,
+              };
+        this.lastPublished = "";
+        if (previous) this.options.onRestore?.(this.toSnapshot(previous), previous.graphVersion);
+        await this.persistState();
+    }
+
     /** A human moved the view; queued agent commands that predate this are dropped. */
     markUserAction(): void {
-        this.state.lastUserActionAt = Date.now();
+        this.window.lastUserActionAt = Date.now();
         this.publishOnce().catch((err: unknown) => this.logError("user action publish", err));
     }
 
@@ -102,7 +141,7 @@ export class ViewStateService implements vscode.Disposable {
     observeWebviewCommand(command: CallGraphWebviewCommand): void {
         switch (command.command) {
             case "callGraphSelectionChanged":
-                this.state.selection = command.nodeId
+                this.window.selection = command.nodeId
                     ? {
                           nodeId: command.nodeId,
                           path: command.path,
@@ -117,8 +156,13 @@ export class ViewStateService implements vscode.Disposable {
                 this.markUserAction();
                 break;
             case "callGraphDepthChanged":
-                this.state.callGraph = { ...this.state.callGraph, depth: command.depth };
+                this.window.callGraph = { ...this.window.callGraph, depth: command.depth };
                 this.markUserAction();
+                break;
+            case "callGraphLayoutChanged":
+                this.window.layout = command.layout;
+                if (command.userInitiated) this.markUserAction();
+                else this.publishOnce().catch((err: unknown) => this.logError("layout publish", err));
                 break;
             case "callGraphOpenFile":
             case "callGraphSymbolFocus":
@@ -150,16 +194,17 @@ export class ViewStateService implements vscode.Disposable {
     }
 
     private async processCommands(): Promise<void> {
-        const requests = await listCommandRequests(this.options.root);
+        const requests = await listCommandRequests(this.workspaceRoot);
         if (requests.length === 0) return;
         /* eslint-disable no-await-in-loop -- commands are applied in order */
         for (const request of requests) {
             if (this.disposed) return;
+            // Another window owns this command; leave the request for it.
+            if (request.targetWindowId && request.targetWindowId !== this.windowId) continue;
             const result = await this.applyCommand(request);
-            await writeCommandResult(this.options.root, result);
-            await deleteCommandRequest(this.options.root, request.id);
+            await writeCommandResult(this.workspaceRoot, result);
+            await deleteCommandRequest(this.workspaceRoot, request.id);
             if (result.status === "applied") {
-                this.state.updatedAt = Date.now();
                 await this.persistState();
             }
         }
@@ -168,10 +213,10 @@ export class ViewStateService implements vscode.Disposable {
 
     private async applyCommand(request: SkeinCommandRequest): Promise<SkeinCommandResult> {
         const base = { id: request.id, completedAt: Date.now() };
-        if (isCommandSupersededByUser(request, this.state)) {
+        if (isCommandSupersededByUser(request, this.window)) {
             return { ...base, status: "rejected", reason: "user-action-superseded" };
         }
-        if (isCommandStale(request, this.state)) {
+        if (isCommandStale(request, this.window)) {
             return { ...base, status: "rejected", reason: "stale-graph-version" };
         }
 
@@ -184,9 +229,14 @@ export class ViewStateService implements vscode.Disposable {
             // The webview reports the selection asynchronously; keep the applied
             // node in the result so the caller sees what it selected.
             if (request.command.action === "select") {
-                this.state.selection = { nodeId: request.command.nodeId };
+                this.window.selection = { nodeId: request.command.nodeId };
             }
-            return { ...base, status: "applied", completedAt: Date.now(), state: { ...this.state } };
+            return {
+                ...base,
+                status: "applied",
+                completedAt: Date.now(),
+                state: this.currentStateView(),
+            };
         } catch (err: unknown) {
             return {
                 ...base,
@@ -201,7 +251,7 @@ export class ViewStateService implements vscode.Disposable {
         const action = request.command;
         switch (action.action) {
             case "select":
-                if (this.state.mode !== "callgraph") return "view-not-available";
+                if (this.window.mode !== "callgraph") return "view-not-available";
                 // A node id from an older graph (or a typo) must not be reported as
                 // applied: the webview would silently ignore it.
                 if (this.options.host.hasNode && !this.options.host.hasNode(action.nodeId)) {
@@ -209,10 +259,10 @@ export class ViewStateService implements vscode.Disposable {
                 }
                 return (await this.options.host.select(action.nodeId)) ? true : "view-not-available";
             case "focus":
-                if (this.state.mode !== "callgraph") return "view-not-available";
+                if (this.window.mode !== "callgraph") return "view-not-available";
                 return (await this.options.host.focus(action.nodeId)) ? true : "view-not-available";
             case "set_depth":
-                if (this.state.mode !== "callgraph") return "view-not-available";
+                if (this.window.mode !== "callgraph") return "view-not-available";
                 return (await this.options.host.setDepth(action.depth)) ? true : "view-not-available";
             case "open_file":
                 return (await this.options.host.openFile(action.path, action.line, action.character))
@@ -224,7 +274,7 @@ export class ViewStateService implements vscode.Disposable {
                     ? true
                     : "view-not-available";
             case "set_expand_all":
-                this.state.expandAll = action.expandAll;
+                this.window.expandAll = action.expandAll;
                 return (await this.options.host.setExpandAll(action.expandAll))
                     ? true
                     : "view-not-available";
@@ -234,47 +284,88 @@ export class ViewStateService implements vscode.Disposable {
     }
 
     private setHiddenFilter(filterType: SkeinFilterType, value: string, hidden: boolean): void {
-        const filters = this.state.hiddenFilters.filter(
+        const filters = this.window.hiddenFilters.filter(
             (filter) => !(filter.filterType === filterType && filter.value === value),
         );
         if (hidden) filters.push({ filterType, value });
-        this.state.hiddenFilters = filters;
+        this.window.hiddenFilters = filters;
     }
 
     private refreshFromHost(): void {
         const { snapshot, graphVersion } = this.options.host.read();
-        this.state.mode = snapshot.mode;
-        this.state.expandAll = snapshot.expandAll;
-        this.state.graphVersion = graphVersion;
-        if (snapshot.filePath !== undefined) this.state.filePath = snapshot.filePath;
-        else delete this.state.filePath;
+        this.window.mode = snapshot.mode;
+        this.window.expandAll = snapshot.expandAll;
+        this.window.graphVersion = graphVersion;
+        if (snapshot.filePath !== undefined) this.window.filePath = snapshot.filePath;
+        else delete this.window.filePath;
+        if (snapshot.layout !== undefined) this.window.layout = snapshot.layout;
+        if (snapshot.views !== undefined) this.window.views = snapshot.views;
         // The dependency graph shares this file but has no call-graph state to
         // report. Keep the last call-graph snapshot instead of erasing it, so a
         // restart can restore depth, filters and selection and an agent can see
         // them before the call-graph tab is reopened.
         if (snapshot.mode === "callgraph") {
-            this.state.hiddenFilters = snapshot.hiddenFilters;
-            if (snapshot.selection !== undefined) this.state.selection = snapshot.selection;
-            else delete this.state.selection;
-            if (snapshot.callGraph !== undefined) this.state.callGraph = snapshot.callGraph;
-            else delete this.state.callGraph;
+            this.window.hiddenFilters = snapshot.hiddenFilters;
+            if (snapshot.selection !== undefined) this.window.selection = snapshot.selection;
+            else delete this.window.selection;
+            if (snapshot.callGraph !== undefined) this.window.callGraph = snapshot.callGraph;
+            else delete this.window.callGraph;
         }
     }
 
     private async publishOnce(): Promise<void> {
         if (this.disposed) return;
         this.refreshFromHost();
-        const content = JSON.stringify(this.state);
-        if (content === this.lastPublished) return;
+        const signature = JSON.stringify({
+            snapshot: this.toSnapshot(this.window),
+            graphVersion: this.window.graphVersion,
+            lastUserActionAt: this.window.lastUserActionAt,
+        });
+        if (signature === this.lastPublished) return;
         await this.persistState();
+        this.lastPublished = signature;
     }
 
     private async persistState(): Promise<void> {
         if (this.disposed) return;
-        this.state.updatedAt = Date.now();
-        const content = JSON.stringify(this.state);
-        await writeViewState(this.options.root, this.state);
-        this.lastPublished = content;
+        const merged = await mergeViewState(this.workspaceRoot, {
+            workspaceRoot: this.workspaceRoot,
+            windowId: this.windowId,
+            snapshot: this.toSnapshot(this.window),
+            graphVersion: this.window.graphVersion,
+            lastUserActionAt: this.window.lastUserActionAt,
+        });
+        this.window.updatedAt = merged.updatedAt;
+    }
+
+    /** The previous session's window snapshot, preferring the last writer. */
+    private previousWindow(state: SkeinViewState): SkeinWindowView | undefined {
+        return state.windows[state.activeWindowId] ?? Object.values(state.windows)[0];
+    }
+
+    private toSnapshot(window: SkeinWindowView): SkeinViewSnapshot {
+        const snapshot: SkeinViewSnapshot = {
+            mode: window.mode,
+            hiddenFilters: window.hiddenFilters.map((filter) => ({ ...filter })),
+            expandAll: window.expandAll,
+        };
+        if (window.filePath !== undefined) snapshot.filePath = window.filePath;
+        if (window.selection !== undefined) snapshot.selection = { ...window.selection };
+        if (window.callGraph !== undefined) snapshot.callGraph = { ...window.callGraph };
+        if (window.layout !== undefined) snapshot.layout = window.layout;
+        if (window.views !== undefined) snapshot.views = window.views;
+        return snapshot;
+    }
+
+    private currentStateView(): SkeinViewState {
+        const window = { ...this.window };
+        return {
+            ...window,
+            schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
+            workspaceRoot: normalizeAreaKey(this.workspaceRoot),
+            activeWindowId: this.windowId,
+            windows: { [this.windowId]: window },
+        };
     }
 
     private logError(what: string, err: unknown): void {

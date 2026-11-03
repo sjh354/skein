@@ -19,6 +19,7 @@ import type {
   CallGraphCopyReferenceCommand,
   CallGraphDepthChangedCommand,
   CallGraphExtensionMessage,
+  CallGraphLayoutChangedCommand,
   CallGraphMountedCommand,
   CallGraphOpenFileCommand,
   CallGraphReadyCommand,
@@ -335,6 +336,10 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
   const nodesRef = useRef<SerializedCallNode[]>([]);
   nodesRef.current = graphNodes;
 
+  // Layout reporting: debounce drags/zooms into one state-file write.
+  const layoutReportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressLayoutReportRef = useRef(false);
+
   /** Tell the extension what is selected so agents see the same view. */
   const reportSelection = useCallback((nodeId: string | undefined, userInitiated: boolean): void => {
     const node = nodeId ? nodesRef.current.find((candidate) => candidate.id === nodeId) : undefined;
@@ -475,6 +480,10 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       }
     });
 
+    // Persist the user's node placement and viewport (DESIGN 3.2, 5.2).
+    cy.on("dragfree", "node", () => scheduleLayoutReport(true));
+    cy.on("zoom", () => scheduleLayoutReport(true));
+
     // Auto-resize when the webview panel is resized. Opening the detail panel
     // narrows the canvas; re-fitting there would shrink the whole graph on the
     // first click, so keep the zoom and only re-centre the same content.
@@ -559,6 +568,10 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       if (safetyTimerRef.current !== null) {
         clearTimeout(safetyTimerRef.current);
         safetyTimerRef.current = null;
+      }
+      if (layoutReportTimerRef.current !== null) {
+        clearTimeout(layoutReportTimerRef.current);
+        layoutReportTimerRef.current = null;
       }
       resizeObserver?.disconnect();
       themeObserver?.disconnect();
@@ -667,8 +680,37 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
     }
   }
 
+  function scheduleLayoutReport(userInitiated: boolean): void {
+    if (suppressLayoutReportRef.current) return;
+    if (layoutReportTimerRef.current !== null) clearTimeout(layoutReportTimerRef.current);
+    layoutReportTimerRef.current = setTimeout(() => {
+      layoutReportTimerRef.current = null;
+      const cy = cyRef.current;
+      if (!cy || suppressLayoutReportRef.current) return;
+      rememberLayout(cy);
+      const positions: Record<string, Point> = {};
+      for (const [nodeId, point] of positionsRef.current) positions[nodeId] = point;
+      if (Object.keys(positions).length === 0) return;
+      const command: CallGraphLayoutChangedCommand = {
+        command: "callGraphLayoutChanged",
+        layout: {
+          positions,
+          zoom: cy.zoom(),
+          pan: { ...cy.pan() },
+          ...(lastRootRef.current ? { rootSymbolId: lastRootRef.current } : {}),
+        },
+        userInitiated,
+      };
+      try {
+        postMessageRef.current(command);
+      } catch {
+        // postMessage not available outside webview (e.g., unit tests)
+      }
+    }, 400);
+  }
+
   /** fcose rebuild: a new root, an explicit re-layout or the first render. */
-  function runFullLayout(cy: cytoscape.Core): void {
+  function runFullLayout(cy: cytoscape.Core, userInitiated = false): void {
     if (layoutTimerRef.current !== null) {
       clearTimeout(layoutTimerRef.current);
       layoutTimerRef.current = null;
@@ -680,6 +722,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
 
     // fcose is synchronous and blocks the whole thread on large graphs, so the
     // overlay is painted first and layout.run() is deferred one frame.
+    suppressLayoutReportRef.current = true;
     setIsLoading(true);
     setLoadingMessage("Calculating layout…");
 
@@ -716,6 +759,8 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       triggerCanvasRepaint(cy);
       setIsLoading(false);
       rememberLayout(cy);
+      suppressLayoutReportRef.current = false;
+      scheduleLayoutReport(userInitiated);
 
       // Safety retry: the container may still have been sizing during the run.
       if (postLayoutResizeTimerRef.current !== null) {
@@ -724,9 +769,11 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       postLayoutResizeTimerRef.current = setTimeout(() => {
         postLayoutResizeTimerRef.current = null;
         if (!cyRef.current) return;
+        suppressLayoutReportRef.current = true;
         cyRef.current.resize();
         cyRef.current.fit(undefined, 60);
         triggerCanvasRepaint(cyRef.current);
+        suppressLayoutReportRef.current = false;
       }, 500);
 
       reportRendered(cy);
@@ -768,11 +815,26 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
 
     // A new root is a new graph: rebuild the layout. Anything else (save,
     // depth slider, filter) keeps the user's positions (DESIGN 3.2).
+    // A saved layout from `.skein/state.json` replaces the fcose run so the
+    // restart restores the screen the user left.
+    const savedLayout = msg.layout;
+    const savedLayoutMatches =
+      savedLayout !== undefined &&
+      Object.keys(savedLayout.positions).length > 0 &&
+      (savedLayout.rootSymbolId === undefined || savedLayout.rootSymbolId === msg.rootSymbolId);
+    if (savedLayoutMatches) {
+      positionsRef.current = new Map(Object.entries(savedLayout.positions));
+      viewportRef.current =
+        savedLayout.zoom !== undefined && savedLayout.pan
+          ? { zoom: savedLayout.zoom, pan: { ...savedLayout.pan } }
+          : null;
+    }
+
     const previousRoot = lastRootRef.current;
     const rootChanged = previousRoot !== msg.rootSymbolId;
     if (!rootChanged) {
       rememberLayout(cy);
-    } else {
+    } else if (!savedLayoutMatches) {
       positionsRef.current.clear();
       viewportRef.current = null;
     }
@@ -825,19 +887,25 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
 
     lastRootRef.current = msg.rootSymbolId;
 
-    if (rootChanged) {
+    if (rootChanged && !savedLayoutMatches) {
       runFullLayout(cy);
       return;
     }
 
-    // Same root: keep every known position, place newly reachable symbols
-    // beside their neighbours, and restore the viewport instead of re-fitting.
+    // Same root, or a saved layout: keep every known position, place newly
+    // reachable symbols beside their neighbours, and restore the viewport
+    // instead of re-fitting.
     const planned = planPositions(
       positionsRef.current,
       msg.nodes,
       msg.edges.map((edge) => ({ sourceId: edge.sourceId, targetId: edge.targetId })),
     );
+    suppressLayoutReportRef.current = true;
     cy.batch(() => {
+      for (const [id, position] of positionsRef.current) {
+        const element = cy.getElementById(id);
+        if (element.nonempty()) element.position(position);
+      }
       for (const [id, position] of planned) {
         const element = cy.getElementById(id);
         if (element.nonempty()) element.position(position);
@@ -853,6 +921,8 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
     cy.style().update();
     triggerCanvasRepaint(cy);
     rememberLayout(cy);
+    suppressLayoutReportRef.current = false;
+    scheduleLayoutReport(false);
     reportRendered(cy);
   }
 
@@ -864,7 +934,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
     setSelectedNodeId(undefined);
     setSelectedEdgeId(undefined);
     clearSelection(cy);
-    runFullLayout(cy);
+    runFullLayout(cy, true);
   }
 
   function handleSelectEdge(edgeId: string): void {

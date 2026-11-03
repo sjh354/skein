@@ -115,42 +115,67 @@ export function activate(context: vscode.ExtensionContext) {
       ...(editorEventsService?.register() ?? []),
     ];
 
-    // Register MCP server provider if a workspace folder is open
-    const workspaceFolder = resolvePreferredWorkspaceFolder();
-    if (workspaceFolder) {
-        mcpServerProvider = createMcpServerProvider(context.extensionUri, workspaceFolder);
-        const mcpDisposable = mcpServerProvider.register(context);
-        disposables.push(mcpDisposable);
-        context.subscriptions.push(mcpServerProvider);
-        provider.notifyMcpServerOfConfigChange = () => mcpServerProvider?.notifyChange();
-    } else {
-        log.info('No workspace folder open, MCP server not registered');
-    }
+    // Register MCP server provider and the shared view state when a workspace
+    // folder is available. Activation can run before the folder is known (the
+    // E2E and remote hosts hit this), so the same setup is retried when folders
+    // appear instead of staying off for the whole session.
+    let viewStateService: ViewStateService | null = null;
+    let viewStateStart: Promise<void> | null = null;
 
-    // Publish the graph tab state for the MCP server and apply its commands (DESIGN 10).
-    if (workspaceFolder) {
-        const viewStateService = new ViewStateService({
-            root: workspaceFolder.uri.fsPath,
-            logger: log,
-            host: {
-                read: () => provider.getViewStateSnapshot(),
-                select: async (nodeId) => callGraphViewService.selectNode(nodeId),
-                hasNode: (nodeId) => callGraphViewService.hasNode(nodeId),
-                focus: async (nodeId) => callGraphViewService.focusNode(nodeId),
-                setDepth: async (depth) => callGraphViewService.setDepth(depth),
-                openFile: (filePath, line, character) => provider.openFileAt(filePath, line, character),
-                setFilter: async (filterType, value, visible) =>
-                    callGraphViewService.setFilter(filterType, value, visible),
-                setExpandAll: (expandAll) => provider.setExpandAllState(expandAll),
-            },
-            onRestore: (snapshot) => callGraphViewService.restoreView(snapshot),
-        });
-        provider.setViewStateObserver((message) => viewStateService.observeWebviewCommand(message));
-        disposables.push(viewStateService);
-        void viewStateService.start().catch((err: unknown) => {
-            log.warn('View state publishing failed to start:', err);
-        });
-    }
+    const setupWorkspaceServices = (): void => {
+        const workspaceFolder = resolvePreferredWorkspaceFolder();
+        if (!workspaceFolder) return;
+
+        if (!mcpServerProvider) {
+            mcpServerProvider = createMcpServerProvider(context.extensionUri, workspaceFolder);
+            const mcpDisposable = mcpServerProvider.register(context);
+            disposables.push(mcpDisposable);
+            context.subscriptions.push(mcpServerProvider);
+            provider.notifyMcpServerOfConfigChange = () => mcpServerProvider?.notifyChange();
+        }
+
+        if (!viewStateService) {
+            viewStateService = new ViewStateService({
+                root: workspaceFolder.uri.fsPath,
+                logger: log,
+                host: {
+                    read: () => provider.getViewStateSnapshot(),
+                    select: async (nodeId) => callGraphViewService.selectNode(nodeId),
+                    hasNode: (nodeId) => callGraphViewService.hasNode(nodeId),
+                    focus: async (nodeId) => callGraphViewService.focusNode(nodeId),
+                    setDepth: async (depth) => callGraphViewService.setDepth(depth),
+                    openFile: (filePath, line, character) => provider.openFileAt(filePath, line, character),
+                    setFilter: async (filterType, value, visible) =>
+                        callGraphViewService.setFilter(filterType, value, visible),
+                    setExpandAll: (expandAll) => provider.setExpandAllState(expandAll),
+                },
+                onRestore: (snapshot, graphVersion) => {
+                    callGraphViewService.restoreView(snapshot, graphVersion);
+                    provider.restorePersistedView(snapshot);
+                },
+            });
+            provider.setViewStateObserver((message) => viewStateService?.observeWebviewCommand(message));
+            const service = viewStateService;
+            disposables.push(service);
+            viewStateStart = service.start().catch((err: unknown) => {
+                log.warn('View state publishing failed to start:', err);
+            });
+        }
+    };
+
+    setupWorkspaceServices();
+    disposables.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            setupWorkspaceServices();
+            const folder = resolvePreferredWorkspaceFolder();
+            const service = viewStateService;
+            if (folder && service) {
+                void (viewStateStart ?? Promise.resolve()).then(() =>
+                    service.setRoot(folder.uri.fsPath),
+                );
+            }
+        }),
+    );
 
     // Command: switch the workspace root the graph and MCP server analyze
     disposables.push(
@@ -182,6 +207,9 @@ export function activate(context: vscode.ExtensionContext) {
             if (mcpServerProvider) {
                 mcpServerProvider.updateWorkspaceFolder(pick.folder);
             }
+            // Move the shared state file to the newly selected area so its
+            // settings are restored independently (multi-root).
+            await viewStateService?.setRoot(pick.folder.uri.fsPath);
             await vscode.workspace.getConfiguration('skein').update(
                 'workspaceFolder', pick.folder.uri.fsPath, vscode.ConfigurationTarget.Workspace
             );

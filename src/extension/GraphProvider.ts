@@ -129,10 +129,14 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   /** What the graph tab currently shows, published to `.skein/state.json`. */
   public getViewStateSnapshot(): { snapshot: SkeinViewSnapshot; graphVersion: number } {
     const mode = this._stateManager.viewMode;
+    const views: NonNullable<SkeinViewSnapshot["views"]> = {};
+    const selectedSymbolId = this._stateManager.selectedSymbolId;
+    if (selectedSymbolId) views.symbol = { nodeId: selectedSymbolId };
     const snapshot: SkeinViewSnapshot = {
       mode,
       hiddenFilters: [],
       expandAll: this._graphState.getExpandAll(),
+      ...(Object.keys(views).length > 0 ? { views } : {}),
     };
     if (mode === "callgraph" && this._callGraphViewService) {
       const filePath = this._callGraphViewService.getViewedFilePath();
@@ -141,6 +145,8 @@ export class GraphProvider implements vscode.WebviewViewProvider {
       if (selection) snapshot.selection = selection;
       snapshot.callGraph = this._callGraphViewService.getViewSnapshot();
       snapshot.hiddenFilters = this._callGraphViewService.getHiddenFilters();
+      const layout = this._callGraphViewService.getLayout();
+      if (layout) snapshot.layout = layout;
     } else {
       const filePath = this._stateManager.currentFilePath;
       if (filePath) snapshot.filePath = filePath;
@@ -149,6 +155,19 @@ export class GraphProvider implements vscode.WebviewViewProvider {
       snapshot,
       graphVersion: this._callGraphViewService?.getCurrentGraphVersion() ?? 0,
     };
+  }
+
+  /** Applies the previous session's mode, file and symbol selection from state.json. */
+  public restorePersistedView(snapshot: SkeinViewSnapshot): void {
+    void this._stateManager
+      .setViewMode(snapshot.mode)
+      .then(() => this._updateViewModeContext())
+      .catch(() => undefined);
+    if (snapshot.filePath !== undefined) {
+      void this._stateManager.setCurrentFilePath(snapshot.filePath);
+    }
+    const symbolId = snapshot.views?.symbol?.nodeId;
+    if (symbolId) this._stateManager.selectedSymbolId = symbolId;
   }
 
   /** Opens a file at a position for an MCP-driven command. */
@@ -487,6 +506,8 @@ export class GraphProvider implements vscode.WebviewViewProvider {
       log.debug(`[GraphProvider] Symbol graph cache invalidated (${eventType}): ${filePath}`);
     }
     this.architectureViewService?.markStale(filePath, eventType);
+    // A file change invalidates the analysis behind every graph view.
+    this._callGraphViewService?.bumpGraphVersion();
     await this.eventHub?.handleFileChange(filePath, eventType);
   }
 
@@ -654,6 +675,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     targetViewMode?: "symbol" | "list",
   ): Promise<void> {
     if (this._isDisposing) return;
+    this._callGraphViewService?.bumpGraphVersion();
     const operation = this.performDrillDown(filePath, isRefresh, targetViewMode);
     this._activeDrillDowns.add(operation);
     void operation.finally(() => this._activeDrillDowns.delete(operation)).catch(() => {});
@@ -1035,6 +1057,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
    */
   public async forceReindex(): Promise<void> {
     await this.indexingManager?.forceReindex();
+    this._callGraphViewService?.bumpGraphVersion();
   }
 
   /**
@@ -1052,6 +1075,9 @@ export class GraphProvider implements vscode.WebviewViewProvider {
 
       log.info(`Refreshing current graph view: mode=${currentMode}, file=${currentFilePath}`);
       log.info(`currentSymbol=${this._stateManager.currentSymbol}`);
+      // Call-graph refreshes bump through their own re-render; every other mode
+      // still replaces the analysis the agent saw.
+      if (currentMode !== "callgraph") this._callGraphViewService?.bumpGraphVersion();
 
       if (currentMode === "architecture") {
         await this.architectureViewService?.build();

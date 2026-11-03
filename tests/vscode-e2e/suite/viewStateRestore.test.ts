@@ -78,19 +78,20 @@ suite('View State restore after restart (step 4, phase 2)', () => {
         s.updatedAt > marker.updatedAt &&
         s.callGraph?.depth === marker.depth &&
         hasFilter(s, 'nodeType', 'function') &&
-        s.selection?.nodeId === marker.rootId
+        s.selection?.nodeId === marker.rootId &&
+        s.graphVersion >= marker.graphVersion
           ? s
           : null,
       'restored state in the published snapshot',
     );
-    assert.strictEqual(state.schemaVersion, 1);
+    assert.strictEqual(state.schemaVersion, 2);
     assert.strictEqual(state.workspaceRoot, workspaceRoot);
+    assert.ok(state.layout && Object.keys(state.layout.positions).length > 0, 'layout persisted');
     console.log(
       `[viewstate][restore] before reopening: mode=${state.mode} depth=${state.callGraph.depth} ` +
-        `filters=${JSON.stringify(state.hiddenFilters)} selection=${state.selection.nodeId}`,
+        `filters=${JSON.stringify(state.hiddenFilters)} selection=${state.selection.nodeId} ` +
+        `graphVersion=${state.graphVersion} layoutNodes=${Object.keys(state.layout.positions).length}`,
     );
-    // Known gap for the next step: the analysis version restarts at 0.
-    console.log(`[viewstate][known-gap] graphVersion after restart=${state.graphVersion} (phase 1 was ${marker.graphVersion})`);
   });
 
   test('Reopened call graph restores depth, filters and selection', async function () {
@@ -108,10 +109,14 @@ suite('View State restore after restart (step 4, phase 2)', () => {
     );
     const nodeCount = (await getContextKey<number>('skein.callGraphNodeCount')) ?? 0;
     assert.ok(nodeCount > 0, 'the graph rendered nodes after restart');
+    assert.ok(
+      state.layout && Object.keys(state.layout.positions).length > 0,
+      'the saved layout is still published after the graph reopens',
+    );
     console.log(
       `[viewstate][restore] reopened: depth=${state.callGraph.depth} filters=${JSON.stringify(state.hiddenFilters)} ` +
-        `selection=${state.selection.nodeId} nodes=${nodeCount} graphVersion=${state.graphVersion}`,
+        `selection=${state.selection.nodeId} nodes=${nodeCount} graphVersion=${state.graphVersion} ` +
+        `layoutNodes=${Object.keys(state.layout.positions).length}`,
     );
-    console.log('[viewstate][known-gap] node positions and viewport zoom are not persisted (not in state.json)');
   });
 });
