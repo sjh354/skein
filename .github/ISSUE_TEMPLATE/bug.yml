@@ -48,7 +48,7 @@ body:
         // a.ts
         export function f() {}
         ```
-        `graph-it tool query_call_graph --filePath=<abs>/a.ts --symbolName=f`
+        `skein_query_call_graph({ filePath: "<abs>/a.ts", symbolName: "f" })`
     validations:
       required: true
   - type: textarea

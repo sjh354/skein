@@ -6,6 +6,7 @@
 .venv/**
 .env/**
 .graph-it/**
+.skein/**
 .obsidian/**
 .code-review-graph/**
 .qoder/**
@@ -124,3 +125,6 @@ wiki/**
 # OS files
 .DS_Store
 **/.DS_Store
+
+# Removed call-graph webview bundle (now part of webview.js)
+dist/callgraph.js
