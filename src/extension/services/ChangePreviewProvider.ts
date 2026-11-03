@@ -26,8 +26,22 @@ export class ChangePreviewProvider implements vscode.TextDocumentContentProvider
 
   /** Registers the planned content and returns the URI to diff against. */
   set(planId: string, filePath: string, content: string): vscode.Uri {
+    return this.setSide(planId, filePath, "after", content);
+  }
+
+  /** Registers the before content of a file that does not exist yet. */
+  setBefore(planId: string, filePath: string, content: string): vscode.Uri {
+    return this.setSide(planId, filePath, "before", content);
+  }
+
+  private setSide(
+    planId: string,
+    filePath: string,
+    side: "before" | "after",
+    content: string,
+  ): vscode.Uri {
     const uri = vscode.Uri.parse(
-      `${ChangePreviewProvider.scheme}:/${encodeURIComponent(filePath)}?plan=${encodeURIComponent(planId)}`,
+      `${ChangePreviewProvider.scheme}:/${encodeURIComponent(filePath)}?plan=${encodeURIComponent(planId)}&side=${side}`,
     );
     this.contents.set(uri.toString(), content);
     return uri;

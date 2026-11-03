@@ -3,7 +3,13 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ChangeService, describeReason } from "@/extension/services/ChangeService";
-import type { ChangeEditorHost, RenameFailure, RenameResolution } from "@/extension/services/changeHost";
+import type {
+  ChangeEditorHost,
+  ChangeReferenceLocation,
+  ChangeSymbolInfo,
+  RenameFailure,
+  RenameResolution,
+} from "@/extension/services/changeHost";
 import { HistoryError, HistoryRepo } from "@/analyzer/change/historyRepo";
 import { fileAfterContent } from "@/analyzer/change/changePlan";
 import {
@@ -25,12 +31,23 @@ class FakeHost implements ChangeEditorHost {
   diagnosticsByPath = new Map<string, ChangeDiagnosticSample>();
   resolution: RenameResolution = { files: [] };
   resolveFailure: RenameFailure | null = null;
+  symbols = new Map<string, ChangeSymbolInfo[]>();
+  references = new Map<string, ChangeReferenceLocation[] | { error: string }>();
   previewCount = 0;
   appliedCount = 0;
   waitCount = 0;
 
   async resolveRename(): Promise<RenameResolution | RenameFailure> {
     return this.resolveFailure ?? this.resolution;
+  }
+  async listSymbols(filePath: string) {
+    if (this.symbols.has(filePath)) return { symbols: this.symbols.get(filePath)! };
+    return { error: "symbol-lookup-failed" };
+  }
+  async findReferences(_filePath: string, symbol: ChangeSymbolInfo) {
+    const value = this.references.get(symbol.name);
+    if (value === undefined) return { references: [] };
+    return "error" in value ? value : { references: value };
   }
   async readSavedContent(filePath: string): Promise<string | null> {
     try {
@@ -39,12 +56,25 @@ class FakeHost implements ChangeEditorHost {
       return null;
     }
   }
+  async exists(filePath: string): Promise<boolean> {
+    try {
+      await fs.stat(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   isDirty(filePath: string): boolean {
     return this.dirty.has(filePath);
   }
   async applyEdits(files: ChangeFileEdit[]): Promise<{ ok: true } | { ok: false; reason: string }> {
     this.appliedCount += 1;
     for (const file of files) {
+      if (file.delete) {
+        await fs.rm(file.path, { force: true });
+        this.files.delete(file.path);
+        continue;
+      }
       const before = this.files.get(file.path) ?? file.beforeContent;
       const after = applyTextEdits(before, file.edits);
       if (after === null) return { ok: false, reason: "invalid-edit" };
@@ -406,6 +436,138 @@ describe("ChangeService", () => {
     });
     expect(result.status).toBe("error");
     expect(result.reason).toBe("boom");
+  });
+
+  it("moves a symbol to a new file, records creation and restores it on undo", async () => {
+    const movedPath = path.join(root, "src", "moved.ts");
+    const app = [
+      "export function alpha(x: number) {",
+      "  return helper(x);",
+      "}",
+      "",
+      "export function helper(x: number) {",
+      "  return x + 1;",
+      "}",
+      "",
+      "export function beta() {",
+      "  return helper(1);",
+      "}",
+      "",
+    ].join("\n");
+    const other = 'import { alpha } from "./app";\n\nexport const value = alpha(1);\n';
+    await fs.writeFile(appPath, app, "utf8");
+    await fs.writeFile(otherPath, other, "utf8");
+    host.files.set(appPath, app);
+    host.files.set(otherPath, other);
+    host.symbols.set(appPath, [
+      { name: "alpha", kind: "function", startLine: 0, startCharacter: 0, endLine: 2, endCharacter: 2, selectionLine: 0, selectionCharacter: 16, isExported: true },
+      { name: "helper", kind: "function", startLine: 4, startCharacter: 0, endLine: 6, endCharacter: 2, selectionLine: 4, selectionCharacter: 16, isExported: true },
+      { name: "beta", kind: "function", startLine: 8, startCharacter: 0, endLine: 10, endCharacter: 2, selectionLine: 8, selectionCharacter: 16, isExported: true },
+    ]);
+    host.symbols.set(otherPath, []);
+    host.references.set("alpha", [
+      { path: appPath, line: 0, character: 16 },
+      { path: otherPath, line: 0, character: 9 },
+      { path: otherPath, line: 2, character: 21 },
+    ]);
+    host.references.set("helper", [
+      { path: appPath, line: 1, character: 9 },
+      { path: appPath, line: 9, character: 9 },
+    ]);
+
+    const planned = await service.planMove({
+      nodeId: `${appPath}:alpha:0`,
+      newPath: movedPath,
+      source: "mcp",
+      graphVersion: 2,
+    });
+    expect(planned.ok).toBe(true);
+    const task = planned.task!;
+    expect(task.plan.kind).toBe("move");
+    expect(task.plan.files.find((file) => file.path === movedPath)?.beforeContent).toBe("");
+
+    const applied = await service.apply(task.plan.id);
+    expect(applied.ok).toBe(true);
+    expect(applied.history?.files.find((file) => file.path === movedPath)?.change).toBe("created");
+    expect(await fs.readFile(movedPath, "utf8")).toContain('import { helper } from "./app";');
+    expect(await fs.readFile(movedPath, "utf8")).toContain("export function alpha");
+    expect(await fs.readFile(appPath, "utf8")).not.toContain("function alpha");
+    expect(await fs.readFile(otherPath, "utf8")).toContain('from "./moved"');
+
+    const undone = await service.undo();
+    expect(undone.ok).toBe(true);
+    await expect(fs.stat(movedPath)).rejects.toThrow();
+    expect(await fs.readFile(appPath, "utf8")).toContain("function alpha");
+    expect(await fs.readFile(otherPath, "utf8")).toContain('from "./app"');
+
+    const redone = await service.redo();
+    expect(redone.ok).toBe(true);
+    expect(await fs.readFile(movedPath, "utf8")).toContain("function alpha");
+  });
+
+  it("extracts a selected expression and applies the plan", async () => {
+    const content = [
+      "function outer(a: number) {",
+      "  const b = 2;",
+      "  const sum = a + b;",
+      "  return sum;",
+      "}",
+      "",
+    ].join("\n");
+    await fs.writeFile(appPath, content, "utf8");
+    host.files.set(appPath, content);
+    host.symbols.set(appPath, [
+      { name: "outer", kind: "function", startLine: 0, startCharacter: 0, endLine: 4, endCharacter: 1, selectionLine: 0, selectionCharacter: 9, isExported: false },
+    ]);
+    const planned = await service.planExtract({
+      path: appPath,
+      selection: { startLine: 2, startCharacter: 14, endLine: 2, endCharacter: 19 },
+      name: "extracted",
+      source: "ui",
+      graphVersion: 1,
+    });
+    expect(planned.ok).toBe(true);
+    const applied = await service.apply(planned.task!.plan.id);
+    expect(applied.ok).toBe(true);
+    const after = await fs.readFile(appPath, "utf8");
+    expect(after).toContain("const sum = extracted(a, b);");
+    expect(after).toContain("function extracted(a, b)");
+  });
+
+  it("inlines a function at every call site", async () => {
+    const content = [
+      "function twice(x: number) {",
+      "  return x * 2;",
+      "}",
+      "",
+      "const a = twice(1);",
+      "const b = twice(a + 1);",
+      "",
+    ].join("\n");
+    await fs.writeFile(appPath, content, "utf8");
+    host.files.set(appPath, content);
+    host.symbols.set(appPath, [
+      { name: "twice", kind: "function", startLine: 0, startCharacter: 0, endLine: 2, endCharacter: 1, selectionLine: 0, selectionCharacter: 9, isExported: false },
+    ]);
+    host.references.set("twice", [
+      { path: appPath, line: 0, character: 9 },
+      { path: appPath, line: 4, character: 10 },
+      { path: appPath, line: 5, character: 10 },
+    ]);
+    const planned = await service.planInline({
+      path: appPath,
+      name: "twice",
+      line: 0,
+      source: "mcp",
+      graphVersion: 1,
+    });
+    expect(planned.ok).toBe(true);
+    const applied = await service.apply(planned.task!.plan.id);
+    expect(applied.ok).toBe(true);
+    const after = await fs.readFile(appPath, "utf8");
+    expect(after).not.toContain("function twice");
+    expect(after).toContain("const a = ((1) * 2);");
+    expect(after).toContain("const b = ((a + 1) * 2);");
   });
 
   it("follows the active workspace area", async () => {

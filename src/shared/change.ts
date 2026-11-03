@@ -45,19 +45,55 @@ export interface ChangeFileEdit {
   /** Full saved content the edits were computed against. */
   beforeContent: string;
   edits: ChangeTextEdit[];
+  /** The plan removes this file instead of writing content. */
+  delete?: boolean;
 }
 
-export type ChangeKind = "rename" | "undo" | "redo";
+export type ChangeKind =
+  | "rename"
+  | "move"
+  | "extract"
+  | "inline"
+  | "undo"
+  | "redo";
 export type ChangeRequestSource = "ui" | "mcp";
+
+export interface ChangeSelectionRange {
+  startLine: number;
+  startCharacter: number;
+  endLine: number;
+  endCharacter: number;
+}
 
 export interface ChangeTarget {
   nodeId?: string;
   name: string;
-  newName: string;
+  /** Rename destination name; absent for move/extract/inline. */
+  newName?: string;
   path: string;
   /** 0-based line of the declaration. */
   line: number;
   character?: number;
+  /** Move destination file. */
+  newPath?: string;
+  /** Selected source range for an extract. */
+  selection?: ChangeSelectionRange;
+  /** Chosen call site for an inline; absent means every call. */
+  callLine?: number;
+  callCharacter?: number;
+}
+
+/** One evidence-backed decision of the move bundle rule engine (DESIGN 8.3). */
+export interface ChangeBundleDecision {
+  name: string;
+  decision: "moved" | "kept" | "blocked";
+  reason: string;
+}
+
+export interface ChangeAnalysis {
+  language?: string;
+  bundle?: ChangeBundleDecision[];
+  notes?: string[];
 }
 
 export type ChangeTaskStatus =
@@ -120,6 +156,8 @@ export interface ChangePlan {
   historyTargetId?: string;
   files: ChangeFileEdit[];
   fingerprint: ChangeFingerprint;
+  /** Rule-engine evidence for a move (DESIGN 8.3). */
+  analysis?: ChangeAnalysis;
 }
 
 export interface ChangeTask {
@@ -311,7 +349,14 @@ const TASK_STATUSES: ReadonlySet<string> = new Set<ChangeTaskStatus>([
   "cancelled",
 ]);
 
-const KINDS: ReadonlySet<string> = new Set<ChangeKind>(["rename", "undo", "redo"]);
+const KINDS: ReadonlySet<string> = new Set<ChangeKind>([
+  "rename",
+  "move",
+  "extract",
+  "inline",
+  "undo",
+  "redo",
+]);
 
 function parseTextEdit(value: unknown): ChangeTextEdit | null {
   if (!isRecord(value)) return null;
@@ -342,7 +387,13 @@ function parseFileEdit(value: unknown): ChangeFileEdit | null {
     if (!edit) return null;
     edits.push(edit);
   }
-  return { path: normalizePath(value.path), beforeContent: value.beforeContent, edits };
+  const file: ChangeFileEdit = {
+    path: normalizePath(value.path),
+    beforeContent: value.beforeContent,
+    edits,
+  };
+  if (value.delete === true) file.delete = true;
+  return file;
 }
 
 function parseFileState(value: unknown): ChangeFileState | null {
@@ -353,19 +404,67 @@ function parseFileState(value: unknown): ChangeFileState | null {
   return { path: normalizePath(value.path), exists: value.exists, sha256: value.sha256 };
 }
 
+function parseSelection(value: unknown): ChangeSelectionRange | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    !isFiniteNumber(value.startLine) ||
+    !isFiniteNumber(value.startCharacter) ||
+    !isFiniteNumber(value.endLine) ||
+    !isFiniteNumber(value.endCharacter)
+  ) {
+    return undefined;
+  }
+  return {
+    startLine: value.startLine,
+    startCharacter: value.startCharacter,
+    endLine: value.endLine,
+    endCharacter: value.endCharacter,
+  };
+}
+
 function parseTarget(value: unknown): ChangeTarget | undefined {
   if (!isRecord(value)) return undefined;
-  if (typeof value.name !== "string" || typeof value.newName !== "string") return undefined;
+  if (typeof value.name !== "string") return undefined;
   if (typeof value.path !== "string" || !isFiniteNumber(value.line)) return undefined;
   const target: ChangeTarget = {
     name: value.name,
-    newName: value.newName,
     path: normalizePath(value.path),
     line: value.line,
   };
+  if (typeof value.newName === "string") target.newName = value.newName;
   if (typeof value.nodeId === "string") target.nodeId = value.nodeId;
   if (isFiniteNumber(value.character)) target.character = value.character;
+  if (typeof value.newPath === "string") target.newPath = normalizePath(value.newPath);
+  if (isFiniteNumber(value.callLine)) target.callLine = value.callLine;
+  if (isFiniteNumber(value.callCharacter)) target.callCharacter = value.callCharacter;
+  const selection = parseSelection(value.selection);
+  if (selection) target.selection = selection;
   return target;
+}
+
+function parseBundle(value: unknown): ChangeAnalysis | undefined {
+  if (!isRecord(value)) return undefined;
+  const analysis: ChangeAnalysis = {};
+  if (typeof value.language === "string") analysis.language = value.language;
+  if (Array.isArray(value.bundle)) {
+    const bundle: ChangeBundleDecision[] = [];
+    for (const item of value.bundle) {
+      if (!isRecord(item) || typeof item.name !== "string") continue;
+      const decision = item.decision;
+      if (decision !== "moved" && decision !== "kept" && decision !== "blocked") continue;
+      bundle.push({
+        name: item.name,
+        decision,
+        reason: typeof item.reason === "string" ? item.reason : "",
+      });
+    }
+    if (bundle.length > 0) analysis.bundle = bundle;
+  }
+  if (Array.isArray(value.notes)) {
+    const notes = value.notes.filter((item): item is string => typeof item === "string");
+    if (notes.length > 0) analysis.notes = notes;
+  }
+  return Object.keys(analysis).length > 0 ? analysis : undefined;
 }
 
 function parseFingerprint(value: unknown): ChangeFingerprint | null {
@@ -460,6 +559,8 @@ export function parseChangeTask(raw: string): ChangeTask | null {
   const target = parseTarget(plan.target);
   if (target) changePlan.target = target;
   if (typeof plan.historyTargetId === "string") changePlan.historyTargetId = plan.historyTargetId;
+  const analysis = parseBundle(plan.analysis);
+  if (analysis) changePlan.analysis = analysis;
 
   const task: ChangeTask = {
     schemaVersion: isFiniteNumber(parsed.schemaVersion)
@@ -640,7 +741,13 @@ export function findUndoCandidate(
 export function canUndo(entry: ChangeHistoryEntry, index: ChangeHistoryIndex): boolean {
   if (index.entries[index.entries.length - 1]?.id !== entry.id) return false;
   if (entry.status === "apply-failed") return false;
-  return entry.kind === "rename" || entry.kind === "redo";
+  return (
+    entry.kind === "rename" ||
+    entry.kind === "move" ||
+    entry.kind === "extract" ||
+    entry.kind === "inline" ||
+    entry.kind === "redo"
+  );
 }
 
 /** The newest entry can be redone when it is an applied undo. */
@@ -664,15 +771,22 @@ export function canRedo(entry: ChangeHistoryEntry, index: ChangeHistoryIndex): b
 // Command queue (same directory as the view-state commands, different `kind`)
 // ---------------------------------------------------------------------------
 
+export type SkeinChangePlanKind = "rename" | "move" | "extract" | "inline";
+
 export type SkeinChangeAction =
   | {
       action: "change_plan";
-      kind: "rename";
+      kind: SkeinChangePlanKind;
       nodeId?: string;
       path?: string;
       name?: string;
       line?: number;
-      newName: string;
+      newName?: string;
+      /** Move destination file. */
+      newPath?: string;
+      selection?: ChangeSelectionRange;
+      callLine?: number;
+      callCharacter?: number;
     }
   | { action: "change_apply"; planId: string }
   | { action: "change_undo"; historyId?: string }
@@ -722,13 +836,32 @@ function parseChangeAction(value: unknown): SkeinChangeAction | null {
   if (!isRecord(value) || typeof value.action !== "string") return null;
   switch (value.action) {
     case "change_plan": {
-      if (value.kind !== "rename") return null;
-      if (typeof value.newName !== "string" || value.newName.length === 0) return null;
-      const action: SkeinChangeAction = { action: "change_plan", kind: "rename", newName: value.newName };
+      if (
+        value.kind !== "rename" &&
+        value.kind !== "move" &&
+        value.kind !== "extract" &&
+        value.kind !== "inline"
+      ) {
+        return null;
+      }
+      const action: SkeinChangeAction = { action: "change_plan", kind: value.kind };
       if (typeof value.nodeId === "string" && value.nodeId.length > 0) action.nodeId = value.nodeId;
       if (typeof value.path === "string" && value.path.length > 0) action.path = value.path;
       if (typeof value.name === "string" && value.name.length > 0) action.name = value.name;
+      if (typeof value.newName === "string" && value.newName.length > 0) action.newName = value.newName;
+      if (typeof value.newPath === "string" && value.newPath.length > 0) action.newPath = value.newPath;
       if (isFiniteNumber(value.line)) action.line = value.line;
+      if (isFiniteNumber(value.callLine)) action.callLine = value.callLine;
+      if (isFiniteNumber(value.callCharacter)) action.callCharacter = value.callCharacter;
+      const selection = parseSelection(value.selection);
+      if (selection) action.selection = selection;
+
+      if (action.kind === "rename" && !action.newName) return null;
+      if (action.kind === "move" && !action.newPath) return null;
+      if (action.kind === "extract") {
+        if (!action.path || !action.name || !selection) return null;
+        return action;
+      }
       if (!action.nodeId && (!action.path || !action.name || action.line === undefined)) return null;
       return action;
     }

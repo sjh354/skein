@@ -161,6 +161,63 @@ describe("MCP change tools", () => {
     expect(files.filter((name) => name.endsWith(".request.json"))).toEqual([]);
   });
 
+  it("queues move, extract and inline plans with their parameters", async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    respondWith((request) => {
+      seen.push(request!.command as unknown as Record<string, unknown>);
+      return {
+        id: request!.id,
+        status: "applied",
+        completedAt: Date.now(),
+        task: task("plan-1"),
+      };
+    });
+    await executePlanChange(root, {
+      kind: "move",
+      path: path.join(root, FILE),
+      name: "alpha",
+      line: 0,
+      newPath: path.join(root, "src/moved.ts"),
+    });
+    await executePlanChange(root, {
+      kind: "extract",
+      path: path.join(root, FILE),
+      name: "extracted",
+      startLine: 0,
+      startCharacter: 0,
+      endLine: 0,
+      endCharacter: 5,
+    });
+    await executePlanChange(root, {
+      kind: "inline",
+      path: path.join(root, FILE),
+      name: "alpha",
+      line: 0,
+      callLine: 2,
+      callCharacter: 10,
+    });
+    expect(seen[0]).toMatchObject({
+      kind: "move",
+      newPath: path.join(root, "src/moved.ts"),
+    });
+    expect(seen[1]).toMatchObject({
+      kind: "extract",
+      selection: { startLine: 0, startCharacter: 0, endLine: 0, endCharacter: 5 },
+    });
+    expect(seen[2]).toMatchObject({ kind: "inline", callLine: 2, callCharacter: 10 });
+  });
+
+  it("rejects a move destination outside the workspace", async () => {
+    const result = await executePlanChange(root, {
+      kind: "move",
+      path: path.join(root, FILE),
+      name: "alpha",
+      line: 0,
+      newPath: "/elsewhere/moved.ts",
+    });
+    expect(result).toMatchObject({ applied: false, reason: "path-outside-workspace" });
+  });
+
   it("applies, undoes and redoes through the queue", async () => {
     const entry = historyEntry();
     respondWith((request) => ({

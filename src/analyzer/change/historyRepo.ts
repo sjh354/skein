@@ -86,7 +86,30 @@ export class HistoryRepo {
     const relative = paths.map((filePath) => this.relativePath(filePath));
     if (relative.length === 0) throw new HistoryError("no-paths", "No files to record");
     try {
-      await this.run(["add", "--all", "--force", "--", ...relative]);
+      // A file created by this plan does not exist yet; a deleted file is no
+      // longer on disk but is still tracked, so include it to stage the
+      // deletion. Paths that match neither would make `git add` fail.
+      const stageable: string[] = [];
+      /* eslint-disable no-await-in-loop -- inspect each planned path */
+      for (const item of relative) {
+        try {
+          await fs.access(path.resolve(this.root, item));
+          stageable.push(item);
+          continue;
+        } catch {
+          // not on disk; stage it only when the internal repository tracks it
+        }
+        try {
+          await this.run(["ls-files", "--error-unmatch", "--", item]);
+          stageable.push(item);
+        } catch {
+          // never existed in this history
+        }
+      }
+      /* eslint-enable no-await-in-loop */
+      if (stageable.length > 0) {
+        await this.run(["add", "--all", "--force", "--", ...stageable]);
+      }
       await this.run([
         "commit",
         "--quiet",

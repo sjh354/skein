@@ -120,6 +120,19 @@ vi.mock("vscode", () => {
           if (text === undefined) throw { code: "FileNotFound" };
           return Buffer.from(text, "utf8");
         },
+        async stat(uri: { fsPath: string }) {
+          if (!state.docs.has(uri.fsPath)) throw { code: "FileNotFound" };
+          return {};
+        },
+        async writeFile(uri: { fsPath: string }, bytes: Uint8Array) {
+          state.docs.set(uri.fsPath, Buffer.from(bytes).toString("utf8"));
+        },
+        async delete(uri: { fsPath: string }) {
+          state.docs.delete(uri.fsPath);
+        },
+        async createDirectory() {
+          return undefined;
+        },
       },
       get textDocuments() {
         return [...state.docs.keys()].map(documentFor);

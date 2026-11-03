@@ -47,16 +47,34 @@ const TimeoutSchema = z
   .describe(`How long to wait for the extension (default ${CHANGE_RESULT_TIMEOUT_MS} ms).`);
 
 export const PlanChangeSchema = z.object({
-  kind: z.literal("rename").describe("Change kind. Step 5 supports rename."),
+  kind: z
+    .enum(["rename", "move", "extract", "inline"])
+    .describe("Change kind: rename, move, extract or inline."),
   nodeId: z
     .string()
     .min(1)
     .optional()
     .describe("Call graph node id from get_view_state, in the form <path>:<symbol>:<startLine>."),
   path: z.string().min(1).optional().describe("Absolute file path when nodeId is not available."),
-  name: z.string().min(1).optional().describe("Current symbol name, with path and line."),
+  name: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Current symbol name, or the new function name for extract."),
   line: z.number().int().min(0).optional().describe("0-based declaration line, with path and name."),
-  newName: z.string().min(1).describe("New symbol name."),
+  newName: z.string().min(1).optional().describe("New symbol name (rename)."),
+  newPath: z.string().min(1).optional().describe("Destination file path (move)."),
+  startLine: z.number().int().min(0).optional().describe("Selection start line (extract)."),
+  startCharacter: z.number().int().min(0).optional().describe("Selection start character (extract)."),
+  endLine: z.number().int().min(0).optional().describe("Selection end line (extract)."),
+  endCharacter: z.number().int().min(0).optional().describe("Selection end character (extract)."),
+  callLine: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Call site line to inline; omit to inline every call site."),
+  callCharacter: z.number().int().min(0).optional().describe("Call site character with callLine."),
   timeoutMs: TimeoutSchema,
 });
 
@@ -193,6 +211,40 @@ export async function executePlanChange(
   params: PlanChangeParams,
 ): Promise<ChangeToolResult> {
   if (!rootDir) return { applied: false, status: "error", reason: "workspace-not-configured" };
+
+  if (params.kind === "extract") {
+    if (
+      !params.path ||
+      !params.name ||
+      params.startLine === undefined ||
+      params.startCharacter === undefined ||
+      params.endLine === undefined ||
+      params.endCharacter === undefined
+    ) {
+      return {
+        applied: false,
+        status: "error",
+        reason: "extract requires path, name and the selection range",
+      };
+    }
+    if (!isPathWithinRoot(params.path, rootDir)) {
+      return { applied: false, status: "error", reason: "path-outside-workspace" };
+    }
+    const action: SkeinChangeAction = {
+      action: "change_plan",
+      kind: "extract",
+      path: params.path,
+      name: params.name,
+      selection: {
+        startLine: params.startLine,
+        startCharacter: params.startCharacter,
+        endLine: params.endLine,
+        endCharacter: params.endCharacter,
+      },
+    };
+    return toToolResult(await queueChange(rootDir, action, params.timeoutMs));
+  }
+
   if (!params.nodeId) {
     if (!params.path || !params.name || params.line === undefined) {
       return {
@@ -205,15 +257,30 @@ export async function executePlanChange(
       return { applied: false, status: "error", reason: "path-outside-workspace" };
     }
   }
+  if (params.kind === "rename" && !params.newName) {
+    return { applied: false, status: "error", reason: "rename requires newName" };
+  }
+  if (params.kind === "move") {
+    if (!params.newPath) {
+      return { applied: false, status: "error", reason: "move requires newPath" };
+    }
+    if (!isPathWithinRoot(params.newPath, rootDir)) {
+      return { applied: false, status: "error", reason: "path-outside-workspace" };
+    }
+  }
+
   const action: SkeinChangeAction = {
     action: "change_plan",
-    kind: "rename",
-    newName: params.newName,
+    kind: params.kind,
   };
   if (params.nodeId) action.nodeId = params.nodeId;
   if (params.path) action.path = params.path;
   if (params.name) action.name = params.name;
   if (params.line !== undefined) action.line = params.line;
+  if (params.newName) action.newName = params.newName;
+  if (params.newPath) action.newPath = params.newPath;
+  if (params.callLine !== undefined) action.callLine = params.callLine;
+  if (params.callCharacter !== undefined) action.callCharacter = params.callCharacter;
   const result = await queueChange(rootDir, action, params.timeoutMs);
   return toToolResult(result);
 }

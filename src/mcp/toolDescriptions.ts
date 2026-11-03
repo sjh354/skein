@@ -395,12 +395,12 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
   },
   plan_change: {
     summary:
-      "Plans a symbol rename against the saved code and returns a plan id and diff without modifying files.",
+      "Plans a rename, move, extract or inline change against the saved code and returns a plan id and diff without modifying files.",
     lines: [
-      "WHEN: the user asked to rename a symbol and wants to inspect the change before it is applied.",
-      "WHY: the rename comes from the workspace's language service (TypeScript or the installed Dart extension). The plan records the exact saved content it was computed against, so applying later cannot silently rename a different version of the file.",
+      "WHEN: the user asked to rename/move a symbol, extract a selected range into a function, or inline a function, and wants to inspect the change before applying it.",
+      "WHY: rename comes from the workspace's language service; move uses a deterministic rule engine that moves helper symbols only when every reference stays inside the bundle, keeps public symbols and shared helpers in place, updates imports and creates a new file when needed; extract derives parameters from the enclosing function; inline replaces every call of a single-expression function. The plan records the exact saved content it was computed against.",
       "RETURNS: applied/status/reason, a plan summary (planId, target, files, added/removed lines) and a unified diff capped at 12000 characters.",
-      "LIMITS: one change at a time; a dirty editor for a touched file is rejected with unsaved-changes. An unsupported language returns rename-provider-unavailable instead of a guessed rename.",
+      "LIMITS: one change at a time; a dirty editor for a touched file is rejected with unsaved-changes. Move blocks entry points, unresolved references/imports, name collisions, circular imports and Dart private helpers. Inline only supports non-exported, non-async, single-expression top-level functions used inside their own file. Unsupported cases return an explicit reason instead of a guessed edit.",
     ],
   },
   apply_change: {

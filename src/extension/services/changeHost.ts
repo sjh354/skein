@@ -12,6 +12,7 @@ import type {
   ChangeTextEdit,
 } from "@/shared/change";
 import type { ChangePreviewFile } from "@/analyzer/change/changePlan";
+import type { RefactorReference, RefactorSymbol } from "@/analyzer/change/refactor";
 
 export interface RawRenameEdit {
   path: string;
@@ -31,6 +32,16 @@ export type RenameFailure = {
   message?: string;
 };
 
+export type ChangeSymbolInfo = RefactorSymbol;
+export type ChangeReferenceLocation = RefactorReference;
+export type ChangeSymbolLookup =
+  | { symbols: ChangeSymbolInfo[] }
+  | { error: string; message?: string };
+
+export type ChangeReferenceLookup =
+  | { references: ChangeReferenceLocation[] }
+  | { error: string; message?: string };
+
 export interface ChangeEditorHost {
   /** Asks the language service for all edits of a symbol rename. */
   resolveRename(input: {
@@ -39,8 +50,14 @@ export interface ChangeEditorHost {
     line: number;
     newName: string;
   }): Promise<RenameResolution | RenameFailure>;
+  /** Top-level and nested document symbols with declaration ranges. */
+  listSymbols(path: string): Promise<ChangeSymbolLookup>;
+  /** Resolved references of a symbol, including import/export specifiers. */
+  findReferences(path: string, symbol: ChangeSymbolInfo): Promise<ChangeReferenceLookup>;
   /** Saved (not editor-buffer) content, or null when the file is missing. */
   readSavedContent(path: string): Promise<string | null>;
+  /** True when the saved file exists, so an unreadable file is not treated as new. */
+  exists(path: string): Promise<boolean>;
   /** True when the file has unsaved editor changes. */
   isDirty(path: string): boolean;
   /** Applies the text edits to the workspace and saves the files. */

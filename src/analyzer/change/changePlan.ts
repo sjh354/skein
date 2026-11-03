@@ -17,6 +17,7 @@ import type {
   ChangeTextEdit,
   ChangeKind,
   ChangeFileChange,
+  ChangeAnalysis,
 } from "@/shared/change";
 import {
   applyTextEdits,
@@ -29,6 +30,10 @@ import { diffLines, type LineDiff } from "./lineDiff";
 export interface RawFileEdit {
   path: string;
   edits: ChangeTextEdit[];
+  /** The file does not exist yet; its before state is an empty file. */
+  create?: boolean;
+  /** Remove the file instead of writing it. */
+  delete?: boolean;
 }
 
 export interface BuildChangePlanInput {
@@ -42,6 +47,7 @@ export interface BuildChangePlanInput {
   files: RawFileEdit[];
   target?: ChangeTarget;
   historyTargetId?: string;
+  analysis?: ChangeAnalysis;
   now?: number;
 }
 
@@ -50,6 +56,10 @@ export interface ChangePreviewFile {
   beforeContent: string;
   afterContent: string;
   diff: LineDiff;
+  /** The planned file state is "deleted". */
+  deleted?: boolean;
+  /** The planned file state is "created". */
+  created?: boolean;
 }
 
 export type ChangeFileKind = ChangeFileChange;
@@ -72,20 +82,35 @@ export function buildChangePlan(input: BuildChangePlanInput): BuildChangePlanRes
     if (isProtectedChangePath(filePath, input.root)) {
       return { ok: false, reason: "path-not-allowed" };
     }
-    const beforeContent = input.contents.get(filePath);
+    const knownContent = input.contents.get(filePath);
+    const beforeContent = raw.create ? (knownContent ?? "") : knownContent;
     if (beforeContent === undefined) return { ok: false, reason: "file-not-readable" };
-    const afterContent = applyTextEdits(beforeContent, raw.edits);
-    if (afterContent === null) return { ok: false, reason: "invalid-edit" };
+    if (raw.delete && raw.create) return { ok: false, reason: "invalid-edit" };
+    const afterContent = raw.delete ? null : applyTextEdits(beforeContent, raw.edits);
+    if (!raw.delete && afterContent === null) return { ok: false, reason: "invalid-edit" };
     const beforeHash = hashContent(beforeContent);
-    if (afterContent === beforeContent) continue;
-    changedFiles.push({ path: filePath, beforeContent, edits: raw.edits.map((edit) => ({ ...edit })) });
-    fingerprintFiles.push({ path: filePath, exists: true, sha256: beforeHash });
-    preview.push({
+    if (!raw.delete && afterContent === beforeContent) continue;
+    const fileEdit: ChangeFileEdit = {
       path: filePath,
       beforeContent,
-      afterContent,
-      diff: diffLines(beforeContent, afterContent),
+      edits: raw.delete ? [] : raw.edits.map((edit) => ({ ...edit })),
+    };
+    if (raw.delete) fileEdit.delete = true;
+    changedFiles.push(fileEdit);
+    fingerprintFiles.push({
+      path: filePath,
+      exists: !raw.create,
+      sha256: raw.create ? null : beforeHash,
     });
+    const previewFile: ChangePreviewFile = {
+      path: filePath,
+      beforeContent,
+      afterContent: afterContent ?? "",
+      diff: diffLines(beforeContent, afterContent ?? ""),
+    };
+    if (raw.delete) previewFile.deleted = true;
+    if (raw.create) previewFile.created = true;
+    preview.push(previewFile);
   }
 
   if (changedFiles.length === 0) return { ok: false, reason: "no-changes" };
@@ -102,11 +127,13 @@ export function buildChangePlan(input: BuildChangePlanInput): BuildChangePlanRes
   };
   if (input.target) plan.target = input.target;
   if (input.historyTargetId) plan.historyTargetId = input.historyTargetId;
+  if (input.analysis) plan.analysis = input.analysis;
   return { ok: true, plan, preview };
 }
 
 /** Recomputes the planned content of a file. */
 export function fileAfterContent(file: ChangeFileEdit): string | null {
+  if (file.delete) return null;
   return applyTextEdits(file.beforeContent, file.edits);
 }
 
@@ -115,13 +142,17 @@ export function materializePreview(task: ChangeTask): ChangePreviewFile[] {
   const preview: ChangePreviewFile[] = [];
   for (const file of task.plan.files) {
     const afterContent = fileAfterContent(file);
-    if (afterContent === null) continue;
-    preview.push({
+    if (afterContent === null && !file.delete) continue;
+    const previewFile: ChangePreviewFile = {
       path: file.path,
       beforeContent: file.beforeContent,
-      afterContent,
-      diff: diffLines(file.beforeContent, afterContent),
-    });
+      afterContent: afterContent ?? "",
+      diff: diffLines(file.beforeContent, afterContent ?? ""),
+    };
+    if (file.delete) previewFile.deleted = true;
+    const fingerprint = task.plan.fingerprint.files.find((item) => item.path === file.path);
+    if (fingerprint?.exists === false) previewFile.created = true;
+    preview.push(previewFile);
   }
   return preview;
 }
@@ -140,7 +171,10 @@ export function summarizeTask(task: ChangeTask): ChangePlanSummary {
   if (task.historyId) summary.historyId = task.historyId;
   for (const file of task.plan.files) {
     const afterContent = fileAfterContent(file);
-    const diff = afterContent === null ? null : diffLines(file.beforeContent, afterContent);
+    const diff =
+      afterContent === null && !file.delete
+        ? null
+        : diffLines(file.beforeContent, afterContent ?? "");
     summary.files.push({
       path: file.path,
       edits: file.edits.length,
