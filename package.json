@@ -1353,6 +1353,7 @@
     "test:unit": "vitest run --run",
     "test:coverage": "vitest run --coverage",
     "test:vscode": "npm run compile:tests && npm run compile && node ./tests/vscode-e2e/runTests.js",
+    "test:viewstate": "node scripts/verify-viewstate.mjs",
     "test:vscode:vsix": "npm run package && npm run compile:tests && node ./tests/vscode-e2e/runTests.js --vsix",
     "test:all": "npm run test:unit",
     "test:bench": "node scripts/run-benchmarks.mjs",

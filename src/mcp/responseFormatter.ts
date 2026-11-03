@@ -24,6 +24,15 @@ const log = getLogger('responseFormatter');
 export type ResponseFormat = 'json' | 'markdown' | 'toon';
 
 /**
+ * Tools whose payloads are control inputs, not analysis display. Their paths and
+ * node ids must be used verbatim by the caller, so they are not relativized.
+ */
+const PATH_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
+  'skein_get_view_state',
+  'skein_control_view',
+]);
+
+/**
  * Format a tool response for MCP protocol (legacy interface)
  * 
  * @param response - The full MCP tool response
@@ -38,7 +47,12 @@ export function formatToolResponse<T>(
   detail?: GraphContextDetail,
 ): { content: { type: 'text'; text: string }[]; structuredContent: McpToolResponse<T>; isError?: true } {
   // Paths become workspace-relative first, so duplicated path keys compare equal.
-  const redactedResponse = compactOutput(redactAbsolutePaths(response, response.metadata.workspaceRoot));
+  // View-state tools are exempt from redaction: their node ids (`<path>:<symbol>:<line>`)
+  // and file paths are exact command arguments the agent must send back verbatim.
+  const compacted = compactOutput(response);
+  const redactedResponse = toolName !== undefined && PATH_EXEMPT_TOOLS.has(toolName)
+    ? compacted
+    : redactAbsolutePaths(compacted, response.metadata.workspaceRoot);
   let publicResponse: McpToolResponse<T> = redactedResponse;
   if (toolName === 'skein_graph_context' && isGraphContextResponse(redactedResponse.data)) {
     publicResponse = {

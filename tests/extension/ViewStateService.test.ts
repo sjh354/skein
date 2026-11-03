@@ -48,6 +48,7 @@ describe('ViewStateService', () => {
     openFile: ReturnType<typeof vi.fn>;
     setFilter: ReturnType<typeof vi.fn>;
     setExpandAll: ReturnType<typeof vi.fn>;
+    hasNode: ReturnType<typeof vi.fn>;
   };
   let service: ViewStateService;
 
@@ -61,6 +62,7 @@ describe('ViewStateService', () => {
       openFile: vi.fn(async () => true),
       setFilter: vi.fn(async () => true),
       setExpandAll: vi.fn(async () => true),
+      hasNode: vi.fn(() => true),
     };
     service = new ViewStateService({ root, logger, host, pollIntervalMs: 10 });
     await service.start();
@@ -147,6 +149,53 @@ describe('ViewStateService', () => {
     const result = await waitFor(() => readCommandResult(root, request.id), 'not available result');
     expect(result.reason).toBe('view-not-available');
     expect(host.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects selecting a node that is not in the current graph', async () => {
+    host.hasNode.mockReturnValue(false);
+    const request = {
+      id: createCommandId(),
+      createdAt: Date.now(),
+      command: { action: 'select' as const, nodeId: 'stale-node' },
+    };
+    await writeCommandRequest(root, request);
+
+    const result = await waitFor(() => readCommandResult(root, request.id), 'node-not-found result');
+    expect(result.status).toBe('rejected');
+    expect(result.reason).toBe('node-not-found');
+    expect(host.select).not.toHaveBeenCalled();
+  });
+
+  it('keeps the restored call-graph snapshot while another view mode is showing', async () => {
+    service.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await writeViewState(root, {
+      schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
+      workspaceRoot: root,
+      updatedAt: 1,
+      lastUserActionAt: 0,
+      graphVersion: 9,
+      mode: 'callgraph',
+      filePath: '/workspace/src/app.ts',
+      hiddenFilters: [{ filterType: 'nodeType', value: 'function' }],
+      expandAll: false,
+      callGraph: { rootSymbolId: 'root', depth: 3 },
+      selection: { nodeId: 'root' },
+    });
+    host.read.mockReturnValue({
+      snapshot: snapshot({ mode: 'file', filePath: '/workspace/src/app.ts', hiddenFilters: [] }),
+      graphVersion: 0,
+    });
+    service = new ViewStateService({ root, logger, host, pollIntervalMs: 10, onRestore: vi.fn() });
+    await service.start();
+
+    const state = await waitFor(
+      () => readViewState(root).then((value) => (value?.mode === 'file' ? value : null)),
+      'published file-mode state',
+    );
+    expect(state.callGraph).toEqual({ rootSymbolId: 'root', depth: 3 });
+    expect(state.hiddenFilters).toEqual([{ filterType: 'nodeType', value: 'function' }]);
+    expect(state.selection).toEqual({ nodeId: 'root' });
   });
 
   it('restores the previous session view once', async () => {

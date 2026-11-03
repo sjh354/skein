@@ -573,7 +573,7 @@ Graph-It-Live를 기반 후보로 채택하고 최소 동작 검증 후 포크·
 
 - 3단계 결과: 공통 구조 모델 변환(`src/analyzer/model`)과 언어별 기능 등록, Dart 파일 import 해석, 심벌 선언·동일 파일 호출, 교차 파일 호출 그래프를 연결했다. Dart 호출은 구문·이름 기반이라 동명 심벌이 여럿이면 확정하지 않고, 해석되지 않은 대상은 지우거나 추정하지 않는다. 공통 모델을 화면 상태와 잇는 작업은 단계 4에서 한다. 기존 언어의 분석 경로는 바꾸지 않았다.
 
-- 4단계 진행: `.skein/state.json`의 뷰 상태(모드·파일·선택·호출 그래프 루트·깊이·필터·펼침)와 `.skein/commands/` 명령 큐를 구현했다. 확장만 상태 파일을 쓰고, MCP 서버(`skein_get_view_state`, `skein_control_view`)는 명령 요청을 남긴 뒤 결과를 기다린다. `graphVersion`이 다른 명령은 `stale-graph-version`, 사용자 조작 이후 대기한 명령은 `user-action-superseded`로 거부한다. 남은 확인은 실제 VS Code 창에서 Codex 왕복, 재시작 후 깊이·필터·선택 복원, 분석 갱신 시 무효화 동작이다.
+- 4단계 진행: `.skein/state.json`의 뷰 상태(모드·파일·선택·호출 그래프 루트·깊이·필터·펼침)와 `.skein/commands/` 명령 큐를 구현했다. 확장만 상태 파일을 쓰고, MCP 서버(`skein_get_view_state`, `skein_control_view`)는 명령 요청을 남긴 뒤 결과를 기다린다. `graphVersion`이 다른 명령은 `stale-graph-version`, 사용자 조작 이후 대기한 명령은 `user-action-superseded`로 거부한다. 실제 확장 호스트와 MCP stdio 왕복, 재시작 복원은 `npm run test:viewstate`로 자동 검증한다. 이 과정에서 경로 축약이 노드 ID·파일 경로를 바꿔 명령 왕복을 깨뜨리던 문제, 없는 노드 선택을 수용하던 문제, 뷰 모드가 `file`일 때 복원 상태를 게시하지 않던 문제를 수정했다. 남은 확인은 실제 화면의 선택·포커스·필터·펼침 반영, 노드 배치·뷰포트 복원, 멀티루트·다중 창 분리, 분석 갱신 시 무효화다.
 
 - 물리 기반(force-directed) 자유 배치는 3.1 화면 통합과 전체 단계가 끝난 뒤 적용할 후속 후보로 둔다. 지금은 fCoSE와 폴더·파일 묶음을 유지한다.
 - 후속 후보(단계 8 이후): `graph_context` 결과 순위에 Personalized PageRank를 약하게 섞는다. 질의에 맞은 파일을 시드로 삼아 import 그래프에서 구조적 중요도를 계산하고, 기존 점수와 순위 결합(RRF)으로 보정한다. 참고는 [Graphweft](https://github.com/ThisaST/graphweft)(MIT)의 알고리즘 설명이며 코드는 가져오지 않고 직접 구현한다. 구조 신호가 항상 검색을 개선하는 것은 아니므로(Graphweft 자체 벤치마크에서 그래프만 쓴 hit@5가 grep보다 낮음) 정답 파일을 라벨링한 질의 집합으로 hit@1·hit@5·MRR을 기존 방식과 비교해 개선이 확인될 때만 켠다. 임베딩 기반 시맨틱 검색은 런타임·모델 크기 부담으로 이 후보에 포함하지 않는다.

@@ -41,6 +41,8 @@ export interface ViewStateHost {
     openFile(path: string, line?: number, character?: number): Promise<boolean>;
     setFilter(filterType: SkeinFilterType, value: string, visible: boolean): Promise<boolean>;
     setExpandAll(expandAll: boolean): Promise<boolean>;
+    /** False when the node is not in the graph currently rendered (optional for older hosts). */
+    hasNode?(nodeId: string): boolean;
 }
 
 export interface ViewStateServiceOptions {
@@ -174,9 +176,9 @@ export class ViewStateService implements vscode.Disposable {
         }
 
         try {
-            const applied = await this.runCommand(request);
-            if (!applied) {
-                return { ...base, status: "rejected", reason: "view-not-available", completedAt: Date.now() };
+            const outcome = await this.runCommand(request);
+            if (outcome !== true) {
+                return { ...base, status: "rejected", reason: outcome, completedAt: Date.now() };
             }
             this.refreshFromHost();
             // The webview reports the selection asynchronously; keep the applied
@@ -195,28 +197,39 @@ export class ViewStateService implements vscode.Disposable {
         }
     }
 
-    private async runCommand(request: SkeinCommandRequest): Promise<boolean> {
+    private async runCommand(request: SkeinCommandRequest): Promise<true | string> {
         const action = request.command;
         switch (action.action) {
             case "select":
-                if (this.state.mode !== "callgraph") return false;
-                return this.options.host.select(action.nodeId);
+                if (this.state.mode !== "callgraph") return "view-not-available";
+                // A node id from an older graph (or a typo) must not be reported as
+                // applied: the webview would silently ignore it.
+                if (this.options.host.hasNode && !this.options.host.hasNode(action.nodeId)) {
+                    return "node-not-found";
+                }
+                return (await this.options.host.select(action.nodeId)) ? true : "view-not-available";
             case "focus":
-                if (this.state.mode !== "callgraph") return false;
-                return this.options.host.focus(action.nodeId);
+                if (this.state.mode !== "callgraph") return "view-not-available";
+                return (await this.options.host.focus(action.nodeId)) ? true : "view-not-available";
             case "set_depth":
-                if (this.state.mode !== "callgraph") return false;
-                return this.options.host.setDepth(action.depth);
+                if (this.state.mode !== "callgraph") return "view-not-available";
+                return (await this.options.host.setDepth(action.depth)) ? true : "view-not-available";
             case "open_file":
-                return this.options.host.openFile(action.path, action.line, action.character);
+                return (await this.options.host.openFile(action.path, action.line, action.character))
+                    ? true
+                    : "view-not-available";
             case "set_filter":
                 this.setHiddenFilter(action.filterType, action.value, !action.visible);
-                return this.options.host.setFilter(action.filterType, action.value, action.visible);
+                return (await this.options.host.setFilter(action.filterType, action.value, action.visible))
+                    ? true
+                    : "view-not-available";
             case "set_expand_all":
                 this.state.expandAll = action.expandAll;
-                return this.options.host.setExpandAll(action.expandAll);
+                return (await this.options.host.setExpandAll(action.expandAll))
+                    ? true
+                    : "view-not-available";
             default:
-                return false;
+                return "view-not-available";
         }
     }
 
@@ -232,14 +245,20 @@ export class ViewStateService implements vscode.Disposable {
         const { snapshot, graphVersion } = this.options.host.read();
         this.state.mode = snapshot.mode;
         this.state.expandAll = snapshot.expandAll;
-        this.state.hiddenFilters = snapshot.hiddenFilters;
         this.state.graphVersion = graphVersion;
         if (snapshot.filePath !== undefined) this.state.filePath = snapshot.filePath;
         else delete this.state.filePath;
-        if (snapshot.selection !== undefined) this.state.selection = snapshot.selection;
-        else delete this.state.selection;
-        if (snapshot.callGraph !== undefined) this.state.callGraph = snapshot.callGraph;
-        else delete this.state.callGraph;
+        // The dependency graph shares this file but has no call-graph state to
+        // report. Keep the last call-graph snapshot instead of erasing it, so a
+        // restart can restore depth, filters and selection and an agent can see
+        // them before the call-graph tab is reopened.
+        if (snapshot.mode === "callgraph") {
+            this.state.hiddenFilters = snapshot.hiddenFilters;
+            if (snapshot.selection !== undefined) this.state.selection = snapshot.selection;
+            else delete this.state.selection;
+            if (snapshot.callGraph !== undefined) this.state.callGraph = snapshot.callGraph;
+            else delete this.state.callGraph;
+        }
     }
 
     private async publishOnce(): Promise<void> {

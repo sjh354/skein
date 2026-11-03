@@ -82,6 +82,31 @@ describe('formatToolResponse', () => {
     expect(result.content[0].text).not.toContain('/private/secret.ts');
   });
 
+  it('keeps absolute node ids and paths for view-state tools', () => {
+    const response = createSuccessResponse({
+      available: true,
+      state: {
+        workspaceRoot: '/workspace',
+        filePath: '/workspace/src/main.ts',
+        selection: { nodeId: '/workspace/src/main.ts:main:3' },
+        callGraph: { rootSymbolId: '/workspace/src/main.ts:main:3' },
+      },
+    }, 5, '/workspace');
+
+    const result = formatToolResponse(response, 'json', 'skein_get_view_state');
+
+    expect(result.structuredContent.data).toEqual({
+      available: true,
+      state: {
+        workspaceRoot: '/workspace',
+        filePath: '/workspace/src/main.ts',
+        selection: { nodeId: '/workspace/src/main.ts:main:3' },
+        callGraph: { rootSymbolId: '/workspace/src/main.ts:main:3' },
+      },
+    });
+    expect(result.structuredContent.metadata.workspaceRoot).toBe('/workspace');
+  });
+
   it('emits the query tool TOON subgraph directly instead of escaping it into a row', () => {
     sessionStats.reset();
     const toon = '# nodeCount=1 edgeCount=0 truncated=false\nnodes(id,n)\n[src/a.ts:main,main]\nedges()';

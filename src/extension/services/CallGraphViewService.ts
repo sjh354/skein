@@ -108,6 +108,8 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   private currentFilePath: string | null = null;
   /** Set of node IDs in the currently displayed neighbourhood — used to scope saves */
   private currentNeighbourhoodPaths = new Set<string>();
+  /** IDs of the nodes currently rendered, for validating MCP commands. */
+  private currentGraphNodeIds = new Set<string>();
   private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private saveListener: vscode.Disposable | null = null;
   /** Workspace root for which the DB has been fully indexed (null = not indexed yet). */
@@ -248,6 +250,11 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   /** Pins MCP commands to the graph the agent saw. */
   public getCurrentGraphVersion(): number {
     return this.graphVersion;
+  }
+
+  /** True when the node is part of the graph currently rendered. */
+  public hasNode(nodeId: string): boolean {
+    return this.currentGraphNodeIds.has(nodeId);
   }
 
   /** Applies the previous session's depth, filters and selection. */
@@ -648,6 +655,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
 
   private sendGraphToWebview(result: ReturnType<typeof queryNeighbourhood>): void {
     this.graphVersion += 1;
+    this.currentGraphNodeIds = new Set(result.nodes.map((node) => node.id));
     // Buffer so we can replay if callGraphMounted fires after the initial postMessage
     // (race on first open: React may not have mounted its listener yet).
     this.pendingGraph = result;

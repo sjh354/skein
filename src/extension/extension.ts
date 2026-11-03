@@ -135,6 +135,7 @@ export function activate(context: vscode.ExtensionContext) {
             host: {
                 read: () => provider.getViewStateSnapshot(),
                 select: async (nodeId) => callGraphViewService.selectNode(nodeId),
+                hasNode: (nodeId) => callGraphViewService.hasNode(nodeId),
                 focus: async (nodeId) => callGraphViewService.focusNode(nodeId),
                 setDepth: async (depth) => callGraphViewService.setDepth(depth),
                 openFile: (filePath, line, character) => provider.openFileAt(filePath, line, character),
