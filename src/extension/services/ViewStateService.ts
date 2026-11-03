@@ -1,6 +1,6 @@
 /**
- * Publishes the graph view state to `.skein/state.json` and applies view
- * commands queued there by the MCP server (DESIGN 10).
+ * Publishes the graph view state to `.skein/state.json` and executes view
+ * commands handed over by `CommandBridgeService` (DESIGN 10).
  *
  * The extension is the only writer of the state file, so two processes never
  * edit it at once. Human interactions stamp `lastUserActionAt`; a queued
@@ -15,17 +15,13 @@ import type { CallGraphWebviewCommand } from "../../shared/callgraph-types";
 import {
     EMPTY_VIEW_SNAPSHOT,
     SKEIN_STATE_SCHEMA_VERSION,
-    deleteCommandRequest,
     ensureSkeinWorkspace,
     isCommandStale,
     isCommandSupersededByUser,
-    listCommandRequests,
     mergeViewState,
     normalizeAreaKey,
-    pruneCommandFiles,
     pruneWindowSnapshotsInFile,
     readViewState,
-    writeCommandResult,
     type SkeinCommandRequest,
     type SkeinCommandResult,
     type SkeinFilterType,
@@ -33,9 +29,6 @@ import {
     type SkeinViewState,
     type SkeinWindowView,
 } from "../../shared/viewState";
-
-/** Commands and files the MCP server left behind by a crashed run are dropped after a day. */
-const STALE_COMMAND_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export interface ViewStateHost {
     /** Current view mode, file, selection and filters. */
@@ -94,7 +87,6 @@ export class ViewStateService implements vscode.Disposable {
             };
             this.options.onRestore?.(this.toSnapshot(previous), previous.graphVersion);
         }
-        await pruneCommandFiles(this.workspaceRoot, STALE_COMMAND_MAX_AGE_MS);
         this.publishOnce().catch((err: unknown) => this.logError("initial publish", err));
         this.timer = setInterval(
             () => void this.tick(),
@@ -184,7 +176,6 @@ export class ViewStateService implements vscode.Disposable {
         this.writing = true;
         try {
             this.refreshFromHost();
-            await this.processCommands();
             await this.publishOnce();
         } catch (err: unknown) {
             this.logError("poll", err);
@@ -193,25 +184,18 @@ export class ViewStateService implements vscode.Disposable {
         }
     }
 
-    private async processCommands(): Promise<void> {
-        const requests = await listCommandRequests(this.workspaceRoot);
-        if (requests.length === 0) return;
-        /* eslint-disable no-await-in-loop -- commands are applied in order */
-        for (const request of requests) {
-            if (this.disposed) return;
-            // Another window owns this command; leave the request for it.
-            if (request.targetWindowId && request.targetWindowId !== this.windowId) continue;
-            const result = await this.applyCommand(request);
-            await writeCommandResult(this.workspaceRoot, result);
-            await deleteCommandRequest(this.workspaceRoot, request.id);
-            if (result.status === "applied") {
-                await this.persistState();
-            }
-        }
-        /* eslint-enable no-await-in-loop */
+    /** Window id used by the command bridge to route MCP commands. */
+    getWindowId(): string {
+        return this.windowId;
     }
 
-    private async applyCommand(request: SkeinCommandRequest): Promise<SkeinCommandResult> {
+    /** Last published snapshot, including the selection restored from disk. */
+    getSnapshot(): SkeinViewSnapshot {
+        return this.toSnapshot(this.window);
+    }
+
+    /** Executes one view command and persists the resulting state. */
+    async handleCommand(request: SkeinCommandRequest): Promise<SkeinCommandResult> {
         const base = { id: request.id, completedAt: Date.now() };
         if (isCommandSupersededByUser(request, this.window)) {
             return { ...base, status: "rejected", reason: "user-action-superseded" };
@@ -231,6 +215,7 @@ export class ViewStateService implements vscode.Disposable {
             if (request.command.action === "select") {
                 this.window.selection = { nodeId: request.command.nodeId };
             }
+            await this.persistState();
             return {
                 ...base,
                 status: "applied",

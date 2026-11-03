@@ -18,6 +18,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
+import { withFileLock } from "./lock";
 import { normalizePath } from "./path";
 
 export const SKEIN_DIR_NAME = ".skein";
@@ -532,45 +533,13 @@ export async function ensureSkeinWorkspace(root: string): Promise<void> {
   }
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Serializes read-modify-write cycles across extension windows.
  * A crashed writer leaves a lock behind; it is treated as stale after 5 s.
  */
 export async function withStateLock<T>(root: string, action: () => Promise<T>): Promise<T> {
   await ensureSkeinWorkspace(root);
-  const lockPath = stateLockPath(root);
-  const deadline = Date.now() + 3_000;
-  /* eslint-disable no-await-in-loop -- acquiring and releasing the lock is inherently sequential */
-  for (;;) {
-    try {
-      const handle = await fs.open(lockPath, "wx");
-      try {
-        return await action();
-      } finally {
-        await handle.close();
-        await fs.rm(lockPath, { force: true });
-      }
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== "EEXIST") throw err;
-      try {
-        const stat = await fs.stat(lockPath);
-        if (Date.now() - stat.mtimeMs > 5_000) {
-          await fs.rm(lockPath, { force: true });
-          continue;
-        }
-      } catch {
-        continue;
-      }
-      if (Date.now() >= deadline) throw new Error("state-lock-timeout", { cause: err });
-      await sleep(20);
-    }
-  }
-  /* eslint-enable no-await-in-loop */
+  return withFileLock(stateLockPath(root), action);
 }
 
 export async function readViewState(root: string): Promise<SkeinViewState | null> {

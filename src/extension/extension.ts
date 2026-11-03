@@ -11,6 +11,11 @@ import { GraphProvider } from './GraphProvider';
 import { CallGraphViewService } from './services/CallGraphViewService';
 import { CommandCoordinator } from './services/CommandCoordinator';
 import { CommandRegistrationService } from './services/CommandRegistrationService';
+import { CommandBridgeService } from './services/CommandBridgeService';
+import { ChangePreviewProvider } from './services/ChangePreviewProvider';
+import { ChangeService } from './services/ChangeService';
+import { VSCodeChangeHost } from './services/VSCodeChangeHost';
+import { registerChangeCommands } from './services/ChangeCommands';
 import { EditorEventsService } from './services/EditorEventsService';
 import { LmToolsService } from './services/LmToolsService';
 import { ViewStateService } from './services/ViewStateService';
@@ -121,6 +126,9 @@ export function activate(context: vscode.ExtensionContext) {
     // appear instead of staying off for the whole session.
     let viewStateService: ViewStateService | null = null;
     let viewStateStart: Promise<void> | null = null;
+    let changeService: ChangeService | null = null;
+    let commandBridge: CommandBridgeService | null = null;
+    let changePreview: ChangePreviewProvider | null = null;
 
     const setupWorkspaceServices = (): void => {
         const workspaceFolder = resolvePreferredWorkspaceFolder();
@@ -161,6 +169,47 @@ export function activate(context: vscode.ExtensionContext) {
                 log.warn('View state publishing failed to start:', err);
             });
         }
+
+        if (!changeService) {
+            changePreview = new ChangePreviewProvider();
+            disposables.push(changePreview);
+            const host = new VSCodeChangeHost(changePreview, log);
+            const service = new ChangeService({
+                root: workspaceFolder.uri.fsPath,
+                logger: log,
+                host,
+            });
+            changeService = service;
+            disposables.push(
+                ...registerChangeCommands({
+                    service,
+                    host,
+                    logger: log,
+                    getSelection: () =>
+                        callGraphViewService.getSelectedNode() ??
+                        viewStateService?.getSnapshot().selection,
+                    getGraphVersion: () => callGraphViewService.getCurrentGraphVersion(),
+                }),
+            );
+            void service.start().catch((err: unknown) => {
+                log.warn('Change recovery failed to start:', err);
+            });
+        }
+
+        if (!commandBridge && viewStateService && changeService) {
+            const bridge = new CommandBridgeService({
+                root: workspaceFolder.uri.fsPath,
+                logger: log,
+                windowId: () => viewStateService?.getWindowId() ?? 'unknown',
+                view: viewStateService,
+                change: changeService,
+            });
+            commandBridge = bridge;
+            disposables.push(bridge);
+            void bridge.start().catch((err: unknown) => {
+                log.warn('Command bridge failed to start:', err);
+            });
+        }
     };
 
     setupWorkspaceServices();
@@ -170,9 +219,11 @@ export function activate(context: vscode.ExtensionContext) {
             const folder = resolvePreferredWorkspaceFolder();
             const service = viewStateService;
             if (folder && service) {
-                void (viewStateStart ?? Promise.resolve()).then(() =>
-                    service.setRoot(folder.uri.fsPath),
-                );
+                void (viewStateStart ?? Promise.resolve()).then(async () => {
+                    await service.setRoot(folder.uri.fsPath);
+                    await changeService?.setRoot(folder.uri.fsPath);
+                    await commandBridge?.setRoot(folder.uri.fsPath);
+                });
             }
         }),
     );

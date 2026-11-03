@@ -208,6 +208,26 @@
         "title": "Show Call Graph",
         "category": "Skein",
         "icon": "$(call-incoming)"
+      },
+      {
+        "command": "skein.renameSymbol",
+        "title": "Rename Selected Symbol",
+        "category": "Skein"
+      },
+      {
+        "command": "skein.showChangeHistory",
+        "title": "Show Change History",
+        "category": "Skein"
+      },
+      {
+        "command": "skein.undoLastChange",
+        "title": "Undo Last Tool Change",
+        "category": "Skein"
+      },
+      {
+        "command": "skein.redoLastChange",
+        "title": "Re-apply Last Undone Change",
+        "category": "Skein"
       }
     ],
     "menus": {
@@ -1354,6 +1374,7 @@
     "test:coverage": "vitest run --coverage",
     "test:vscode": "npm run compile:tests && npm run compile && node ./tests/vscode-e2e/runTests.js",
     "test:viewstate": "node scripts/verify-viewstate.mjs",
+    "test:change": "node scripts/verify-change.mjs",
     "test:vscode:vsix": "npm run package && npm run compile:tests && node ./tests/vscode-e2e/runTests.js --vsix",
     "test:all": "npm run test:unit",
     "test:bench": "node scripts/run-benchmarks.mjs",
