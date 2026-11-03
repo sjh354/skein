@@ -222,6 +222,7 @@ export interface SurfaceCommandMessage {
 }
 export interface SurfaceStateMessage {
   command: "surfaceState";
+  updatedAt?: number;
   mode: import("./viewState").SkeinViewMode;
   state: import("./viewState").SkeinSurfaceState;
   selection?: import("./viewState").SkeinSelection;
@@ -229,6 +230,7 @@ export interface SurfaceStateMessage {
 }
 export interface SurfaceSyncMessage {
   command: "surfaceSync";
+  updatedAt?: number;
   mode: import("./viewState").SkeinViewMode;
   state: import("./viewState").SkeinSurfaceState;
   selection?: import("./viewState").SkeinSelection;

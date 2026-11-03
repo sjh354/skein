@@ -17,6 +17,7 @@ export function useSurfaceBridge(options: {
   latest.current = options;
   const [commandVersion, setCommandVersion] = useState(0);
   const userPending = useRef(false);
+  const lastLocalActionAt = useRef(0);
   const syncTarget = useRef<SurfaceSyncMessage | undefined>(undefined);
   const pending = useRef<Array<{ id: string; reason?: string }>>([]);
   const [selection, setSelection] = useState<SkeinSelection>();
@@ -26,7 +27,7 @@ export function useSurfaceBridge(options: {
   const report = (userInitiated = false) => {
     const o = latest.current;
     const nodeIds = (o.getNodes?.() ?? o.nodes).map(node => node.id);
-    o.post?.({ command: "surfaceState", mode: o.mode,
+    o.post?.({ command: "surfaceState", mode: o.mode, updatedAt: Date.now(),
       state: { ...o.state, nodeIds: nodeIds.slice(0, 10000), ...(nodeIds.length > 10000 ? { nodeIdsTruncated: true } : {}), search: current.current.search },
       selection: current.current.selection, userInitiated });
   };
@@ -70,12 +71,14 @@ export function useSurfaceBridge(options: {
       const message = event.data;
       if (!message || message.mode !== latest.current.mode) return;
       if (message.command === "surfaceSync") {
+        if (lastLocalActionAt.current > 0 && (message.updatedAt ?? 0) <= lastLocalActionAt.current) return;
         syncTarget.current = message;
         setCommandVersion(version => version + 1);
         return;
       }
       if (message.command !== "surfaceCommand") return;
       syncTarget.current = undefined;
+      lastLocalActionAt.current = Date.now();
       const o = latest.current;
       const action = message.action;
       const nodes = o.getNodes?.() ?? o.nodes;
@@ -103,7 +106,8 @@ export function useSurfaceBridge(options: {
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, []);
-  return { markUserAction: () => { syncTarget.current = undefined; userPending.current = true; }, selectedId: selection?.nodeId, select: (nodeId?: string, path?: string) => {
+  return { markUserAction: () => { lastLocalActionAt.current = Date.now(); syncTarget.current = undefined; userPending.current = true; }, selectedId: selection?.nodeId, select: (nodeId?: string, path?: string) => {
+    lastLocalActionAt.current = Date.now();
     syncTarget.current = undefined;
     current.current.selection = nodeId ? { nodeId, path } : undefined;
     setSelection(current.current.selection); report(true);

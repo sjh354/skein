@@ -1080,7 +1080,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
           if (!message.reason) {
             const mode = this._stateManager.viewMode;
             const state = this.surfaceStates[mode];
-            if (state && mode !== "callgraph") await this.webviews.mirror(webviewView.webview, { command: "surfaceSync", mode, state, selection: this.surfaceSelections[mode] });
+            if (state && mode !== "callgraph") await this.webviews.mirror(webviewView.webview, { command: "surfaceSync", updatedAt: Date.now(), mode, state, selection: this.surfaceSelections[mode] });
             if (mode === "callgraph") await this.webviews.mirror(webviewView.webview, { type: "callGraphSelectNode", nodeId: this._callGraphViewService?.getSelectedNode()?.nodeId ?? "" });
           }
           this.surfacePending.get(message.id)?.(message.reason ?? true);

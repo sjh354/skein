@@ -120,7 +120,10 @@ async function expectMatrix(
     if (((await getContextKey<number>('skein.architectureMatrixCount')) ?? 0) > before && last && predicate(last)) return last;
     await sleep(250);
   }
-  assert.fail(`${description}: last matrix ${JSON.stringify(last)}`);
+  const stateFile = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, '.skein', 'state.json');
+  const published = await Promise.resolve(vscode.workspace.fs.readFile(stateFile)).then(bytes => JSON.parse(Buffer.from(bytes).toString('utf8'))).catch(() => undefined);
+  const count = await getContextKey<number>('skein.architectureMatrixCount');
+  assert.fail(`${description}: count ${before} -> ${count}, surface ${JSON.stringify(published?.surface?.architecture)}, last matrix ${JSON.stringify(last)}`);
 }
 
 const totalsOf = ({ rows, cells, fileEdges, upwardCells, cycles }: MatrixRender) => ({ rows, cells, fileEdges, upwardCells, cycles });
