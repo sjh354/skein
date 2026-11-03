@@ -112,17 +112,23 @@ async function expectMatrix(
   predicate: (matrix: MatrixRender) => boolean,
 ): Promise<MatrixRender> {
   const before = (await getContextKey<number>('skein.architectureMatrixCount')) ?? 0;
+  const prior = await getContextKey<MatrixRender>('skein.architectureMatrix');
   await vscode.commands.executeCommand('skein.e2eArchitectureControls', controls);
   const start = Date.now();
+  // The control may ask for the view already drawn (a screen restored from the saved state repaints nothing).
+  const idempotentUntil = prior !== undefined && predicate(prior) ? start + 3000 : 0;
   let last: MatrixRender | undefined;
   while (Date.now() - start < 30000) {
     last = await getContextKey<MatrixRender>('skein.architectureMatrix');
-    if (((await getContextKey<number>('skein.architectureMatrixCount')) ?? 0) > before && last && predicate(last)) return last;
+    const count = (await getContextKey<number>('skein.architectureMatrixCount')) ?? 0;
+    if (count > before && last && predicate(last)) return last;
+    if (idempotentUntil > 0 && count === before && Date.now() >= idempotentUntil) return prior!;
     await sleep(250);
   }
+  const count = await getContextKey<number>('skein.architectureMatrixCount');
+  if (count === before && prior !== undefined && predicate(prior)) return prior;
   const stateFile = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, '.skein', 'state.json');
   const published = await Promise.resolve(vscode.workspace.fs.readFile(stateFile)).then(bytes => JSON.parse(Buffer.from(bytes).toString('utf8'))).catch(() => undefined);
-  const count = await getContextKey<number>('skein.architectureMatrixCount');
   assert.fail(`${description}: count ${before} -> ${count}, surface ${JSON.stringify(published?.surface?.architecture)}, last matrix ${JSON.stringify(last)}`);
 }
 
