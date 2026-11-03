@@ -13,6 +13,7 @@
  */
 
 import type {
+  ChangeArchitectureSnapshot,
   ChangeHistoryEntry,
   ChangePlan,
   ChangeConflict,
@@ -54,8 +55,14 @@ import {
   type RefactorSymbol,
 } from "@/analyzer/change/refactor";
 import { mergeThreeWay } from "@/analyzer/change/threeWayMerge";
+import { architectureAfterChange } from "@/analyzer/diagnostics/changeArchitecture";
 import { inspectTaskState, recoverInterruptedTasks, withChangeLock } from "@/analyzer/change/taskStore";
 import type { ChangeEditorHost } from "./changeHost";
+
+/** Confirmed architecture findings around a change; implemented with the workspace analyzer. */
+export interface ChangeArchitectureGuard {
+  check(files: readonly string[]): Promise<ChangeArchitectureSnapshot>;
+}
 
 export interface ChangeServiceOptions {
   root: string;
@@ -69,6 +76,8 @@ export interface ChangeServiceOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Extra diagnostic polls while a just-applied edit is still settling. */
   verificationRetries?: number;
+  /** Declared architecture rules, when the workspace has them; absent disables the gate. */
+  architectureGuard?: ChangeArchitectureGuard;
 }
 
 export interface ChangeResult {
@@ -164,6 +173,10 @@ const REASON_MESSAGES: Record<string, string> = {
   "rename-failed": "The language service refused the rename.",
   "unsupported-uri": "The rename touches a file outside the workspace.",
   "unsaved-changes": "Save the changed files before applying a change.",
+  "architecture-blocked": "The change would introduce or worsen a confirmed architecture violation. Fix it or record an exception first.",
+  "architecture-config-error": "skein.architecture.json could not be checked, so the change was not applied.",
+  "architecture-violation": "The change introduced or worsened a confirmed architecture violation.",
+  "architecture-unavailable": "The architecture check could not run; the change is not reported as verified.",
   "stale-plan": "The code changed after the plan was created; create a new plan.",
   "plan-not-found": "The change plan no longer exists.",
   "plan-not-ready": "This plan has already been applied or cancelled.",
@@ -622,6 +635,20 @@ export class ChangeService {
     if (dirty.length > 0) return { ok: false, reason: "unsaved-changes", files: dirty, task };
 
     const paths = task.plan.files.map((file) => file.path);
+    let architectureBefore: ChangeArchitectureSnapshot | undefined;
+    if (this.options.architectureGuard !== undefined) {
+      architectureBefore = await this.checkArchitecture(paths);
+      if (architectureBefore.status === "blocked") {
+        task.reason = "architecture-blocked";
+        await this.saveTask(task);
+        return { ok: false, reason: "architecture-blocked", files: paths, task };
+      }
+      if (architectureBefore.status === "config-error") {
+        task.reason = "architecture-config-error";
+        await this.saveTask(task);
+        return { ok: false, reason: "architecture-config-error", files: paths, task };
+      }
+    }
     const baseline = new Map(paths.map((file) => [file, this.options.host.diagnostics(file)]));
 
     let beforeCommit: string;
@@ -675,7 +702,7 @@ export class ChangeService {
     task.status = "verifying";
     await this.saveTask(task);
 
-    const verification = await this.verify(task, baseline);
+    const verification = await this.verify(task, baseline, architectureBefore);
     task.verification = verification;
     task.status =
       verification.status === "passed"
@@ -701,10 +728,14 @@ export class ChangeService {
   private async verify(
     task: ChangeTask,
     baseline: Map<string, ReturnType<ChangeEditorHost["diagnostics"]>>,
+    architectureBefore: ChangeArchitectureSnapshot | undefined,
   ): Promise<ChangeVerification> {
     const paths = task.plan.files.map((file) => file.path);
     const checkedAt = this.now();
     const notRun = { status: "not-run" as const, reason: "step-5" };
+    const architecture = await this.verifyArchitecture(paths, architectureBefore, checkedAt);
+    const architectureFailed = architecture.status === "failed";
+    const architectureIncomplete = architecture.status === "unavailable";
     try {
       await this.options.host.waitForDiagnostics(paths);
       const retries = this.options.verificationRetries ?? 3;
@@ -729,13 +760,19 @@ export class ChangeService {
         after: samples.get(file)!,
       }));
       const verification: ChangeVerification = {
-        status: newErrors.length > 0 ? "failed" : "passed",
+        status: newErrors.length > 0 || architectureFailed
+          ? "failed"
+          : architectureIncomplete
+            ? "incomplete"
+            : "passed",
         checkedAt,
         files,
         tests: notRun,
-        architecture: notRun,
+        architecture,
       };
       if (newErrors.length > 0) verification.reason = "new-errors";
+      else if (architectureFailed) verification.reason = "architecture-violation";
+      else if (architectureIncomplete) verification.reason = "architecture-unavailable";
       return verification;
     } catch {
       return {
@@ -744,7 +781,42 @@ export class ChangeService {
         reason: "diagnostics-unavailable",
         files: [],
         tests: notRun,
-        architecture: notRun,
+        architecture,
+      };
+    }
+  }
+
+  /** Runs the architecture guard again after apply and compares it with the pre-apply snapshot. */
+  private async verifyArchitecture(
+    files: readonly string[],
+    before: ChangeArchitectureSnapshot | undefined,
+    checkedAt: number,
+  ): Promise<ChangeVerification["architecture"]> {
+    if (this.options.architectureGuard === undefined) return { status: "not-run", reason: "step-7" };
+    if (before === undefined) return { status: "unavailable", checkedAt, findings: [], message: "no architecture check ran before apply" };
+    try {
+      const after = await this.options.architectureGuard.check(files);
+      return { ...architectureAfterChange(before, after), checkedAt };
+    } catch (error) {
+      return {
+        status: "unavailable",
+        checkedAt,
+        findings: [],
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /** The pre-apply snapshot: a throw is reported as unavailable, never as a pass. */
+  private async checkArchitecture(files: readonly string[]): Promise<ChangeArchitectureSnapshot> {
+    try {
+      return await this.options.architectureGuard!.check(files);
+    } catch (error) {
+      return {
+        status: "unavailable",
+        checkedAt: this.now(),
+        findings: [],
+        message: error instanceof Error ? error.message : String(error),
       };
     }
   }

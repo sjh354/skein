@@ -20,7 +20,7 @@ vi.mock("../../../src/shared/pathSecurity", async (importOriginal) => ({
 }));
 
 import { workerState } from "../../../src/mcp/shared/state";
-import { executeExploreArchitecture } from "../../../src/mcp/tools/architecture";
+import { executeDiagnoseStructure, executeExploreArchitecture } from "../../../src/mcp/tools/architecture";
 import { ExploreArchitectureParamsSchema } from "../../../src/mcp/types";
 
 const workspaceRoot = path.resolve("/workspace");
@@ -213,5 +213,17 @@ describe("ExploreArchitectureParamsSchema", () => {
     expect(ExploreArchitectureParamsSchema.safeParse({ view: "matrix", group: 2 }).success).toBe(false);
     expect(ExploreArchitectureParamsSchema.safeParse({ view: "matrix", from: "a", to: "b" }).success).toBe(false);
     expect(ExploreArchitectureParamsSchema.safeParse({ view: "table" }).success).toBe(false);
+  });
+
+  it("runs the structure diagnostics with the default thresholds and pages them", async () => {
+    workerState.config = { rootDir: workspaceRoot, excludeNodeModules: true, maxDepth: 3 };
+    vi.spyOn(workerState, "getSpider").mockReturnValue({ analyze: async () => [] } as never);
+    mocks.collectAllSourceFiles.mockResolvedValue([]);
+    const result = await executeDiagnoseStructure({ limit: 1 });
+
+    expect(result.thresholds.responsibility.loc).toBe(400);
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.page).toMatchObject({ offset: 0, limit: 1, total: 0, truncated: false });
+    expect(result.limits.join(" ")).toContain("Candidates are never");
   });
 });

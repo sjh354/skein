@@ -129,3 +129,11 @@ npm run lint
   - [ ] M7 생성·삭제 Undo/Redo와 이후 편집 보존
   - [ ] M8 Codex 왕복(`kind`: move/extract/inline)
   - [ ] M9 ggultarae 실제 사례
+- 7단계: `docs/verification/step7-manual-checklist.md` (자동 검증은 완료)
+  - [ ] M1 프로필 위반 방향·`strict`
+  - [ ] M2 예외 적용·만료
+  - [ ] M3 기준선 v2·악화
+  - [ ] M4 다섯 진단과 근거·한계
+  - [ ] M5 변경 차단·예외·사후 검증
+  - [ ] M6 `skein_diagnose_structure` Codex 왕복
+  - [ ] M7 대표 저장소 성능

@@ -1401,6 +1401,7 @@
     "test:viewstate": "node scripts/verify-viewstate.mjs",
     "test:change": "node scripts/verify-change.mjs",
     "test:refactor": "node scripts/verify-refactor.mjs",
+    "test:diagnostics": "vitest run tests/analyzer/diagnostics tests/analyzer/architecture tests/extension/ChangeService.test.ts tests/extension/ArchitectureViewService.test.ts tests/mcp/tools/architecture.test.ts tests/mcp/worker/invokeTool.test.ts tests/webview/components/architecture",
     "test:vscode:vsix": "npm run package && npm run compile:tests && node ./tests/vscode-e2e/runTests.js --vsix",
     "test:all": "npm run test:unit",
     "test:bench": "node scripts/run-benchmarks.mjs",

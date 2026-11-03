@@ -4,6 +4,7 @@ import {
   executeAnalyzeDependencies,
   executeCrawlDependencyGraph,
   executeCheckArchitecture,
+  executeDiagnoseStructure,
   executeExploreArchitecture,
   executeFindReferencingFiles,
   executeFindUnusedSymbols,
@@ -26,6 +27,7 @@ import type {
   AnalyzeDependenciesParams,
   CrawlDependencyGraphParams,
   CheckArchitectureParams,
+  DiagnoseStructureParams,
   ExploreArchitectureParams,
   FindReferencingFilesParams,
   FindUnusedSymbolsParams,
@@ -94,6 +96,8 @@ const toolHandlers: Partial<Record<McpToolName, ToolHandler>> = {
     executeExploreArchitecture(params as ExploreArchitectureParams, signal),
   check_architecture: (params, _config, _postMessage, signal) =>
     executeCheckArchitecture(params as CheckArchitectureParams, signal),
+  diagnose_structure: (params, _config, _postMessage, signal) =>
+    executeDiagnoseStructure(params as DiagnoseStructureParams, signal),
 };
 
 async function executeValidatedTool(

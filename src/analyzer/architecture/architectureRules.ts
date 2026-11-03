@@ -13,7 +13,6 @@ import * as path from "node:path";
 import ignore from "ignore";
 import { z } from "zod/v4";
 import {
-  ARCHITECTURE_RULE_KINDS,
   UNIT_ROLES,
   type ArchitectureCheckTotals,
   type ArchitectureRuleSummary,
@@ -28,6 +27,8 @@ import { matchesWildcard, type DeclaredRoles } from "./unitRoles";
 export { matchesWildcard } from "./unitRoles";
 
 export const ARCHITECTURE_CONFIG_FILE = "skein.architecture.json";
+/** A profile rule is generated for every area: `profile:<area>`. */
+export const PROFILE_RULE_PREFIX = "profile:";
 export const ARCHITECTURE_BASELINE_FILE = "skein.architecture.baseline.json";
 /** Files larger than these are refused before they are read. */
 export const MAX_CONFIG_BYTES = 256 * 1024;
@@ -35,6 +36,7 @@ export const MAX_BASELINE_BYTES = 32 * 1024 * 1024;
 const MAX_ELEMENTS = 256;
 const MAX_PATTERNS = 128;
 const MAX_RULES = 256;
+const CONFIG_RULE_KINDS = ["forbid", "allowOnly", "noCycles"] as const;
 /** `noCycles: "units"` checks the units; no element may take that name. */
 const UNITS = "units";
 
@@ -71,6 +73,49 @@ const RuleSchema = z.strictObject({
   reason: z.string().max(1000).optional().describe("Why the rule exists, shown with every violation"),
 });
 
+/** Element names by layer, most dependent first: a lower layer may import only itself and lower layers. */
+const ProfileSchema = z.strictObject({
+  layers: z.array(z.array(NameSchema).min(1)).min(2).max(32)
+    .describe("Element names by layer, most dependent first; a file of a layer must not import a layer above it"),
+});
+
+const AreaSchema = z.strictObject({
+  path: oneOrMany(PatternSchema),
+  profile: NameSchema,
+  severity: z.enum(["error", "warning", "off"]).optional(),
+  strict: z.boolean().optional().describe("Also report imports of files in no layer of the profile"),
+});
+
+const ExceptionSchema = z.strictObject({
+  rule: z.string().min(1).max(128).optional().describe("Rule name, or profile:<area>"),
+  diagnostic: z.string().min(1).max(256).optional().describe("Stable structure diagnostic id"),
+  source: z.string().max(4096).optional(),
+  target: z.string().max(4096).optional(),
+  reason: z.string().min(1).max(1000),
+  until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Last accepted day (YYYY-MM-DD)"),
+});
+
+const ThresholdSchema = z.number().positive().max(1_000_000);
+const DiagnosticsConfigSchema = z.strictObject({
+  thresholds: z.strictObject({
+    responsibility: z.strictObject({
+      loc: ThresholdSchema.optional(),
+      fanOut: ThresholdSchema.optional(),
+      fanIn: ThresholdSchema.optional(),
+    }).optional(),
+    duplication: z.strictObject({
+      minTokens: ThresholdSchema.optional(),
+      shingleSize: ThresholdSchema.optional(),
+      similarity: z.number().min(0.1).max(1).optional(),
+      maxResults: ThresholdSchema.optional(),
+    }).optional(),
+    dependency: z.strictObject({
+      heavyPairs: ThresholdSchema.optional(),
+      maxResults: ThresholdSchema.optional(),
+    }).optional(),
+  }).optional(),
+}).optional();
+
 type RawRule = z.infer<typeof RuleSchema>;
 type ArchitectureConfigElements = Record<string, z.infer<typeof ElementSchema>>;
 
@@ -100,7 +145,7 @@ function selfRuleIssue(rule: RawRule, each: (name: string) => boolean): { messag
 /** Every rule names one kind and only elements of the config; rule names are unique. */
 function checkRule(rule: RawRule, index: number, elements: ArchitectureConfigElements, names: Set<string>, context: z.RefinementCtx) {
   const issue = (message: string, ...at: (string | number)[]) => context.addIssue({ code: "custom", message, path: ["rules", index, ...at] });
-  const kinds = ARCHITECTURE_RULE_KINDS.filter((kind) => rule[kind] !== undefined);
+  const kinds = CONFIG_RULE_KINDS.filter((kind) => rule[kind] !== undefined);
   if (kinds.length !== 1) issue("a rule needs exactly one of forbid, allowOnly or noCycles");
   if (kinds.includes("noCycles") === (rule.from !== undefined)) issue(rule.from === undefined ? "forbid and allowOnly need from" : "noCycles takes no from", "from");
   if (names.has(rule.name)) issue(`duplicate rule name "${rule.name}"`, "name");
@@ -121,6 +166,13 @@ export const ArchitectureConfigSchema = z
     rules: z.array(RuleSchema).max(MAX_RULES).default([]),
     roles: z.record(UnitPatternSchema, z.enum(UNIT_ROLES)).optional()
       .describe("Unit key or package name (* matches any characters) → role; the first matching entry overrides the inferred role"),
+    profiles: z.record(NameSchema, ProfileSchema).optional()
+      .describe("Named layer orders over elements: profiles used by areas"),
+    areas: z.record(NameSchema, AreaSchema).optional()
+      .describe("Folders with a profile: each area checks its own imports"),
+    exceptions: z.array(ExceptionSchema).max(1024).optional()
+      .describe("Accepted violations, each with its reason and optional last day"),
+    diagnostics: DiagnosticsConfigSchema.describe("Thresholds of the five structure diagnostics"),
   })
   .superRefine((config, context) => {
     const elements = new Set(Object.keys(config.elements));
@@ -128,6 +180,51 @@ export const ArchitectureConfigSchema = z
     if (elements.has(UNITS)) context.addIssue({ code: "custom", message: `"${UNITS}" is reserved for noCycles: rename the element`, path: ["elements", UNITS] });
     const names = new Set<string>();
     config.rules.forEach((rule, index) => checkRule(rule, index, config.elements, names, context));
+    const layersOf = new Map<string, number>();
+    for (const [profileName, profile] of Object.entries(config.profiles ?? {})) {
+      profile.layers.forEach((layer, layerIndex) => {
+        for (const element of layer) {
+          if (!(element in config.elements)) {
+            context.addIssue({ code: "custom", message: `unknown element "${element}"`, path: ["profiles", profileName, "layers", layerIndex] });
+          }
+          if (layersOf.has(`${profileName}\0${element}`)) {
+            context.addIssue({ code: "custom", message: `"${element}" is in more than one layer`, path: ["profiles", profileName, "layers", layerIndex] });
+          }
+          layersOf.set(`${profileName}\0${element}`, layerIndex);
+        }
+      });
+    }
+    const areaRules = new Set<string>();
+    for (const [areaName, area] of Object.entries(config.areas ?? {})) {
+      if (!(area.profile in (config.profiles ?? {}))) {
+        context.addIssue({ code: "custom", message: `unknown profile "${area.profile}"`, path: ["areas", areaName, "profile"] });
+      }
+      const ruleName = `${PROFILE_RULE_PREFIX}${areaName}`;
+      if (names.has(ruleName)) {
+        context.addIssue({ code: "custom", message: `"${ruleName}" is reserved for the area profile`, path: ["areas", areaName] });
+      }
+      areaRules.add(ruleName);
+    }
+    const ruleNames = new Set([...names, ...areaRules]);
+    config.exceptions?.forEach((exception, index) => {
+      if ((exception.rule === undefined) === (exception.diagnostic === undefined)) {
+        context.addIssue({ code: "custom", message: "an exception needs exactly one of rule or diagnostic", path: ["exceptions", index] });
+      }
+      if (exception.rule !== undefined) {
+        if (exception.source === undefined || exception.target === undefined) {
+          context.addIssue({ code: "custom", message: "a rule exception needs source and target", path: ["exceptions", index] });
+        }
+        if (!ruleNames.has(exception.rule)) {
+          context.addIssue({ code: "custom", message: `unknown rule "${exception.rule}"`, path: ["exceptions", index, "rule"] });
+        }
+      }
+      if (exception.diagnostic !== undefined && (exception.source !== undefined || exception.target !== undefined)) {
+        context.addIssue({ code: "custom", message: "a diagnostic exception takes no source or target", path: ["exceptions", index] });
+      }
+      if (exception.until !== undefined && Number.isNaN(Date.parse(exception.until))) {
+        context.addIssue({ code: "custom", message: "until is not a date", path: ["exceptions", index, "until"] });
+      }
+    });
   });
 
 export type ArchitectureConfig = z.infer<typeof ArchitectureConfigSchema>;
@@ -184,23 +281,44 @@ export interface BaselineEntry {
 }
 
 const BaselineSchema = z.strictObject({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   violations: z.array(z.strictObject({ rule: z.string().max(128), source: z.string().max(4096), target: z.string().max(4096) })),
+  /** Version 2: the accepted value of each structure diagnostic, by stable id. */
+  diagnostics: z.array(z.strictObject({ id: z.string().min(1).max(512), value: z.number().finite() })).optional(),
 });
 
 const byEntry = (left: BaselineEntry, right: BaselineEntry) =>
   byCodeUnit(left.rule, right.rule) || byCodeUnit(left.source, right.source) || byCodeUnit(left.target, right.target);
 
+export interface DiagnosticBaselineEntry {
+  id: string;
+  value: number;
+}
+
+/** The violations (version 1 and 2) and the diagnostic values (version 2 only). */
+export function parseBaselineFile(text: string, file = ARCHITECTURE_BASELINE_FILE): {
+  violations: BaselineEntry[];
+  diagnostics: DiagnosticBaselineEntry[];
+} {
+  const parsed = parseJsonFile(text, file, MAX_BASELINE_BYTES, BaselineSchema);
+  return {
+    violations: parsed.violations.map(({ rule, source, target }) =>
+      ({ rule, source: normalizePath(source), target: normalizePath(target) })),
+    diagnostics: parsed.diagnostics ?? [],
+  };
+}
+
 export function parseBaseline(text: string, file = ARCHITECTURE_BASELINE_FILE): BaselineEntry[] {
   // Written on any OS: a baseline edited on Windows may hold backslashes.
-  return parseJsonFile(text, file, MAX_BASELINE_BYTES, BaselineSchema).violations.map(({ rule, source, target }) =>
-    ({ rule, source: normalizePath(source), target: normalizePath(target) }));
+  return parseBaselineFile(text, file).violations;
 }
 
 /** Baseline file text: every violation, sorted, so it is identical on every OS. */
-export function formatBaseline(violations: readonly BaselineEntry[]): string {
+export function formatBaseline(violations: readonly BaselineEntry[], diagnostics: readonly DiagnosticBaselineEntry[] = []): string {
   const entries = violations.map(({ rule, source, target }) => ({ rule, source: normalizePath(source), target: normalizePath(target) })).sort(byEntry);
-  return `${JSON.stringify({ version: 1, violations: entries }, null, 2)}\n`;
+  const values = [...diagnostics].sort((left, right) => byCodeUnit(left.id, right.id));
+  if (values.length === 0) return `${JSON.stringify({ version: 1, violations: entries }, null, 2)}\n`;
+  return `${JSON.stringify({ version: 2, violations: entries, diagnostics: values }, null, 2)}\n`;
 }
 
 /**
@@ -225,6 +343,7 @@ export interface ArchitectureRulesFiles {
   config: ArchitectureConfig;
   baselineFile?: string;
   baseline?: BaselineEntry[];
+  diagnosticBaseline?: DiagnosticBaselineEntry[];
 }
 
 /** Config and baseline files, workspace-relative; `baseline: false` reads no baseline. */
@@ -249,7 +368,14 @@ export async function loadArchitectureRules(workspaceRoot: string, files: Archit
     if (files.baseline !== undefined) throw new Error(`Baseline ${baselineFile} not found.`);
     return { configFile, config };
   }
-  return { configFile, config, baselineFile, baseline: parseBaseline(baselineText, baselineFile) };
+  const parsed = parseBaselineFile(baselineText, baselineFile);
+  return {
+    configFile,
+    config,
+    baselineFile,
+    baseline: parsed.violations,
+    ...(parsed.diagnostics.length > 0 ? { diagnosticBaseline: parsed.diagnostics } : {}),
+  };
 }
 
 /** Element name → instance, for one file. An element without `each` has one instance: its name. */
@@ -342,8 +468,10 @@ export interface ArchitectureViolation {
   /** Element instances (`element` or `element (instance)` with each), or unit keys for noCycles units. */
   from: string;
   to: string;
-  /** Not in the baseline (every violation without one). */
+  /** Not in the baseline and not accepted by an exception. */
   new: boolean;
+  /** The config exception that accepts this violation, with its expiry. */
+  excepted?: { reason: string; until?: string };
 }
 
 type Edge = ArchitectureGraph["edges"][number];
@@ -410,6 +538,47 @@ function ruleViolations(rule: RawRule, graph: ArchitectureGraph, assignment: Uni
   return found;
 }
 
+/**
+ * Imports of an area that go up its profile: the source is in one of the profile's layers and
+ * the target is in a layer above it. With `strict`, an import of a file in no layer is reported too.
+ */
+function profileViolations(
+  area: NonNullable<ArchitectureConfig["areas"]>[string],
+  layers: string[][],
+  graph: ArchitectureGraph,
+  elements: ResolvedElements,
+): Map<Edge, Found> {
+  const matcher = ignore().add(asList(area.path));
+  const layerOfElement = new Map<string, number>();
+  layers.forEach((layer, index) => layer.forEach((element) => layerOfElement.set(element, index)));
+  const layerOf = (file: string): number | undefined => {
+    const member = elements.membership.get(file);
+    if (member === undefined) return undefined;
+    let lowest: number | undefined;
+    for (const element of member.keys()) {
+      const layer = layerOfElement.get(element);
+      if (layer !== undefined && (lowest === undefined || layer < lowest)) lowest = layer;
+    }
+    return lowest;
+  };
+  const found = new Map<Edge, Found>();
+  for (const edge of graph.edges) {
+    if (!matcher.ignores(edge.sourceRelative)) continue;
+    const from = layerOf(edge.sourceRelative);
+    const to = layerOf(edge.targetRelative);
+    if (from === undefined) {
+      if (area.strict) found.set(edge, { from: "no layer", to: to === undefined ? "no layer" : `layer ${to}` });
+      continue;
+    }
+    if (to === undefined) {
+      if (area.strict) found.set(edge, { from: `layer ${from}`, to: "no layer" });
+      continue;
+    }
+    if (to < from) found.set(edge, { from: `layer ${from}`, to: `layer ${to}` });
+  }
+  return found;
+}
+
 /** Distinct element (or unit) pairs of a rule's violations, most pairs first. */
 function elementPairs(violations: readonly Found[]): ArchitectureRuleSummary["elementPairs"] {
   const pairs = new Map<string, { from: string; to: string; count: number }>();
@@ -433,20 +602,40 @@ export function checkArchitecture(
   config: ArchitectureConfig,
   baseline?: readonly BaselineEntry[],
   roleOf: RoleOf = new Map(),
+  now: Date = new Date(),
 ) {
   const files = graph.nodes.map((node) => node.relativePath);
   const elements = resolveElements(config, files, assignment, roleOf);
   const accepted = new Set((baseline ?? []).map((entry) => `${entry.rule}\0${entry.source}\0${entry.target}`));
-  const found = new Set<string>();
+  const today = now.toISOString().slice(0, 10);
+  const exceptionFor = (rule: string, source: string, target: string) => {
+    const exception = (config.exceptions ?? []).find((item) =>
+      item.rule === rule && item.source === normalizePath(source) && item.target === normalizePath(target));
+    if (exception === undefined || (exception.until !== undefined && exception.until < today)) return undefined;
+    return { reason: exception.reason, ...(exception.until === undefined ? {} : { until: exception.until }) };
+  };
+  const seen = new Set<string>();
   const violations: ArchitectureViolation[] = [];
+  const toViolations = (rule: string, severity: "error" | "warning", found: Map<Edge, Found>) =>
+    [...found].map(([edge, pair]) => {
+      const key = `${rule}\0${edge.sourceRelative}\0${edge.targetRelative}`;
+      seen.add(key);
+      const excepted = exceptionFor(rule, edge.sourceRelative, edge.targetRelative);
+      return {
+        rule,
+        severity,
+        source: edge.sourceRelative,
+        target: edge.targetRelative,
+        line: edge.line,
+        ...pair,
+        new: excepted === undefined && !accepted.has(key),
+        ...(excepted === undefined ? {} : { excepted }),
+      };
+    });
   const rules: ArchitectureRuleSummary[] = config.rules.map((rule) => {
     const severity = rule.severity ?? "error";
-    const kind = ARCHITECTURE_RULE_KINDS.find((candidate) => rule[candidate] !== undefined)!;
-    const own = severity === "off" ? [] : [...ruleViolations(rule, graph, assignment, elements)].map(([edge, pair]) => {
-      const key = `${rule.name}\0${edge.sourceRelative}\0${edge.targetRelative}`;
-      found.add(key);
-      return { rule: rule.name, severity, source: edge.sourceRelative, target: edge.targetRelative, line: edge.line, ...pair, new: !accepted.has(key) };
-    });
+    const kind = CONFIG_RULE_KINDS.find((candidate) => rule[candidate] !== undefined)!;
+    const own = severity === "off" ? [] : toViolations(rule.name, severity, ruleViolations(rule, graph, assignment, elements));
     violations.push(...own);
     return {
       name: rule.name,
@@ -458,12 +647,28 @@ export function checkArchitecture(
       elementPairs: elementPairs(own),
     };
   });
+  for (const [areaName, area] of Object.entries(config.areas ?? {})) {
+    const severity = area.severity ?? "error";
+    const profile = config.profiles?.[area.profile];
+    if (profile === undefined) continue;
+    const name = `${PROFILE_RULE_PREFIX}${areaName}`;
+    const own = severity === "off" ? [] : toViolations(name, severity, profileViolations(area, profile.layers, graph, elements));
+    violations.push(...own);
+    rules.push({
+      name,
+      kind: "profile",
+      severity,
+      violations: own.length,
+      newViolations: own.filter((violation) => violation.new).length,
+      elementPairs: elementPairs(own),
+    });
+  }
   violations.sort(byEntry);
   const unmatchedFiles = files.filter((file) => elements.membership.get(file)!.size === 0).sort(byCodeUnit);
   // A rule switched off is not checked: its accepted entries are neither found nor resolved.
   const off = new Set(rules.filter((rule) => rule.severity === "off").map((rule) => rule.name));
   const resolved = (baseline ?? [])
-    .filter((entry) => !off.has(entry.rule) && !found.has(`${entry.rule}\0${entry.source}\0${entry.target}`))
+    .filter((entry) => !off.has(entry.rule) && !seen.has(`${entry.rule}\0${entry.source}\0${entry.target}`))
     .sort(byEntry);
   const count = (severity: "error" | "warning", onlyNew: boolean) =>
     violations.filter((violation) => violation.severity === severity && (!onlyNew || violation.new)).length;
@@ -490,6 +695,7 @@ export function checkArchitecture(
       newErrors: count("error", true),
       warnings: count("warning", false),
       resolved: resolved.length,
+      excepted: violations.filter((violation) => violation.excepted !== undefined).length,
     } satisfies ArchitectureCheckTotals,
     rules,
     violations,

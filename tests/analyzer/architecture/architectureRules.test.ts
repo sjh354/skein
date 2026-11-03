@@ -57,6 +57,22 @@ describe("parseArchitectureConfig", () => {
     expect(issuesOf(withRules([{ name: "r", noCycles: "web" }]))).toEqual([{ path: "$.rules[0].noCycles", message: 'unknown element "web"' }]);
   });
 
+  it("accepts area profiles and exceptions, and refuses references to missing ones", () => {
+    const profileConfig = {
+      ...RULES_CONFIG,
+      profiles: { layers: { layers: [["frontend"], ["backend"]] } },
+      areas: { web: { path: ["frontend/", "backend/"], profile: "layers" } },
+      exceptions: [{ rule: "profile:web", source: "frontend/src/app.ts", target: "backend/src/api.ts", reason: "legacy" }],
+    };
+    expect(parseArchitectureConfig(JSON.stringify(profileConfig)).areas?.web.profile).toBe("layers");
+    expect(issuesOf(JSON.stringify({ ...profileConfig, areas: { web: { path: "frontend/", profile: "missing" } } })))
+      .toEqual([{ path: "$.areas.web.profile", message: 'unknown profile "missing"' }]);
+    expect(issuesOf(JSON.stringify({ ...profileConfig, profiles: { layers: { layers: [["frontend"], ["missing"]] } } })))
+      .toEqual([{ path: "$.profiles.layers.layers[1]", message: 'unknown element "missing"' }]);
+    expect(issuesOf(JSON.stringify({ ...profileConfig, exceptions: [{ rule: "profile:web", source: "frontend/src/app.ts", reason: "legacy" }] })))
+      .toEqual([{ path: "$.exceptions[0]", message: "a rule exception needs source and target" }]);
+  });
+
   it("rejects empty and escaping patterns", () => {
     expect(issuesOf(withRules([], { a: { path: "" } }))).toEqual([{ path: "$.elements.a.path", message: "empty pattern" }]);
     expect(issuesOf(withRules([], { a: { path: ["a/", "  "] } }))).toEqual([{ path: "$.elements.a.path[1]", message: "empty pattern" }]);
@@ -154,6 +170,38 @@ describe("checkArchitecture on the generated workspace", () => {
     ]);
   });
 
+  it("profile areas: an import up the declared layers is a rule violation, unless excepted", () => {
+    const tiny = {
+      nodes: [
+        { relativePath: "base/a.ts" },
+        { relativePath: "top/b.ts" },
+      ],
+      edges: [{ source: "/w/base/a.ts", target: "/w/top/b.ts", sourceRelative: "base/a.ts", targetRelative: "top/b.ts", line: 1 }],
+      context: { revision: "r" },
+    } as unknown as ArchitectureGraph;
+    const assignment: UnitAssignment = {
+      unitOf: new Map([["base/a.ts", "(root)"], ["top/b.ts", "(root)"]]),
+      names: new Map([["(root)", "(root)"]]),
+    };
+    const profileConfig = (exceptions: unknown[] = []) => parseArchitectureConfig(JSON.stringify({
+      elements: { base: { path: "base/" }, top: { path: "top/" } },
+      profiles: { layers: { layers: [["top"], ["base"]] } },
+      areas: { web: { path: ["base/", "top/"], profile: "layers" } },
+      exceptions,
+    }));
+    const result = checkArchitecture(tiny, assignment, profileConfig());
+    expect(pairs(result, "profile:web")).toEqual([
+      { source: "base/a.ts", target: "top/b.ts", from: "layer 1", to: "layer 0", line: 1 },
+    ]);
+    expect(result.passed).toBe(false);
+
+    const accepted = checkArchitecture(tiny, assignment, profileConfig([
+      { rule: "profile:web", source: "base/a.ts", target: "top/b.ts", reason: "legacy" },
+    ]));
+    expect(accepted.violations.find((violation) => violation.rule === "profile:web")?.excepted).toEqual({ reason: "legacy" });
+    expect(accepted.totals.excepted).toBe(1);
+  });
+
   it("allowOnly: a function imports shared libraries and its own files only", () => {
     expect(pairs(checkArchitecture(graph, assignment, config()), "functions-only-shared")).toEqual([
       { source: "functions/billing/index.ts", target: "backend/src/db.ts", from: "functions (functions/billing)", to: "backend", line: 2 },
@@ -203,6 +251,7 @@ describe("checkArchitecture on the generated workspace", () => {
       newErrors: 5,
       warnings: 1,
       resolved: 0,
+      excepted: 0,
     });
     expect(result.unmatchedFiles).toEqual(["scripts/seed.ts"]);
     expect(result.passed).toBe(false);
@@ -293,7 +342,7 @@ describe("baseline file", () => {
   });
 
   it("rejects an invalid baseline with the JSON path", () => {
-    expect(() => parseBaseline(JSON.stringify({ version: 2, violations: [] }))).toThrow(/\$\.version/);
+    expect(() => parseBaseline(JSON.stringify({ version: 3, violations: [] }))).toThrow(/\$\.version/);
     expect(() => parseBaseline(JSON.stringify({ version: 1, violations: [{ rule: "a" }] }))).toThrow(/\$\.violations\[0\]\.source/);
   });
 });

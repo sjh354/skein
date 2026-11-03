@@ -154,6 +154,7 @@ import {
   GetImpactAnalysisParamsSchema,
   type GetImpactAnalysisResult,
   CheckArchitectureParamsSchema,
+  DiagnoseStructureParamsSchema,
   ExploreArchitectureParamsSchema,
   GraphContextParamsSchema,
   type GetIndexStatusResult,
@@ -1481,6 +1482,32 @@ server.registerTool(
 
     const response = await invokeToolWithResponse("check_architecture", params);
     return formatToolResponse(response, responseFormat, "skein_check_architecture");
+  },
+);
+
+// Tool: skein_diagnose_structure
+server.registerTool(
+  "skein_diagnose_structure",
+  {
+    title: "Diagnose Structure",
+    description: mcpToolDescription("diagnose_structure"),
+    inputSchema: DiagnoseStructureParamsSchema,
+    outputSchema: McpToolResponseSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ response_format, ...params }) => {
+    const responseFormat = response_format ?? "toon";
+    const workerCheck = await ensureWorkerReady();
+    if (workerCheck.error)
+      return formatToolResponse(workerCheck.response, responseFormat, "skein_diagnose_structure");
+
+    const response = await invokeToolWithResponse("diagnose_structure", params);
+    return formatToolResponse(response, responseFormat, "skein_diagnose_structure");
   },
 );
 

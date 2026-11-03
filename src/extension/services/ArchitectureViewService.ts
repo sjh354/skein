@@ -22,8 +22,10 @@ import {
   type UnitSource,
 } from "@/analyzer/architecture/architectureView";
 import type { IndexerStatusSnapshot } from "@/analyzer/IndexerStatus";
+import { runWorkspaceDiagnostics } from "@/analyzer/diagnostics/structureDiagnostics";
 import {
   DEFAULT_RENDERED_GROUPS,
+  MAX_RENDERED_DIAGNOSTICS,
   MAX_RENDERED_GROUPS,
   type ArchitectureControlsMessage,
   type ArchitectureDependentFilesCommand,
@@ -595,6 +597,17 @@ export class ArchitectureViewService {
         return;
       }
       const rules = await checkRules(graph, this.options.workspaceRoot);
+      let diagnostics: Awaited<ReturnType<typeof runWorkspaceDiagnostics>> | undefined;
+      let diagnosticsError: string | undefined;
+      try {
+        const result = await runWorkspaceDiagnostics(graph, this.options.workspaceRoot, { signal });
+        diagnostics = {
+          ...result,
+          diagnostics: result.diagnostics.slice(0, MAX_RENDERED_DIAGNOSTICS),
+        };
+      } catch (error) {
+        diagnosticsError = maskWorkspaceRoot(error instanceof Error ? error.message : String(error), this.options.workspaceRoot);
+      }
       // A refused config is reported by the rules panel: the roles are then only inferred.
       const declaredRoles = await loadDeclaredRoles(this.options.workspaceRoot).catch(() => undefined);
       signal.throwIfAborted();
@@ -606,6 +619,8 @@ export class ArchitectureViewService {
         stale: running.indexRan || any || [...changed].some(file => files.has(file)),
         ...overview,
         ...rulesView(rules, viewGraph, source?.assignment.unitOf),
+        ...(diagnostics === undefined ? {} : { diagnostics }),
+        ...(diagnosticsError === undefined ? {} : { diagnosticsError }),
       };
       this.graph = { graph: viewGraph, files, hidden, source, rules, folders: new Map(), startedAt };
       // Cleared only once posted: a change seen by an aborted build still applies to the next one.

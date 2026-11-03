@@ -10,9 +10,10 @@ import { buildArchitectureGraph } from "../../analyzer/architecture/Architecture
 import { groupMatrix, unitMatrix } from "../../analyzer/architecture/architectureMatrix";
 import { checkWorkspaceArchitecture, loadDeclaredRoles } from "../../analyzer/architecture/architectureRules";
 import { assignUnits, buildArchitectureUnits, folderLevel } from "../../analyzer/architecture/architectureUnits";
+import { exploreDiagnostics, runWorkspaceDiagnostics } from "../../analyzer/diagnostics/structureDiagnostics";
 import { aggregateCommunityGroups } from "../../analyzer/community/groupAggregation";
 import { workerState } from "../shared/state";
-import type { CheckArchitectureParams, ExploreArchitectureParams } from "../types";
+import type { CheckArchitectureParams, DiagnoseStructureParams, ExploreArchitectureParams } from "../types";
 
 /**
  * Progressive exploration of the grouped architecture: a bounded summary, one group with
@@ -55,4 +56,16 @@ export async function executeCheckArchitecture(params: CheckArchitectureParams, 
   const graph = await buildArchitectureGraph(rootDir, (filePath) => workerState.getSpider().analyze(filePath), { signal });
   const check = await checkWorkspaceArchitecture(graph, rootDir, { config: params.config, baseline: params.baseline });
   return exploreArchitectureCheck(check, params);
+}
+
+/** The five structure diagnostics: declared-rule violations and review candidates, paged. */
+export async function executeDiagnoseStructure(params: DiagnoseStructureParams, signal?: AbortSignal) {
+  const { rootDir } = workerState.getConfig();
+  const graph = await buildArchitectureGraph(
+    rootDir,
+    (filePath) => workerState.getSpider().analyze(filePath),
+    { maxFiles: params.maxFiles, signal },
+  );
+  const result = await runWorkspaceDiagnostics(graph, rootDir, { signal });
+  return exploreDiagnostics(result, params);
 }
