@@ -1662,6 +1662,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
   };
   /** A double click enters a unit, a folder holding sub-folders, or a group (its files). */
   const dbltap = (target: cytoscape.SingularElementArgument) => {
+    surface.markUserAction();
     if (target.isNode() && target.data("unitKey") !== undefined) selectUnit(target.data("unitKey"));
     else if (target.isNode() && target.data("folder") !== undefined) enterFolder(target.data("folder"));
     else if (isGroup(target)) enter(target.data("groupId"));
@@ -2266,12 +2267,12 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
             unitsLevel={unitsLevel}
             shownEdges={shownEdges}
             query={query}
-            onQuery={setQuery}
+            onQuery={value => { surface.markUserAction(); setQuery(value); }}
             minImports={minImports}
-            onMinImports={setMinImports}
+            onMinImports={value => { surface.markUserAction(); setMinImports(value); }}
             capReached={capReached}
             view={view}
-            onView={(next) => actionsRef.current.switchView(next)}
+            onView={(next) => { surface.markUserAction(); actionsRef.current.switchView(next); }}
             findMatches={view === "matrix" ? matrixMatches.length : findMatches}
             found={found}
             onShowMore={() => actionsRef.current.showMoreGroups()}
@@ -2280,8 +2281,8 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
             summary={drawn}
             unit={unit}
             folders={folders}
-            onUnits={() => actionsRef.current.selectUnit(null)}
-            onLevel={(depth) => actionsRef.current.goTo(unit, folders.slice(0, depth))}
+            onUnits={() => { surface.markUserAction(); actionsRef.current.selectUnit(null); }}
+            onLevel={(depth) => { surface.markUserAction(); actionsRef.current.goTo(unit, folders.slice(0, depth)); }}
             expansions={expansions}
             focusId={focusId}
             onOverview={() => actionsRef.current.overview()}

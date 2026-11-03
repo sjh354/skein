@@ -494,8 +494,8 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     onDrillDown,
     onFindReferences,
     onToggleParents,
-    onToggle: toggleExpandedNode,
-    onExpandRequest: handleExpandRequest,
+    onToggle: path => { surface.markUserAction(); toggleExpandedNode(path); },
+    onExpandRequest: path => { surface.markUserAction(); handleExpandRequest(path); },
     onHighlight: handleHighlight,
   });
 
@@ -505,8 +505,8 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     onDrillDown,
     onFindReferences,
     onToggleParents,
-    onToggle: toggleExpandedNode,
-    onExpandRequest: handleExpandRequest,
+    onToggle: path => { surface.markUserAction(); toggleExpandedNode(path); },
+    onExpandRequest: path => { surface.markUserAction(); handleExpandRequest(path); },
     onHighlight: handleHighlight,
   };
 
@@ -991,6 +991,8 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
   const surface = useSurfaceBridge({
     mode, nodes: data.nodes.map(id => ({ id, label: data.nodeLabels?.[id] })), post: postMessage,
     state: { expandedNodeIds: [...expandedNodes], analysis: { nodes: data.nodes.length, edges: data.edges.length, stale: isReanalyzing } },
+    syncExpanded: ids => setExpandedNodes(new Set(ids)),
+    clearSelection: () => setNodes(nodes.map(node => ({ ...node, selected: false }))),
     apply: action => {
       if (action.action === "set_expanded") {
         setExpandedNodes(previous => { const next = new Set(previous); if (action.expanded) next.add(action.nodeId); else next.delete(action.nodeId); return next; });
@@ -1026,7 +1028,7 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
         nodes={mode === 'file' ? presentation.nodes : nodes}
         edges={mode === 'file' ? presentation.edges : edges}
         onEdgeClick={mode === 'file' ? handleFileEdgeClick : undefined}
-        onPaneClick={mode === 'file' ? clearFileFocus : undefined}
+        onPaneClick={mode === 'file' ? () => { clearFileFocus(); surface.select(undefined); } : undefined}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}

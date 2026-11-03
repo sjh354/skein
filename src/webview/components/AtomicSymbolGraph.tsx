@@ -53,6 +53,7 @@ export const AtomicSymbolGraph: React.FC<AtomicSymbolGraphProps> = ({
   const surface = useSurfaceBridge({
     mode: "symbol", nodes: symbols.map(symbol => ({ id: symbol.id, label: symbol.name })), post: postMessage,
     state: { expandedNodeIds: [...expandedNodes], analysis: { nodes: symbols.length, edges: dependencies.length, stale: false } },
+    clearSelection: () => setSelectedNode(null),
     apply: action => {
       if (action.action !== "select" && action.action !== "focus") return "unsupported-view-action";
       setSelectedNode(action.nodeId);

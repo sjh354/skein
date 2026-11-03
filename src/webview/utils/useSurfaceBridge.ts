@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { SurfaceCommandMessage, WebviewToExtensionMessage } from "../../shared/messages";
+import type { SurfaceCommandMessage, SurfaceSyncMessage, WebviewToExtensionMessage } from "../../shared/messages";
 import type { SkeinSelection, SkeinSurfaceState, SkeinViewAction, SkeinViewMode } from "../../shared/viewState";
 
 /** Acknowledge commands from the mounted renderer, and publish bounded view state. */
@@ -9,11 +9,15 @@ export function useSurfaceBridge(options: {
   getNodes?: () => Array<{ id: string; label?: string }>;
   state: Omit<SkeinSurfaceState, "nodeIds">;
   post?: (message: WebviewToExtensionMessage) => void;
+  clearSelection?: () => void;
+  syncExpanded?: (nodeIds: string[]) => void;
   apply: (action: SkeinViewAction) => string | void;
 }) {
   const latest = useRef(options);
   latest.current = options;
   const [commandVersion, setCommandVersion] = useState(0);
+  const userPending = useRef(false);
+  const syncTarget = useRef<SurfaceSyncMessage | undefined>(undefined);
   const pending = useRef<Array<{ id: string; reason?: string }>>([]);
   const [selection, setSelection] = useState<SkeinSelection>();
   const [search, setSearch] = useState<SkeinSurfaceState["search"]>();
@@ -27,13 +31,50 @@ export function useSurfaceBridge(options: {
       selection: current.current.selection, userInitiated });
   };
   useEffect(() => {
-    report();
+    report(userPending.current);
+    userPending.current = false;
     for (const result of pending.current.splice(0)) latest.current.post?.({ command: "surfaceResult", ...result });
   }, [options.mode, JSON.stringify(options.nodes), JSON.stringify(options.state), selection, search, commandVersion]);
   useEffect(() => {
-    const receive = (event: MessageEvent<SurfaceCommandMessage>) => {
+    const target = syncTarget.current;
+    if (!target) return;
+    const o = latest.current;
+    const remote = target.state.architecture;
+    const local = o.state.architecture;
+    if (remote && local) {
+      const controls = { action: "set_architecture" as const, view: remote.view as "graph" | "matrix" | undefined, minImports: remote.minImports };
+      if (remote.unit !== local.unit) { o.apply({ ...controls, unit: remote.unit ?? "" }); return; }
+      if (remote.folder !== local.folder) { o.apply({ ...controls, folder: remote.folder ?? "" }); return; }
+      if (remote.view !== local.view || remote.minImports !== local.minImports) { o.apply(controls); return; }
+    }
+    if (target.selection?.nodeId !== current.current.selection?.nodeId) {
+      if (target.selection && o.apply({ action: "select", nodeId: target.selection.nodeId })) return;
+      if (!target.selection) o.clearSelection?.();
+      current.current.selection = target.selection;
+      setSelection(target.selection);
+    }
+    if (JSON.stringify(target.state.search) !== JSON.stringify(current.current.search)) {
+      current.current.search = target.state.search; setSearch(target.state.search);
+    }
+    const expanded = new Set(target.state.expandedNodeIds);
+    if (expanded.size !== o.state.expandedNodeIds.length || o.state.expandedNodeIds.some(id => !expanded.has(id))) {
+      if (o.syncExpanded) o.syncExpanded([...expanded]);
+      else for (const nodeId of new Set([...o.state.expandedNodeIds, ...expanded])) {
+        if (o.state.expandedNodeIds.includes(nodeId) !== expanded.has(nodeId)) o.apply({ action: "set_expanded", nodeId, expanded: expanded.has(nodeId) });
+      }
+    }
+    syncTarget.current = undefined;
+  }, [options.mode, JSON.stringify(options.nodes), JSON.stringify(options.state), commandVersion]);
+  useEffect(() => {
+    const receive = (event: MessageEvent<SurfaceCommandMessage | SurfaceSyncMessage>) => {
       const message = event.data;
-      if (message?.command !== "surfaceCommand" || message.mode !== latest.current.mode) return;
+      if (!message || message.mode !== latest.current.mode) return;
+      if (message.command === "surfaceSync") {
+        syncTarget.current = message;
+        setCommandVersion(version => version + 1);
+        return;
+      }
+      if (message.command !== "surfaceCommand") return;
       const o = latest.current;
       const action = message.action;
       const nodes = o.getNodes?.() ?? o.nodes;
@@ -61,7 +102,7 @@ export function useSurfaceBridge(options: {
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, []);
-  return { selectedId: selection?.nodeId, select: (nodeId?: string, path?: string) => {
+  return { markUserAction: () => { userPending.current = true; }, selectedId: selection?.nodeId, select: (nodeId?: string, path?: string) => {
     current.current.selection = nodeId ? { nodeId, path } : undefined;
     setSelection(current.current.selection); report(true);
   } };

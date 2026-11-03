@@ -632,9 +632,29 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
         return;
       }
 
+      if (msg.type === "callGraphSyncLayout") {
+        const cy = cyRef.current;
+        if (!cy || (msg.layout.rootSymbolId && msg.layout.rootSymbolId !== lastRootRef.current)) return;
+        if (layoutReportTimerRef.current !== null) clearTimeout(layoutReportTimerRef.current);
+        if (postLayoutResizeTimerRef.current !== null) clearTimeout(postLayoutResizeTimerRef.current);
+        suppressLayoutReportRef.current = true;
+        try {
+          cy.batch(() => {
+            for (const [id, point] of Object.entries(msg.layout.positions)) cy.getElementById(id).position(point);
+            if (msg.layout.zoom !== undefined) cy.zoom(msg.layout.zoom);
+            if (msg.layout.pan !== undefined) cy.pan(msg.layout.pan);
+          });
+          rememberLayout(cy);
+        } finally { suppressLayoutReportRef.current = false; }
+        return;
+      }
+
       if (msg.type === "callGraphSelectNode") {
         const cy = cyRef.current;
         if (!cy) return;
+        if (!msg.nodeId) {
+          clearSelection(cy); setSelectedNodeId(undefined); setSelectedEdgeId(undefined); reportSelection(undefined, false); return;
+        }
         const node = cy.getElementById(msg.nodeId);
         if (node.empty() || !node.isNode()) return;
         selectNode(cy, msg.nodeId);

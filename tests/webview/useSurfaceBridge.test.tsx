@@ -58,3 +58,12 @@ describe("rendered surface bridge", () => {
     expect(post.mock.calls.some(([m]) => m.state?.search?.total === 0 && m.state.search.query === "")).toBe(true);
   });
 });
+
+it("receives another surface's selection without classifying it as a user action", () => {
+  const post = vi.fn(); const apply = vi.fn();
+  render(<Harness post={post} apply={apply} />);
+  act(() => window.dispatchEvent(new MessageEvent("message", { data: { command: "surfaceSync", mode: "file", state: { nodeIds: nodes.map(n => n.id), expandedNodeIds: [], search: { query: "alpha", matches: ["file:alpha"], total: 1 } }, selection: { nodeId: "file:alpha" } } })));
+  expect(apply).toHaveBeenCalledWith({ action: "select", nodeId: "file:alpha" });
+  expect(post.mock.calls.some(([m]) => m.selection?.nodeId === "file:alpha")).toBe(true);
+  expect(post.mock.calls.some(([m]) => m.userInitiated === true)).toBe(false);
+});

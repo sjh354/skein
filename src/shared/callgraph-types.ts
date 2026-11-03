@@ -144,7 +144,13 @@ export interface CallGraphSetDepthMessage {
 }
 
 /** Discriminated union of all extension → webview messages for this feature */
+export interface CallGraphSyncLayoutMessage {
+  type: "callGraphSyncLayout";
+  layout: import("./viewState").SkeinLayout;
+}
+
 export type CallGraphExtensionMessage =
+  | CallGraphSyncLayoutMessage
   | ShowCallGraphMessage
   | CallGraphIndexingMessage
   | CallGraphSelectNodeMessage

@@ -227,6 +227,12 @@ export interface SurfaceStateMessage {
   selection?: import("./viewState").SkeinSelection;
   userInitiated?: boolean;
 }
+export interface SurfaceSyncMessage {
+  command: "surfaceSync";
+  mode: import("./viewState").SkeinViewMode;
+  state: import("./viewState").SkeinSurfaceState;
+  selection?: import("./viewState").SkeinSelection;
+}
 export interface SurfaceResultMessage {
   command: "surfaceResult";
   id: string;
@@ -235,6 +241,7 @@ export interface SurfaceResultMessage {
 
 export type ExtensionToWebviewMessage =
   | SurfaceCommandMessage
+  | SurfaceSyncMessage
   | ShowGraphMessage
   | ExpandedGraphMessage
   | ReferencingFilesMessage
