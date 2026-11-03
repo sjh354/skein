@@ -8,6 +8,7 @@
  */
 
 import * as vscode from "vscode";
+import * as path from "node:path";
 import type { ChangeTask } from "@/shared/change";
 import {
   canRedo,
@@ -71,6 +72,26 @@ function reportResult(options: ChangeCommandsOptions, result: ChangeResult, succ
 export function registerChangeCommands(options: ChangeCommandsOptions): vscode.Disposable[] {
   const { service, host } = options;
 
+  const previewAndApply = async (
+    task: ChangeTask,
+    title: string,
+    detail: string,
+    success: string,
+  ): Promise<void> => {
+    await host.showPreview(task.plan.id, service.preview(task));
+    const confirmed = await host.confirm(title, detail);
+    if (!confirmed) return;
+    const applied = await service.apply(task.plan.id);
+    reportResult(options, applied, success);
+  };
+
+  const planDetail = (task: ChangeTask): string => {
+    const summary = summarizeTask(task);
+    return summary.files
+      .map((file) => `${vscode.workspace.asRelativePath(file.path)} (+${file.added} -${file.removed})`)
+      .join("\n");
+  };
+
   const rename = vscode.commands.registerCommand("skein.renameSymbol", async () => {
     const selection = options.getSelection();
     if (!selection?.path || !selection.name || selection.startLine === undefined) {
@@ -98,17 +119,124 @@ export function registerChangeCommands(options: ChangeCommandsOptions): vscode.D
       host.report("warning", `Skein: ${describeReason(planned.reason ?? "rename-failed")}`);
       return;
     }
-    const task = planned.task;
-    await host.showPreview(task.plan.id, service.preview(task));
-    const summary = summarizeTask(task);
-    const detail = summary.files
-      .map((file) => `${vscode.workspace.asRelativePath(file.path)} (+${file.added} -${file.removed})`)
-      .join("\n");
-    const confirmed = await host.confirm(`Rename "${selection.name}" to "${newName}"?`, detail);
-    if (!confirmed) return;
+    await previewAndApply(
+      planned.task,
+      `Rename "${selection.name}" to "${newName}"?`,
+      planDetail(planned.task),
+      `Renamed to "${newName}"`,
+    );
+  });
 
-    const applied = await service.apply(task.plan.id);
-    reportResult(options, applied, `Renamed to "${newName}"`);
+  const move = vscode.commands.registerCommand("skein.moveSymbol", async () => {
+    const selection = options.getSelection();
+    if (!selection?.path || !selection.name || selection.startLine === undefined) {
+      host.report("warning", "Skein: Select a symbol in the call graph first.");
+      return;
+    }
+    const destination = await vscode.window.showInputBox({
+      prompt: `Move "${selection.name}" to a file`,
+      value: vscode.workspace.asRelativePath(selection.path).replace(/[^/]+$/, "moved.ts"),
+      placeHolder: "Workspace-relative or absolute path",
+      validateInput: (value) => (value.trim().length === 0 ? "A destination is required." : undefined),
+    });
+    if (!destination) return;
+    const newPath = path.isAbsolute(destination)
+      ? destination
+      : path.join(service.getRoot(), destination);
+
+    const planned = await service.planMove({
+      nodeId: selection.nodeId,
+      path: selection.path,
+      name: selection.name,
+      line: selection.startLine,
+      newPath,
+      source: "ui",
+      graphVersion: options.getGraphVersion(),
+    });
+    if (!planned.ok || !planned.task) {
+      host.report("warning", `Skein: ${describeReason(planned.reason ?? "apply-failed")}`);
+      return;
+    }
+    await previewAndApply(
+      planned.task,
+      `Move "${selection.name}" to ${vscode.workspace.asRelativePath(newPath)}?`,
+      planDetail(planned.task),
+      `Moved "${selection.name}"`,
+    );
+  });
+
+  const extract = vscode.commands.registerCommand("skein.extractFunction", async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.selection.isEmpty) {
+      host.report("warning", "Skein: Select the code to extract in the editor first.");
+      return;
+    }
+    const name = await vscode.window.showInputBox({
+      prompt: "Name of the extracted function",
+      validateInput: (value) =>
+        /^[A-Za-z_$][\w$]*$/.test(value) ? undefined : "Enter a valid identifier.",
+    });
+    if (!name) return;
+    const range = editor.selection;
+    const planned = await service.planExtract({
+      path: editor.document.uri.fsPath,
+      selection: {
+        startLine: range.start.line,
+        startCharacter: range.start.character,
+        endLine: range.end.line,
+        endCharacter: range.end.character,
+      },
+      name,
+      source: "ui",
+      graphVersion: options.getGraphVersion(),
+    });
+    if (!planned.ok || !planned.task) {
+      host.report("warning", `Skein: ${describeReason(planned.reason ?? "apply-failed")}`);
+      return;
+    }
+    await previewAndApply(
+      planned.task,
+      `Extract the selection as "${name}"?`,
+      planDetail(planned.task),
+      `Extracted "${name}"`,
+    );
+  });
+
+  const inline = vscode.commands.registerCommand("skein.inlineFunction", async () => {
+    const selection = options.getSelection();
+    const editor = vscode.window.activeTextEditor;
+    const target = selection?.path && selection.name && selection.startLine !== undefined
+      ? selection
+      : editor
+        ? {
+            path: editor.document.uri.fsPath,
+            name: editor.document.getText(
+              editor.document.getWordRangeAtPosition(editor.selection.active) ?? editor.selection,
+            ),
+            startLine: editor.selection.active.line,
+          }
+        : undefined;
+    if (!target?.path || !target.name || target.startLine === undefined) {
+      host.report("warning", "Skein: Put the cursor on a function call or select it in the graph.");
+      return;
+    }
+    const planned = await service.planInline({
+      path: target.path,
+      name: target.name,
+      line: target.startLine,
+      source: "ui",
+      graphVersion: options.getGraphVersion(),
+    });
+    if (!planned.ok || !planned.task) {
+      host.report("warning", `Skein: ${describeReason(planned.reason ?? "apply-failed")}`);
+      return;
+    }
+    await previewAndApply(
+      planned.task,
+      `Inline "${target.name}" at every call site?`,
+      planDetail(planned.task),
+      `Inlined "${target.name}"`,
+    );
   });
 
   const undo = vscode.commands.registerCommand("skein.undoLastChange", async () => {
@@ -130,8 +258,18 @@ export function registerChangeCommands(options: ChangeCommandsOptions): vscode.D
     const items = [...index.entries].reverse().slice(0, MAX_HISTORY_ITEMS).map((entry) => {
       const summary = summarizeHistoryEntry(entry);
       const actionable = canUndo(entry, index) ? "undo" : canRedo(entry, index) ? "redo" : "";
+      const icon =
+        entry.kind === "rename"
+          ? "$(symbol-method)"
+          : entry.kind === "move"
+            ? "$(file-symlink-file)"
+            : entry.kind === "extract"
+              ? "$(symbol-function)"
+              : entry.kind === "inline"
+                ? "$(arrow-right)"
+                : "$(history)";
       return {
-        label: `${entry.kind === "rename" ? "$(symbol-method)" : "$(history)"} ${summary.target?.newName ?? summary.target?.name ?? entry.planId}`,
+        label: `${icon} ${summary.target?.newName ?? summary.target?.name ?? entry.planId}`,
         description: `${entry.status}${actionable ? ` · ${actionable} available` : ""}`,
         detail: `${new Date(entry.createdAt).toLocaleString()} · ${summary.files.length} file(s)`,
         entry,
@@ -166,5 +304,5 @@ export function registerChangeCommands(options: ChangeCommandsOptions): vscode.D
     );
   });
 
-  return [rename, undo, redo, history];
+  return [rename, move, extract, inline, undo, redo, history];
 }

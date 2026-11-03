@@ -8,15 +8,21 @@
  */
 
 import * as vscode from "vscode";
-import { normalizeEol } from "@/shared/change";
+import * as path from "node:path";
+import { normalizeEol, applyTextEdits } from "@/shared/change";
 import type {
   ChangeDiagnosticSample,
   ChangeFileEdit,
   ChangeTextEdit,
 } from "@/shared/change";
 import type { ChangePreviewFile } from "@/analyzer/change/changePlan";
+import { normalizePath } from "@/shared/path";
 import type {
   ChangeEditorHost,
+  ChangeReferenceLocation,
+  ChangeReferenceLookup,
+  ChangeSymbolInfo,
+  ChangeSymbolLookup,
   RenameFailure,
   RenameResolution,
 } from "./changeHost";
@@ -39,18 +45,101 @@ interface FlatSymbol {
   range: vscode.Range;
   /** The identifier itself; `range` includes modifiers such as `export`. */
   selectionRange?: vscode.Range;
+  kind: string;
+  parentName?: string;
+}
+
+const SYMBOL_KIND_NAMES: Record<number, string> = {
+  0: "file",
+  1: "module",
+  2: "namespace",
+  3: "package",
+  4: "class",
+  5: "method",
+  6: "property",
+  7: "field",
+  8: "constructor",
+  9: "enum",
+  10: "interface",
+  11: "function",
+  12: "variable",
+  13: "constant",
+  14: "string",
+  15: "number",
+  16: "boolean",
+  17: "array",
+  18: "object",
+  19: "key",
+  20: "null",
+  21: "enummember",
+  22: "struct",
+  23: "event",
+  24: "operator",
+  25: "typeparameter",
+};
+
+function symbolKindName(kind: number | undefined): string {
+  return kind === undefined ? "unknown" : SYMBOL_KIND_NAMES[kind] ?? "unknown";
+}
+
+type DocumentLanguage = "typescript" | "javascript" | "dart" | "other";
+
+function languageForDocument(document: vscode.TextDocument): DocumentLanguage {
+  if (document.languageId === "typescript" || document.languageId === "typescriptreact") {
+    return "typescript";
+  }
+  if (
+    document.languageId === "javascript" ||
+    document.languageId === "javascriptreact"
+  ) {
+    return "javascript";
+  }
+  if (document.languageId === "dart") return "dart";
+  return "other";
+}
+
+/**
+ * VS Code's DocumentSymbol does not expose module visibility, so read the
+ * declaration line. Dart's library privacy is the leading underscore.
+ */
+function isExportedSymbol(
+  document: vscode.TextDocument,
+  language: DocumentLanguage,
+  symbol: FlatSymbol,
+): boolean {
+  if (symbol.parentName) return false;
+  if (language === "dart") return !symbol.name.startsWith("_");
+  if (language === "typescript" || language === "javascript") {
+    const line = symbol.range.start.line;
+    if (line < 0 || line >= document.lineCount) return false;
+    const text = document.lineAt(line).text.trim();
+    return /^export\b/.test(text);
+  }
+  return !symbol.name.startsWith("_");
 }
 
 function flattenSymbols(
   symbols: ReadonlyArray<vscode.DocumentSymbol | vscode.SymbolInformation>,
   result: FlatSymbol[] = [],
+  parentName?: string,
 ): FlatSymbol[] {
   for (const symbol of symbols) {
     if ("location" in symbol) {
-      result.push({ name: symbol.name, range: symbol.location.range });
+      result.push({
+        name: symbol.name,
+        range: symbol.location.range,
+        kind: symbolKindName(symbol.kind),
+      });
     } else {
-      result.push({ name: symbol.name, range: symbol.range, selectionRange: symbol.selectionRange });
-      if (symbol.children.length > 0) flattenSymbols(symbol.children, result);
+      const entry: FlatSymbol = {
+        name: symbol.name,
+        range: symbol.range,
+        selectionRange: symbol.selectionRange,
+        kind: symbolKindName(symbol.kind),
+      };
+      if (parentName) entry.parentName = parentName;
+      result.push(entry);
+      if (symbol.children.length > 0) flattenSymbols(symbol.children, result, symbol.name);
     }
   }
   return result;
@@ -171,6 +260,101 @@ export class VSCodeChangeHost implements ChangeEditorHost {
     return { files };
   }
 
+  async listSymbols(filePath: string): Promise<ChangeSymbolLookup> {
+    let document: vscode.TextDocument;
+    try {
+      document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+    } catch (err) {
+      return { error: "symbol-lookup-failed", message: String(err) };
+    }
+    let raw: Array<vscode.DocumentSymbol | vscode.SymbolInformation>;
+    try {
+      raw =
+        (await vscode.commands.executeCommand<
+          Array<vscode.DocumentSymbol | vscode.SymbolInformation>
+        >("vscode.executeDocumentSymbolProvider", document.uri)) ?? [];
+      // The language service may still be loading the project on the first
+      // call; poll briefly instead of reporting an empty symbol list.
+      /* eslint-disable no-await-in-loop -- warm-up polling is sequential */
+      for (let attempt = 0; raw.length === 0 && attempt < 10; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        raw =
+          (await vscode.commands.executeCommand<
+            Array<vscode.DocumentSymbol | vscode.SymbolInformation>
+          >("vscode.executeDocumentSymbolProvider", document.uri)) ?? [];
+      }
+      /* eslint-enable no-await-in-loop */
+    } catch (err) {
+      return { error: "symbol-lookup-failed", message: String(err) };
+    }
+    const language = languageForDocument(document);
+    const symbols: ChangeSymbolInfo[] = flattenSymbols(raw).map((symbol) => {
+      const info: ChangeSymbolInfo = {
+        name: symbol.name,
+        kind: symbol.kind,
+        startLine: symbol.range.start.line,
+        startCharacter: symbol.range.start.character,
+        endLine: symbol.range.end.line,
+        endCharacter: symbol.range.end.character,
+        selectionLine: (symbol.selectionRange ?? symbol.range).start.line,
+        selectionCharacter: (symbol.selectionRange ?? symbol.range).start.character,
+        isExported: false,
+      };
+      if (symbol.parentName) {
+        info.parentName = symbol.parentName;
+      } else {
+        info.isExported = isExportedSymbol(document, language, symbol);
+      }
+      return info;
+    });
+    return { symbols };
+  }
+
+  async findReferences(
+    filePath: string,
+    symbol: ChangeSymbolInfo,
+  ): Promise<ChangeReferenceLookup> {
+    let document: vscode.TextDocument;
+    try {
+      document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+    } catch (err) {
+      return { error: "symbol-lookup-failed", message: String(err) };
+    }
+    let locations: vscode.Location[] | undefined;
+    try {
+      locations = await vscode.commands.executeCommand<vscode.Location[] | undefined>(
+        "vscode.executeReferenceProvider",
+        document.uri,
+        new vscode.Position(symbol.selectionLine, symbol.selectionCharacter),
+      );
+      if (!locations || locations.length === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        locations = await vscode.commands.executeCommand<vscode.Location[] | undefined>(
+          "vscode.executeReferenceProvider",
+          document.uri,
+          new vscode.Position(symbol.selectionLine, symbol.selectionCharacter),
+        );
+      }
+    } catch (err) {
+      return { error: "reference-provider-unavailable", message: String(err) };
+    }
+    if (!locations) return { error: "reference-provider-unavailable" };
+    const references: ChangeReferenceLocation[] = [];
+    const seen = new Set<string>();
+    for (const location of locations) {
+      if (location.uri.scheme !== "file") continue;
+      const key = `${location.uri.fsPath}:${location.range.start.line}:${location.range.start.character}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      references.push({
+        path: normalizePath(location.uri.fsPath),
+        line: location.range.start.line,
+        character: location.range.start.character,
+      });
+    }
+    return { references };
+  }
+
   /**
    * Candidate positions, most precise first: the symbol's selection range, then
    * a whole-word match on the declaration line.
@@ -233,10 +417,80 @@ export class VSCodeChangeHost implements ChangeEditorHost {
     );
   }
 
+  async exists(path: string): Promise<boolean> {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(path));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Closes editor tabs for a path the plan replaces or deletes. */
+  private async closeTabsForPath(filePath: string): Promise<void> {
+    const target = normalizePath(filePath);
+    const groups = vscode.window.tabGroups?.all ?? [];
+    const TabInput = (vscode as { TabInputText?: typeof vscode.TabInputText }).TabInputText;
+    if (!TabInput) return;
+    const tabs: vscode.Tab[] = [];
+    for (const group of groups) {
+      for (const tab of group.tabs) {
+        const input = tab.input;
+        if (
+          input instanceof TabInput &&
+          input.uri.scheme === "file" &&
+          normalizePath(input.uri.fsPath) === target
+        ) {
+          tabs.push(tab);
+        }
+      }
+    }
+    if (tabs.length > 0) await vscode.window.tabGroups.close(tabs, true);
+  }
+
   async applyEdits(files: ChangeFileEdit[]): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const editable: ChangeFileEdit[] = [];
+    /* eslint-disable no-await-in-loop -- file operations run in plan order */
+    for (const file of files) {
+      const uri = vscode.Uri.file(file.path);
+      if (file.delete) {
+        await this.closeTabsForPath(file.path);
+        try {
+          await vscode.workspace.fs.delete(uri, { useTrash: false });
+        } catch (err) {
+          if ((err as { code?: string }).code !== "FileNotFound") {
+            this.logger.warn(`[Change] could not delete ${file.path}:`, err);
+            return { ok: false, reason: "delete-failed" };
+          }
+        }
+        continue;
+      }
+      const fingerprintMissing = file.beforeContent === "";
+      let created = false;
+      if (fingerprintMissing) {
+        // A tab left over from an earlier version of the file keeps a stale
+        // mtime and makes the save fail with "File Modified Since".
+        await this.closeTabsForPath(file.path);
+        try {
+          await vscode.workspace.fs.stat(uri);
+        } catch {
+          created = true;
+        }
+      }
+      if (created) {
+        const after = applyTextEdits(file.beforeContent, file.edits);
+        if (after === null) return { ok: false, reason: "invalid-edit" };
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(file.path)));
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(after, "utf8"));
+        continue;
+      }
+      editable.push(file);
+    }
+    /* eslint-enable no-await-in-loop */
+
     const documents: vscode.TextDocument[] = [];
     /* eslint-disable no-await-in-loop -- open each edited document in order */
-    for (const file of files) {
+    for (const file of editable) {
       try {
         documents.push(await vscode.workspace.openTextDocument(vscode.Uri.file(file.path)));
       } catch (err) {
@@ -246,7 +500,7 @@ export class VSCodeChangeHost implements ChangeEditorHost {
     }
     /* eslint-enable no-await-in-loop */
     const edit = new vscode.WorkspaceEdit();
-    files.forEach((file, position) => {
+    editable.forEach((file, position) => {
       const document = documents[position];
       const edits = file.edits.map(
         (textEdit) =>
@@ -315,10 +569,14 @@ export class VSCodeChangeHost implements ChangeEditorHost {
     /* eslint-disable no-await-in-loop -- one diff editor per changed file */
     for (const file of shown) {
       const after = this.preview.set(planId, file.path, file.afterContent);
-      const title = `Skein: ${vscode.workspace.asRelativePath(file.path)} (planned)`;
+      const before = file.created
+        ? this.preview.setBefore(planId, file.path, file.beforeContent)
+        : vscode.Uri.file(file.path);
+      const label = file.deleted ? "deleted" : file.created ? "created" : "planned";
+      const title = `Skein: ${vscode.workspace.asRelativePath(file.path)} (${label})`;
       await vscode.commands.executeCommand(
         "vscode.diff",
-        vscode.Uri.file(file.path),
+        before,
         after,
         title,
         { preview: true },

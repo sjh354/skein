@@ -78,16 +78,19 @@ The Live Call Graph shows cross-file symbol relationships in a Cytoscape.js pane
 - Filter by symbol type or folder.
 - Refresh automatically after file saves.
 
-### Rename and change history
+### Refactoring and change history
 
-Select a symbol in the call graph and run **Skein: Rename Selected Symbol**. Skein asks the language service for the rename (the built-in TypeScript support or the installed Dart extension), shows a diff preview, and opens the change only after you confirm.
+Select a symbol in the call graph and run **Skein: Rename Selected Symbol**, **Skein: Move Selected Symbol to File** or **Skein: Inline Function**. In the editor, select code and run **Skein: Extract Selection as Function**. Skein shows a diff preview and applies the change only after you confirm.
 
+- Rename asks the language service (the built-in TypeScript support or the installed Dart extension).
+- Move uses a rule engine: helpers used only by the moved code travel with it, public symbols and helpers used elsewhere stay, imports are rewritten, a destination file is created when needed, and entry points, private Dart helpers, unresolved imports, name collisions and circular imports block the plan with a reason.
+- Extract derives parameters from the enclosing function and supports expression or statement selections; code that uses `this` or awaits inside a synchronous function is refused.
+- Inline supports non-exported, non-async, single-expression top-level functions and replaces every call site (or a chosen call through MCP). Exported or external use is refused instead of guessed.
 - The plan is recorded against the exact saved content it was built from; if the file changed first, applying is refused.
-- Before and after snapshots are written to a separate Git repository under `.skein/history/`, never to your repository's branches or index.
+- Before and after snapshots are written to a separate Git repository under `.skein/history/`, never to your repository's branches or index. Created and deleted files are recorded and restored by undo/redo.
 - Changes are verified by comparing diagnostics before and after. A new error marks the change `verification-failed` and keeps the diff instead of rolling back.
 - **Undo** and **Re-apply** use a three-way merge, so edits made after the change survive. A conflict is reported with the path and first conflicting hunk, and no file is overwritten.
-- Agents can use `skein_plan_change`, `skein_apply_change`, `skein_get_change_plan`, `skein_list_change_history`, `skein_undo_change` and `skein_redo_change`; they go through the same queue and checks as the UI.
-- Step 5 supports rename. Move, extract and inline are planned for step 6.
+- Agents can use `skein_plan_change` (`kind`: `rename`, `move`, `extract`, `inline`), `skein_apply_change`, `skein_get_change_plan`, `skein_list_change_history`, `skein_undo_change` and `skein_redo_change`; they go through the same queue and checks as the UI.
 
 The Live Call Graph supports TypeScript, JavaScript, Vue, Svelte, Python, Rust, C#, Go, Java, Dart, and GraphQL. C#, Go, Java, and GraphQL are supported in the file graph and Live Call Graph; Symbol View support is currently limited to TypeScript, JavaScript, Python, Rust, and Dart. Dart analysis is syntactic: imports resolve through package_config.json or the owning pubspec, and a cross-file call is linked only when its symbol name is unique in the workspace. In GraphQL, operations and fragments call the fragments they spread; an operation's default root type (`Query`, `Mutation`, `Subscription`), type conditions, field, argument and variable types, and union members are type-only references (`USES`, shown with `includeTypeOnly`); `implements` is an `IMPLEMENTS` edge.
 

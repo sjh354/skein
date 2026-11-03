@@ -134,7 +134,7 @@ describe("shared/change parsing", () => {
     expect(parseChangeTask(JSON.stringify(task({ status: "nope" as ChangeTask["status"] })))).toBeNull();
     expect(
       parseChangeTask(
-        JSON.stringify({ ...task(), plan: { ...plan(), kind: "move" } }),
+        JSON.stringify({ ...task(), plan: { ...plan(), kind: "delete" } }),
       ),
     ).toBeNull();
   });

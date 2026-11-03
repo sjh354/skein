@@ -103,7 +103,29 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 ```bash
 npm run build
 npm run test:viewstate   # phase 1 왕복 + phase 2 재시작 복원
+npm run test:change      # 단계 5: 계획→이력→적용→되돌리기→재적용→충돌/복구
+npm run test:refactor    # 단계 6: 이동(생성/삭제 Undo/Redo)→추출→인라인→오래된 계획
 npm test                 # 단위 테스트
 npm run check:types
 npm run lint
 ```
+
+## 7. 5·6단계 수동 확인
+
+자동 검증은 마쳤고, 실제 화면·Dart 확장·실제 프로젝트가 필요한 항목만 남았다. 단계 순서대로 확인한다.
+
+- 5단계: `docs/verification/step5-manual-checklist.md`
+  - [ ] M1 편집기 이름 변경·미리보기·확인 모달
+  - [ ] M2 Dart 실제 이름 변경 (Dart 확장 유무)
+  - [ ] M3 저장하지 않은 편집 거부
+  - [ ] M5 충돌 hunk 표시
+  - [ ] M7 Codex 왕복
+  - [ ] M8·M9 사용자 Git 격리·중단 복구
+- 6단계: `docs/verification/step6-manual-checklist.md`
+  - [ ] M1·M2 이동 UI·새 파일·공유 helper
+  - [ ] M3 이동 차단 사유(진입점·이름 충돌·경로 별칭·재수출)
+  - [ ] M4 Dart 실제 이동·private helper
+  - [ ] M5·M6 추출·인라인 UI와 실패 사유
+  - [ ] M7 생성·삭제 Undo/Redo와 이후 편집 보존
+  - [ ] M8 Codex 왕복(`kind`: move/extract/inline)
+  - [ ] M9 ggultarae 실제 사례
