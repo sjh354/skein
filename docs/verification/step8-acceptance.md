@@ -77,6 +77,7 @@
 - 6단계: `docs/verification/step6-manual-checklist.md` — 약 49개
 - 7단계: `docs/verification/step7-manual-checklist.md` — 약 34개
 - 8단계: [step8-replacement-table.md](step8-replacement-table.md)의 "남은 수동 확인"
+- 진행 순서: [manual-walkthrough.md](manual-walkthrough.md) — 한 번에 1~2개씩
 
 위 항목을 완료하기 전에는 단계 8 또는 MVP 전체를 "완료"로 표시하지 않는다.
 
