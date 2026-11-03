@@ -37,7 +37,21 @@ type LmOnlyToolName =
 /** MCP-only tools for the shared graph view (no LM or CLI counterpart). */
 type McpViewToolName = "get_view_state" | "control_view";
 
-export type DescribedToolName = McpToolName | "get_session_stats" | McpViewToolName | LmOnlyToolName;
+/** MCP-only tools for the common change path (step 5). */
+type McpChangeToolName =
+  | "plan_change"
+  | "apply_change"
+  | "get_change_plan"
+  | "list_change_history"
+  | "undo_change"
+  | "redo_change";
+
+export type DescribedToolName =
+  | McpToolName
+  | "get_session_stats"
+  | McpViewToolName
+  | McpChangeToolName
+  | LmOnlyToolName;
 
 const OPEN_ENDED_HINT =
   "For an open-ended question, start with skein_graph_context and come here when you need this specific cut.";
@@ -377,6 +391,62 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "WHY: the same command queue the UI uses, so a human interaction always wins: a command queued before the user's last action is rejected with reason user-action-superseded.",
       "RETURNS: applied, status, reason and the resulting state. Pass graphVersion from get_view_state to have stale commands rejected after a re-analysis.",
       "LIMITS: requires the VS Code window with the graph tab to be open; without it the call fails with extension-not-responding.",
+    ],
+  },
+  plan_change: {
+    summary:
+      "Plans a symbol rename against the saved code and returns a plan id and diff without modifying files.",
+    lines: [
+      "WHEN: the user asked to rename a symbol and wants to inspect the change before it is applied.",
+      "WHY: the rename comes from the workspace's language service (TypeScript or the installed Dart extension). The plan records the exact saved content it was computed against, so applying later cannot silently rename a different version of the file.",
+      "RETURNS: applied/status/reason, a plan summary (planId, target, files, added/removed lines) and a unified diff capped at 12000 characters.",
+      "LIMITS: one change at a time; a dirty editor for a touched file is rejected with unsaved-changes. An unsupported language returns rename-provider-unavailable instead of a guessed rename.",
+    ],
+  },
+  apply_change: {
+    summary:
+      "Applies a planned change, records it in the internal history, verifies diagnostics and returns the result.",
+    lines: [
+      "WHEN: after the user has reviewed the plan and explicitly asked to apply it. Planning alone never approves applying.",
+      "WHY: the same path the UI uses: fingerprint check, before snapshot, apply, after snapshot, diagnostics comparison. A failure is reported with its reason rather than hidden.",
+      "RETURNS: applied/status/reason, the resulting plan status (succeeded, verification-failed, incomplete, recovery), and the history entry when one was recorded.",
+      "LIMITS: refuses a stale plan (stale-plan), unsaved editor changes (unsaved-changes) and a missing internal history (history-unavailable). Project test commands and architecture rules are not run in step 5.",
+    ],
+  },
+  get_change_plan: {
+    summary: "Returns a stored change plan and its diff without modifying anything.",
+    lines: [
+      "WHEN: re-reading a plan created earlier in the session, or checking why an apply was rejected.",
+      "RETURNS: available=false with plan-not-found when the plan id is unknown; otherwise the plan summary and the unified diff.",
+      "LIMITS: read-only; it does not re-resolve the rename against the current code. Apply performs that check.",
+    ],
+  },
+  list_change_history: {
+    summary:
+      "Lists recorded tool changes with their verification status and shows which entry a bare undo or redo would use.",
+    lines: [
+      "WHEN: before undoing, to choose a specific entry, or to review what the tool changed in this workspace.",
+      "RETURNS: newest-first entries (id, planId, kind, status, target, files, verification), total, plus undoable and redoable entry ids.",
+      "LIMITS: reads the local history index only; it does not include edits made outside this tool.",
+    ],
+  },
+  undo_change: {
+    summary:
+      "Reverts a recorded change by applying its recorded before state to the current files, preserving later edits where they do not conflict.",
+    lines: [
+      "WHEN: the user asked to undo a tool change, optionally a specific history entry.",
+      "WHY: a three-way merge (recorded after, current, recorded before) instead of reset/checkout, so edits made after the change survive. Conflicts are reported and nothing is overwritten.",
+      "RETURNS: applied/status/reason, the new history entry, and conflict details (path, conflicts, first hunk) with reason conflict when the merge stops.",
+      "LIMITS: defaults to the newest undoable entry; undo itself is verified and recorded as a new entry. Requires the VS Code extension to be running.",
+    ],
+  },
+  redo_change: {
+    summary:
+      "Re-applies an undone change to the current files using the same three-way merge and verification path.",
+    lines: [
+      "WHEN: the user asked to re-apply a change that was undone.",
+      "RETURNS: applied/status/reason and the new history entry; conflict details when later edits prevent a clean re-apply.",
+      "LIMITS: defaults to the newest undo entry that has not been redone. Requires the VS Code extension to be running.",
     ],
   },
 };
