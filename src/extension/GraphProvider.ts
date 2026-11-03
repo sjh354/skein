@@ -163,7 +163,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     const mode = this._stateManager.viewMode;
     const views: NonNullable<SkeinViewSnapshot["views"]> = { ...this.surfaceSelections };
     const selectedSymbolId = this._stateManager.selectedSymbolId;
-    if (selectedSymbolId && !views.symbol) views.symbol = { nodeId: selectedSymbolId };
+    if (selectedSymbolId && !views.symbol && !this.surfaceStates.symbol) views.symbol = { nodeId: selectedSymbolId };
     const snapshot: SkeinViewSnapshot = {
       mode,
       hiddenFilters: [],
@@ -1064,10 +1064,10 @@ export class GraphProvider implements vscode.WebviewViewProvider {
             if (message.selection) this.surfaceSelections[message.mode] = message.selection;
             else delete this.surfaceSelections[message.mode];
           }
-          if (message.userInitiated) {
-            this.surfaceUserActionObserver?.();
-            await this.webviews.mirror(webviewView.webview, { ...message, command: "surfaceSync" });
-          }
+          if (message.userInitiated) this.surfaceUserActionObserver?.();
+          // Async expansion pages arrive after the click. Mirror their committed state too.
+          // Passive reports were excluded above, so this cannot echo between surfaces.
+          if (message.mode !== "callgraph") await this.webviews.mirror(webviewView.webview, { ...message, command: "surfaceSync" });
           return;
         }
         if (message.command === "surfaceResult") {

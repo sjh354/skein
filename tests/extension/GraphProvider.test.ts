@@ -194,7 +194,13 @@ describe("GraphProvider", () => {
     dispatch.mockClear();
     await receivePanel({ command: "surfaceState", mode: "file", userInitiated: true, state: { nodeIds: ["file"], expandedNodeIds: [] }, selection: { nodeId: "file" } });
     await receivePanel(report); expect(dispatch).toHaveBeenCalledWith(report);
+    editor.webview.postMessage.mockClear();
+    await receivePanel({ command: "surfaceState", mode: "file", state: { nodeIds: ["file"], expandedNodeIds: ["file"] }, selection: { nodeId: "file" } });
+    expect(editor.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ command: "surfaceSync", state: expect.objectContaining({ expandedNodeIds: ["file"] }) }));
     dispatch.mockClear(); await receiveEditor(report); expect(dispatch).not.toHaveBeenCalled();
+    (provider as any)._stateManager.selectedSymbolId = "old-root";
+    await receivePanel({ command: "surfaceState", mode: "symbol", state: { nodeIds: [], expandedNodeIds: [] } });
+    expect(provider.getViewStateSnapshot().snapshot.views?.symbol).toBeUndefined();
   });
 
   it("should initialize Spider on creation", () => {
