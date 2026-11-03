@@ -1,4 +1,4 @@
-# Architecture view, rules and check-architecture
+# Architecture view, rules and check_architecture
 
 Skein draws the architecture of a workspace from its static imports, checks it against rules you write, and exposes the same data in VS Code and the MCP server.
 
@@ -28,7 +28,7 @@ Each term has one meaning in this page and the README.
 | **Rule** | What the files of an element may or may not import. |
 | **Baseline** | The violations you accept for now, in `skein.architecture.baseline.json`. Only new violations fail. |
 
-Groups follow the `skein.communityMode` setting (CLI `--communities`, MCP `communityMode`):
+Groups follow the `skein.communityMode` setting (MCP `communityMode`):
 
 - `path` (default): units, then folders. Units and folder levels exist only in this mode.
 - `louvain`: communities of files that import each other, one flat level.
@@ -167,7 +167,7 @@ Rows 1–2 are outlined. The red cell, `core` → `shared`, has 6 pairs; its mir
 
 - The summary reads *N violations of M rules (K new)*, M being the rules with at least one violation, or *All N rules pass*, N being every rule; then the config file. It turns red when an `error` rule has a new violation.
   - *violations*: file pairs breaking a rule.
-  - *new*: violations missing from `skein.architecture.baseline.json`; only new violations of `error` rules fail `check-architecture`. The others are baselined: accepted for now.
+  - *new*: violations missing from `skein.architecture.baseline.json`; only new violations of `error` rules fail `skein_check_architecture`. The others are baselined: accepted for now.
   - *N files in no element*: unmatched files. No element selects them, so no rule checks them.
 - One line per rule: its name (underlined and coloured by severity when it has violations), its kind, severity and count. Hover the name for its `reason`; click it to list its file pairs in the evidence panel.
 - Config warnings, such as a pattern matching no file, follow in the warning colour.
@@ -397,7 +397,7 @@ A unit matching several roles takes the first in the table; the other matches st
 | Key | Answers | Effect |
 | --- | --- | --- |
 | `elements` | Which files belong together? | Names sets of files for the rules |
-| `rules` | Which imports are allowed? | Violations in the view, `check-architecture` exit code |
+| `rules` | Which imports are allowed? | Violations in the view and in `skein_check_architecture` results |
 | `roles` | What is each unit? | Badge `[role]` instead of `[role?]`, legend counts, `role` selectors of elements |
 | `profiles` and `areas` | Which direction may an area import? | One generated `profile:<area>` rule per area |
 | `exceptions` | Which violations are accepted on purpose? | Recorded with a reason, not counted as new |
@@ -450,7 +450,7 @@ With `each: true`, every matched folder or unit is an instance of its own. `mfe 
 | `forbid` | Files of `from` may not import these elements |
 | `allowOnly` | Files of `from` may import only these elements and their own instance; a target in no element is a violation |
 | `noCycles` | `"units"` or an `each` element: no import cycle between them |
-| `severity` | `error` (default, fails `check-architecture`), `warning`, or `off` (not checked) |
+| `severity` | `error` (default, fails `skein_check_architecture`), `warning`, or `off` (not checked) |
 | `reason` | Shown with every violation |
 
 A rule that could never report is refused: `noCycles` on an element without `each`, or `forbid` of the element it comes `from` without `each`.
@@ -476,7 +476,7 @@ The names in `layers` are element names from the same file. `strict: true` also 
 
 ### Exceptions
 
-An exception accepts one violation with its reason; the view and MCP report it as `excepted`, not as new, and it does not fail `check-architecture`.
+An exception accepts one violation with its reason; the view and MCP report it as `excepted`, not as new, and it does not fail `skein_check_architecture`.
 
 ```json
 "exceptions": [
@@ -504,7 +504,7 @@ Override a threshold under `diagnostics.thresholds`; the full shape is in the JS
 
 ### Baseline version 2
 
-`check-architecture` reads version 1 and 2 baselines. Version 2 adds the accepted value of each structure diagnostic, so a later larger value is reported as `worsened`:
+`skein_check_architecture` reads version 1 and 2 baselines. Version 2 adds the accepted value of each structure diagnostic, so a later larger value is reported as `worsened`:
 
 ```json
 { "version": 2, "violations": [], "diagnostics": [{ "id": "responsibility:src/big.ts", "value": 1.4 }] }
@@ -515,7 +515,7 @@ Version 1 keeps working unchanged; a baseline with no diagnostic values is writt
 ### Write the file for your workspace
 
 1. Open the Architecture view (or call `explore_architecture` with `level: "units"`) and note the unit keys.
-2. Under `elements`, name each part of your architecture by `path`, `unit` or `role`. Every source file should belong to an element: `check-architecture` reports the others as `unmatchedFiles`.
+2. Under `elements`, name each part of your architecture by `path`, `unit` or `role`. Every source file should belong to an element: `skein_check_architecture` reports the others as `unmatchedFiles`.
 3. Under `rules`, write what each element may import (`allowOnly`) or must not import (`forbid`), with a `reason`.
 4. Optionally, under `roles`, fix every role the view infers wrongly or marks `[unknown?]`.
 5. Call `check_architecture`: it should report 0 violations, no unmatched file and no config warning.

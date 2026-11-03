@@ -1,5 +1,5 @@
 /**
- * Workspace architecture graph shared by `graph-it architecture`, the
+ * Workspace architecture graph shared by `skein_explore_architecture`, the
  * explore_architecture MCP tool and the extension, so all report the same groups and counts.
  *
  * CRITICAL ARCHITECTURE RULE: This module is completely VS Code agnostic!

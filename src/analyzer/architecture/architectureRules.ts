@@ -1,7 +1,7 @@
 /**
  * Declared architecture rules: `skein.architecture.json` names elements (files selected by
  * path patterns or units) and rules on the imports between them. Shared by
- * `graph-it check-architecture`, the check_architecture MCP tool and the extension's view.
+ * `skein_check_architecture` and the extension's view.
  * Rules are human annotation: the check only compares static import pairs with them (#300).
  *
  * CRITICAL ARCHITECTURE RULE: This module is completely VS Code agnostic!
@@ -54,9 +54,9 @@ const ElementSchema = z
     path: oneOrMany(PatternSchema).optional()
       .describe("Workspace-relative gitignore-style patterns, as in .skeinignore (e.g. 'frontend/', 'mfe/*')"),
     unit: oneOrMany(UnitPatternSchema).optional()
-      .describe("Unit keys or package names (graph-it architecture --level units); * matches any characters"),
+      .describe("Unit keys or package names at the units level; * matches any characters"),
     role: oneOrMany(z.enum(UNIT_ROLES)).optional()
-      .describe("Unit roles (graph-it architecture --level units): every unit with one of them"),
+      .describe("Unit roles at the units level: every unit with one of them"),
     each: z.boolean().optional()
       .describe("Every matched folder or unit is an instance of its own: a rule from this element to itself means another instance"),
   })
@@ -69,7 +69,7 @@ const RuleSchema = z.strictObject({
   allowOnly: z.array(NameSchema).max(MAX_ELEMENTS).optional()
     .describe("The only elements the files of from may import, besides their own element instance"),
   noCycles: NameSchema.optional().describe("'units', or an element with each: no import cycle between them"),
-  severity: z.enum(["error", "warning", "off"]).optional().describe("error (default) fails graph-it check-architecture; off skips the rule"),
+  severity: z.enum(["error", "warning", "off"]).optional().describe("error (default) fails `skein_check_architecture`; off skips the rule"),
   reason: z.string().max(1000).optional().describe("Why the rule exists, shown with every violation"),
 });
 
@@ -592,7 +592,7 @@ function elementPairs(violations: readonly Found[]): ArchitectureRuleSummary["el
 
 /**
  * Checks every rule against the file pairs of the graph. Element `unit` selectors and noCycles
- * "units" read the unit assignment of `graph-it architecture --level units`, `role` selectors
+ * "units" read the unit assignment at the units level, `role` selectors
  * its unit roles (`roleOf`). With a baseline, only violations absent from it are new;
  * `resolved` lists its entries no longer found.
  */
@@ -682,7 +682,7 @@ export function checkArchitecture(
     .digest("hex");
   return {
     context: { ...graph.context, revision, baseline: baseline !== undefined },
-    /** False when an error-severity violation is new: graph-it check-architecture exits with 1. */
+    /** False when an error-severity violation is new: `skein_check_architecture` reports failure. */
     passed: count("error", true) === 0,
     totals: {
       files: files.length,
@@ -722,7 +722,7 @@ export async function checkWorkspaceArchitecture(
 
 /**
  * The unit roles skein.architecture.json declares, none without the file: what
- * `graph-it architecture --level units`, explore_architecture and the view apply.
+ * `skein_explore_architecture` at the units level and the view apply.
  */
 export async function loadDeclaredRoles(workspaceRoot: string): Promise<DeclaredRoles | undefined> {
   const text = await readWorkspaceFile(workspaceRoot, ARCHITECTURE_CONFIG_FILE, MAX_CONFIG_BYTES);

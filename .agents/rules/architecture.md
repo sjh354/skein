@@ -10,7 +10,7 @@ paths:
 - Put extension orchestration in `src/extension/services/`. Keep `GraphProvider` as coordinator, not feature implementation.
 - Define extension↔webview protocol in `src/shared/types.ts`; update message type, sender, router, and receiver together.
 - Prefer `@/` imports for `src/`, named/type-only imports, strict types, and existing naming conventions. Use `SpiderError`/`SpiderErrorCode` when callers branch on failure reason.
-- Preserve separate outputs: extension host, MCP server, workers, file/symbol webview, and call-graph webview.
+- Preserve separate outputs: extension host, MCP server, workers, and the webview.
 - After modifying first-party source, run targeted tests, `npm run lint`, `npm run check:types`, and configured SonarQube analysis. Fix new findings before completion.
 
 ## Architecture Rules (`skein.architecture.json`)
