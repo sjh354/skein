@@ -1796,3 +1796,26 @@ describe('architecture MCP surface', () => {
     expect(lastOf(postMessage, 'surfaceResult').reason).toBe('node-not-found');
   });
 });
+
+describe('architecture viewport during relayout', () => {
+  afterEach(cleanup);
+  it('keeps the viewport when a stale redraw must lay out the same structure again', () => {
+    const postMessage = vi.fn();
+    const fresh = { ...summary, groups: summary.groups.map(group => ({ ...group, key: `viewport-${group.key}` })) };
+    render(<ArchitectureGraph postMessage={postMessage} />); send(fresh);
+    const originalAdd = cy.instance.add;
+    const add = vi.spyOn(cy.instance, 'add').mockImplementation(elements => {
+      // A second surface/font measurement invalidated the cached boxes, without a structure change.
+      for (const element of elements) if (typeof element.data.width === 'number') element.data.width += 20;
+      originalAdd(elements);
+    });
+    const layout = vi.spyOn(cy.instance, 'layout');
+    cy.instance.fit.mockClear();
+    try {
+      send({ ...fresh, stale: true });
+      expect(layout).toHaveBeenCalled();
+      expect(cy.instance.fit).not.toHaveBeenCalled();
+      expect(lastOf(postMessage, 'architectureDetailRendered').viewport).toBe('1@0,0');
+    } finally { add.mockRestore(); layout.mockRestore(); }
+  });
+});

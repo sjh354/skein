@@ -1210,6 +1210,8 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
   const minImportsRef = useRef(minImports);
   minImportsRef.current = minImports;
   const [shownEdges, setShownEdges] = useState(0);
+  const [layoutVersion, setLayoutVersion] = useState(0);
+  const layoutPending = useRef(false);
   /** Role whose units alone are drawn at the units level; null draws them all. */
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const roleFilterRef = useRef(roleFilter);
@@ -2047,12 +2049,15 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     const elk = elkRef.current;
     if (!cy || !elk || !summary || !source || !drawn) return;
     const run = ++layoutRunRef.current;
+    layoutPending.current = true;
     // Shown again by any render: only a pending ELK layout hides the canvas.
     cy.container()?.style.removeProperty("visibility");
     const previous = renderedRef.current.summary;
     const freshRevision = previous?.revision !== summary.revision;
     // A new level re-fits like a new revision; a page, a collapse or a stale mark keeps the viewport.
     const freshLevel = freshRevision || renderedRef.current.unit !== unit || renderedRef.current.folder !== folder;
+    const shape = (value: ArchitectureSummaryMessage | null) => JSON.stringify({ groups: value?.groups, edges: value?.groupEdges });
+    const changedShape = shape(previous) !== shape(drawn);
     if (freshRevision) filePositions.clear();
     // A page, a collapse or a stale mark redraws the same graph: keep what was tapped.
     const pinnedIds = new Set(freshLevel ? [] : (pinnedRef.current?.map((element) => element.id()) ?? []));
@@ -2069,7 +2074,11 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     const orphans = cy.nodes().filter((node) => !node.isChild());
     const finish = (fit: boolean) => {
       settleLayout(cy, orphans);
-      if (fit) fitAll(cy);
+      if (fit && focusRef.current === null) fitAll(cy);
+      else if (fit) {
+        const focused = cy.getElementById(`group-${focusRef.current}`);
+        if (focused.nonempty()) cy.fit(focusGroup(cy, focused), 30);
+      }
       // The same level laid out again (Show more groups): what was found or tapped stays in view.
       if (fit && !freshLevel && pinnedRef.current?.length) cy.center(pinnedRef.current);
       // Measured after the min-imports and role filters, which run in later effects.
@@ -2078,12 +2087,14 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
         applyRoleFilter(cy, roleFilterRef.current);
       }
       actionsRef.current.showBands(cy);
+      layoutPending.current = false;
+      setLayoutVersion(value => value + 1);
       if (previous === drawn) return;
       postMessageRef.current(renderedReport(cy, summary, drawn, unit, folder, actionsRef.current.chrome()));
     };
     const laidOut = () => {
       packIsolatedGroups(cy);
-      finish(true);
+      finish(freshLevel || changedShape);
     };
     const restored = restorePositions(cy, groupNodes(cy));
     if (!restored && summary.units) {
@@ -2131,7 +2142,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
 
   // Before the highlight effects, so their report stays the last message of a render.
   useEffect(() => {
-    if (!summary) return;
+    if (!summary || layoutPending.current) return;
     const { renderedFiles, groupLevelEdges, visibleGroups } = renderedRef.current;
     const focused = focusId === 0 ? "" : drawn?.groups.find((group) => group.id === focusId)?.key;
     postMessageRef.current({
@@ -2155,7 +2166,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
             `${row.querySelector("button")?.title} → ${row.parentElement?.closest("li")?.querySelector("button")?.title}`),
         },
     });
-  }, [summary, drawn, expansions, evidence, capReached, focusId, findMatches, found, query, view, minImports]);
+  }, [summary, drawn, expansions, evidence, capReached, focusId, findMatches, found, query, view, minImports, layoutVersion]);
 
   // The dependents highlight, drawn again on every render (the elements are new), then reported (E2E).
   const dependentMarks = useMemo(() => {
@@ -2190,7 +2201,7 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     if (!cy || !summary) return;
     setShownEdges(applyMinImports(cy, minImports));
     showFocus(cy, pinnedRef.current ?? cy.collection(), postMessageRef.current);
-  }, [summary, drawn, expansions, focusId, minImports]);
+  }, [summary, drawn, expansions, focusId, minImports, layoutVersion]);
 
   // The legend's role filter, then what is drawn once filtered (the units level's render report).
   useEffect(() => {
