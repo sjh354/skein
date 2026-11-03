@@ -89,7 +89,7 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 - [ ] `M7` 멀티루트 폴더 전환과 같은 폴더 두 창에서 상태가 분리되는가 (`windows`, `windowId` 대상 지정)
 - [ ] `M8` Codex가 `get_view_state`의 `nodeId`·`filePath`·`windowId`를 그대로 `control_view`에 넘기는가
 - [ ] `M9` `open_file`이 미리보기 탭으로 열리는 동작이 불편하지 않은가
-- [ ] `M10` 파일·리스트·아키텍처 뷰 선택을 `views`에 게시할 필요가 있는가
+- [ ] `M10` 파일·리스트·아키텍처 뷰의 선택·검색·조작이 `views`·`surface`와 일치하는가
 
 ### 6.2 남은 연결 구현 (2026-11-03)
 

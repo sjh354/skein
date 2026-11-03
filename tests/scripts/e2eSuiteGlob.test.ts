@@ -2,7 +2,7 @@
  * VS Code E2E suite selection tests
  *
  * tests/vscode-e2e/suite/index.ts runs the suites matched by `E2E_SUITE_GLOB`
- * (used by .github/workflows/e2e-os.yml), or every suite without it, and fails
+ * (used by .github/workflows/e2e-os.yml), or the general suites without it, and fails
  * when the glob matches no suite.
  */
 
@@ -31,12 +31,12 @@ describe('suiteGlob', () => {
   const select = async (env: NodeJS.ProcessEnv) =>
     (await glob(suiteGlob(env), { cwd: testsRoot, posix: true, ignore: suiteIgnore(env) })).sort((a, b) => a.localeCompare(b));
 
-  it('runs every suite without E2E_SUITE_GLOB', async () => {
+  it('runs general suites without E2E_SUITE_GLOB', async () => {
     expect(suiteGlob({})).toBe('**/**.test.js');
     expect(await select({})).toEqual(['suite/architectureView.test.js', 'suite/callGraph.test.js']);
   });
 
-  it('runs every suite when E2E_SUITE_GLOB is blank', async () => {
+  it('runs general suites when E2E_SUITE_GLOB is blank', async () => {
     expect(await select({ E2E_SUITE_GLOB: '  ' })).toEqual(['suite/architectureView.test.js', 'suite/callGraph.test.js']);
   });
 
