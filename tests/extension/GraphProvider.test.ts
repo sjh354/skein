@@ -286,7 +286,7 @@ describe("GraphProvider", () => {
       cancelled: false,
       data: [],
     });
-    // The index lock lives in <workspaceRoot>/.graph-it/cache/: keep it out of the repo.
+    // The index lock lives in <workspaceRoot>/.skein/cache/: keep it out of the repo.
     spiderMock.workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "graph-it-provider-"));
 
     try {

@@ -25,7 +25,7 @@ interface BackgroundIndexingManagerOptions {
   initialConfig: BackgroundIndexingConfig;
 }
 
-/** Where versions before the shared .graph-it/cache/ kept the index; cleared on start. */
+/** Where versions before the shared .skein/cache/ kept the index; cleared on start. */
 const LEGACY_REVERSE_INDEX_STORAGE_KEY = 'skein.reverseIndex';
 const WORKER_SCRIPT_PATH = 'dist/indexerWorker.js';
 
@@ -121,7 +121,7 @@ export class BackgroundIndexingManager {
   }
 
   /**
-   * Write the reverse index to the shared .graph-it/cache/. Skipped while another
+   * Write the reverse index to the shared .skein/cache/. Skipped while another
    * process holds the lock: it is indexing and writes a fresher index itself.
    * Also skipped while the index is partial (build cancelled, e.g. on shutdown).
    */

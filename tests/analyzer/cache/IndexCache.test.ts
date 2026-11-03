@@ -34,8 +34,8 @@ describe("IndexCache", () => {
   };
 
   beforeEach(() => {
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "graph-it-index-cache-")));
-    cacheDir = path.join(tmpDir, ".graph-it", "cache");
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "skein-index-cache-")));
+    cacheDir = path.join(tmpDir, ".skein", "cache");
     lockPath = path.join(cacheDir, "index.lock");
     fs.mkdirSync(path.join(tmpDir, "src"));
     fs.writeFileSync(path.join(tmpDir, "package.json"), "{}");
@@ -163,7 +163,7 @@ describe("IndexCache", () => {
       expect(open().readReverseIndex(OPTIONS)).toBe("NEW");
     });
 
-    // #432: `graph-it` builds a fresh IndexCache per run.
+    // #432: Skein builds a fresh IndexCache per run.
     it("does not restore a payload saved before the resolver config changed", () => {
       open().save({ reverseIndex: { data: "INDEX", options: OPTIONS }, callGraph: new Uint8Array([1]) });
       fs.writeFileSync(path.join(tmpDir, "tsconfig.json"), '{"compilerOptions":{"paths":{"@a/*":["src/*"]}}}');
@@ -179,9 +179,9 @@ describe("IndexCache", () => {
       expect(fs.readdirSync(cacheDir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
     });
 
-    it("makes .graph-it/ ignore itself in git, without overwriting an edited .gitignore", () => {
+    it("makes .skein/ ignore itself in git, without overwriting an edited .gitignore", () => {
       open().save({ callGraph: new Uint8Array([1]) });
-      const gitignore = path.join(tmpDir, ".graph-it", ".gitignore");
+      const gitignore = path.join(tmpDir, ".skein", ".gitignore");
       expect(fs.readFileSync(gitignore, "utf-8")).toBe("*\n");
 
       fs.writeFileSync(gitignore, "*\n!keep\n");
@@ -189,8 +189,20 @@ describe("IndexCache", () => {
       expect(fs.readFileSync(gitignore, "utf-8")).toBe("*\n!keep\n");
     });
 
+    it("migrates a pre-rename .graph-it/cache once", async () => {
+      const legacy = path.join(tmpDir, ".graph-it", "cache");
+      fs.mkdirSync(legacy, { recursive: true });
+      fs.writeFileSync(path.join(legacy, "marker"), "x");
+
+      const cache = await IndexCache.open(tmpDir);
+
+      expect(cache.dir).toBe(cacheDir);
+      expect(fs.readFileSync(path.join(cacheDir, "marker"), "utf-8")).toBe("x");
+      expect(fs.existsSync(legacy)).toBe(false);
+    });
+
     it("reports a failed save instead of throwing when the cache cannot be created", () => {
-      fs.writeFileSync(path.join(tmpDir, ".graph-it"), "not a directory");
+      fs.writeFileSync(path.join(tmpDir, ".skein"), "not a directory");
 
       expect(open().save({ callGraph: new Uint8Array([1]) })).toBe(false);
     });
@@ -306,7 +318,7 @@ describe("IndexCache", () => {
     });
 
     it("works without a lock when the cache directory cannot be created", () => {
-      fs.writeFileSync(path.join(tmpDir, ".graph-it"), "not a directory");
+      fs.writeFileSync(path.join(tmpDir, ".skein"), "not a directory");
 
       const release = open().tryLock();
 

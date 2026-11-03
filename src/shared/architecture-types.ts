@@ -29,7 +29,7 @@ export const MAX_RENDERED_GROUPS = 150;
 /** Diagnostics sent with the summary: counts cover every result. */
 export const MAX_RENDERED_DIAGNOSTICS = 200;
 
-/** The units level of a path-mode summary: what `graph-it architecture --level units` reports, plus the unit of each group. */
+/** The units level of a path-mode summary: what `skein_explore_architecture` reports at the units level, plus the unit of each group. */
 export type ArchitectureUnitLevel = Omit<ArchitectureUnits, "context"> & {
   /** Unit key of every group id of the summary. */
   groupUnits: Record<number, string>;
@@ -45,7 +45,7 @@ export type ArchitectureUnitLevel = Omit<ArchitectureUnits, "context"> & {
   cycleUnits?: string[][];
 };
 
-/** The declared rules (skein.architecture.json) checked against one level, as graph-it check-architecture reports them. */
+/** The declared rules (skein.architecture.json) checked against one level, as `skein_check_architecture` reports them. */
 export interface ArchitectureRulesView {
   configFile: string;
   /** context.revision of the check (code, rules and baseline): a new one redraws the violations. */

@@ -98,7 +98,7 @@ const createManager = (config: Partial<BackgroundIndexingConfig> = {}) => {
 };
 
 const managers: BackgroundIndexingManager[] = [];
-const cacheDir = () => path.join(workspaceRoot, '.graph-it', 'cache');
+const cacheDir = () => path.join(workspaceRoot, '.skein', 'cache');
 const cachedIndex = () => fs.readFileSync(path.join(cacheDir(), 'reverse-index.json'), 'utf-8');
 const openCache = () => IndexCache.open(workspaceRoot);
 const options = { excludeNodeModules: true, ignoreTypeImports: false };
@@ -126,7 +126,7 @@ describe('BackgroundIndexingManager', () => {
         expect(spider.buildFullIndexInWorker).toHaveBeenCalledOnce();
         expect(onIndexingComplete).toHaveBeenCalled();
         expect(cachedIndex()).toBe('SERIALIZED');
-        expect(fs.readFileSync(path.join(workspaceRoot, '.graph-it', '.gitignore'), 'utf-8')).toBe('*\n');
+        expect(fs.readFileSync(path.join(workspaceRoot, '.skein', '.gitignore'), 'utf-8')).toBe('*\n');
         // The copy older versions kept in workspaceState is dropped.
         expect(context.workspaceState.update).toHaveBeenCalledWith('skein.reverseIndex', undefined);
     });

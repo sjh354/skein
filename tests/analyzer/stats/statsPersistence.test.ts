@@ -49,23 +49,23 @@ describe('statsPersistence', () => {
 
   beforeEach(() => {
     baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'graph-it-stats-test-'));
-    originalNoStats = process.env.GRAPH_IT_NO_STATS;
-    delete process.env.GRAPH_IT_NO_STATS;
+    originalNoStats = process.env.SKEIN_NO_STATS;
+    delete process.env.SKEIN_NO_STATS;
   });
 
   afterEach(() => {
     fs.rmSync(baseDir, { recursive: true, force: true });
     if (originalNoStats !== undefined) {
-      process.env.GRAPH_IT_NO_STATS = originalNoStats;
+      process.env.SKEIN_NO_STATS = originalNoStats;
     } else {
-      delete process.env.GRAPH_IT_NO_STATS;
+      delete process.env.SKEIN_NO_STATS;
     }
     vi.restoreAllMocks();
   });
 
-  it('getDefaultStatsDir() points under homedir/.graph-it/stats', () => {
+  it('getDefaultStatsDir() points under homedir/.skein/stats', () => {
     const dir = getDefaultStatsDir();
-    expect(dir).toBe(path.join(os.homedir(), '.graph-it', 'stats'));
+    expect(dir).toBe(path.join(os.homedir(), '.skein', 'stats'));
   });
 
   it('flushSession + readAllSessions roundtrip', () => {
@@ -116,8 +116,8 @@ describe('statsPersistence', () => {
     expect(fs.readdirSync(baseDir)).toHaveLength(1);
   });
 
-  it('GRAPH_IT_NO_STATS=1 disables persistence entirely', () => {
-    process.env.GRAPH_IT_NO_STATS = '1';
+  it('SKEIN_NO_STATS=1 disables persistence entirely', () => {
+    process.env.SKEIN_NO_STATS = '1';
     flushSession(makeSnapshot(), baseDir);
     expect(fs.readdirSync(baseDir)).toEqual([]);
   });

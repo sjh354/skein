@@ -165,7 +165,7 @@ export class WorkerState {
     }
   }
 
-  /** Shared `.graph-it/cache/`; null when this process runs without a cache. */
+  /** Shared `.skein/cache/`; null when this process runs without a cache. */
   get indexCache(): IndexCache | null {
     return this._indexCache;
   }

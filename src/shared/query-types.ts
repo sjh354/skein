@@ -1,5 +1,5 @@
 /**
- * Query types for the `graph-it query` feature.
+ * Query types for `skein_query_natural_language`.
  *
  * CRITICAL ARCHITECTURE RULE: This module is completely VS Code agnostic!
  * NO import * as vscode from 'vscode' allowed!

@@ -28,8 +28,9 @@ const workspaceRoot = process.env.E2E_WORKSPACE
   : path.resolve(extensionDevelopmentPath, 'tests/fixtures');
 
 /**
- * The extension writes its shared index cache to <workspace>/.graph-it/. Under
- * the fixtures it would leak into the next run (a stale index) and the repo.
+ * A pre-rename .graph-it/ index cache leaks into the next run and the repo.
+ * The .skein/ directory is left alone: view-state tests write and read their
+ * snapshot there across two launches.
  */
 function removeFixtureIndexCaches(): void {
   for (const entry of fs.readdirSync(workspaceRoot, { recursive: true, withFileTypes: true })) {

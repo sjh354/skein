@@ -1,6 +1,6 @@
 /**
  * E2E for #295: get_index_status reports the on-disk size of the shared
- * .graph-it/cache/ files, so cache growth is visible without a size limit.
+ * .skein/cache/ files, so cache growth is visible without a size limit.
  * Background indexing persists the reverse index once it completes.
  */
 
