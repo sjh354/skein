@@ -10,9 +10,6 @@
     "mcp": {
       "path": "src/mcp/"
     },
-    "cli": {
-      "path": "src/cli/"
-    },
     "extension": {
       "path": "src/extension/"
     },
@@ -44,7 +41,7 @@
         "shared"
       ],
       "severity": "error",
-      "reason": "The analyzer runs in the CLI, the MCP server and workers: no extension, webview or MCP code."
+      "reason": "The analyzer runs in the MCP server, workers and the extension host: no extension, webview or MCP code."
     },
     {
       "name": "mcp-standalone",
@@ -57,32 +54,20 @@
       "reason": "The MCP server is a standalone Node stdio process: it reuses the analyzer, never the extension."
     },
     {
-      "name": "cli-standalone",
-      "from": "cli",
-      "forbid": [
-        "extension",
-        "webview"
-      ],
-      "severity": "error",
-      "reason": "The CLI ships without VS Code."
-    },
-    {
       "name": "extension-no-webview-code",
       "from": "extension",
       "forbid": [
-        "webview",
-        "cli"
+        "webview"
       ],
       "severity": "error",
-      "reason": "The extension host talks to the webview through messages typed in src/shared and runs the CLI as a separate process; it never bundles their code. It reuses MCP tool code for its language model tools."
+      "reason": "The extension host talks to the webview through messages typed in src/shared and never bundles webview code. It reuses MCP tool code for its language model tools."
     },
     {
       "name": "webview-is-browser-code",
       "from": "webview",
       "forbid": [
         "extension",
-        "mcp",
-        "cli"
+        "mcp"
       ],
       "severity": "error",
       "reason": "The webview is a browser bundle; it talks to the extension through messages typed in src/shared/types.ts."
@@ -102,7 +87,6 @@
         "shared",
         "analyzer",
         "mcp",
-        "cli",
         "extension",
         "webview"
       ],

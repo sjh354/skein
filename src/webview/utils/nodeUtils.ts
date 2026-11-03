@@ -1,6 +1,5 @@
 /**
- * Utility functions for node manipulation in the graph visualization
- * These are extracted from useGraphData for testability
+ * Utility functions for node manipulation in the graph visualization.
  */
 
 import dagre from '@dagrejs/dagre';

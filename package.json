@@ -1434,7 +1434,6 @@
     "sql.js": "^1.15.2",
     "tree-sitter-wasms": "^0.1.13",
     "ts-morph": "^27.0.2",
-    "vis-network": "^10.1.4",
     "web-tree-sitter": "^0.26.13",
     "zod": "^4.6.7"
   },
@@ -1451,7 +1450,6 @@
     "@vitest/ui": "^4.1.12",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.1.0",
-    "ajv": "^8.20.0",
     "esbuild": "^0.28.2",
     "esbuild-css-modules-plugin": "^3.1.5",
     "eslint": "^10.13.0",

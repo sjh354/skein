@@ -228,8 +228,7 @@ async function createAllContexts() {
   const mcpServer = await esbuild.context(nodeBundle('src/mcp/mcpServer.ts', 'dist/mcpServer.mjs', { format: 'esm', external: ['web-tree-sitter'], banner: ESM_BANNER }));
   const mcpWorker = await esbuild.context(nodeBundle('src/mcp/McpWorker.ts', 'dist/mcpWorker.js', { external: ['web-tree-sitter'] }));
   const webview = await esbuild.context(browserBundle('src/webview/index.tsx', 'dist/webview.js'));
-  const callgraphWebview = await esbuild.context(browserBundle('src/webview/callgraph/index.tsx', 'dist/callgraph.js'));
-  return { extension, worker, astWorker, mcpServer, mcpWorker, webview, callgraphWebview };
+  return { extension, worker, astWorker, mcpServer, mcpWorker, webview };
 }
 
 async function watchContexts(ctxs) {
@@ -239,7 +238,6 @@ async function watchContexts(ctxs) {
   await ctxs.mcpServer.watch();
   await ctxs.mcpWorker.watch();
   if (ctxs.webview) await ctxs.webview.watch();
-  if (ctxs.callgraphWebview) await ctxs.callgraphWebview.watch();
 }
 
 async function rebuildAndDispose(ctxs) {
@@ -249,7 +247,6 @@ async function rebuildAndDispose(ctxs) {
   const resultMcpServer = await ctxs.mcpServer.rebuild();
   const resultMcpWorker = await ctxs.mcpWorker.rebuild();
   const resultWebview = await ctxs.webview.rebuild();
-  await ctxs.callgraphWebview.rebuild();
 
   if (metafilePath && resultExtension && resultWebview) {
     saveMetafiles(metafilePath, { resultExtension, resultWorker, resultAstWorker, resultMcpServer, resultMcpWorker, resultWebview });
@@ -260,7 +257,6 @@ async function rebuildAndDispose(ctxs) {
   await ctxs.astWorker.dispose();
   await ctxs.mcpServer.dispose();
   await ctxs.mcpWorker.dispose();
-  await ctxs.callgraphWebview.dispose();
   await ctxs.webview.dispose();
 }
 
