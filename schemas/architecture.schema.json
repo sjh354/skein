@@ -35,7 +35,7 @@
             ]
           },
           "unit": {
-            "description": "Unit keys or package names (graph-it architecture --level units); * matches any characters",
+            "description": "Unit keys or package names at the units level; * matches any characters",
             "anyOf": [
               {
                 "type": "string",
@@ -53,7 +53,7 @@
             ]
           },
           "role": {
-            "description": "Unit roles (graph-it architecture --level units): every unit with one of them",
+            "description": "Unit roles at the units level: every unit with one of them",
             "anyOf": [
               {
                 "type": "string",
@@ -158,7 +158,7 @@
             "pattern": "^[\\w.-]{1,64}$"
           },
           "severity": {
-            "description": "error (default) fails graph-it check-architecture; off skips the rule",
+            "description": "error (default) fails `skein_check_architecture`; off skips the rule",
             "type": "string",
             "enum": [
               "error",

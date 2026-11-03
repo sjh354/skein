@@ -31,7 +31,7 @@ type Internals = {
   activeOperations: Set<Promise<unknown>>;
 };
 
-const CALL_GRAPH_DB = "/ws/.graph-it/cache/callgraph.db";
+const CALL_GRAPH_DB = "/ws/.skein/cache/callgraph.db";
 
 function createService() {
   const service = new CallGraphViewService({ subscriptions: [] } as never);

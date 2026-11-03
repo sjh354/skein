@@ -103,7 +103,7 @@ function aggregateHistory(
 /**
  * Build the session stats report: current in-memory session + persisted history.
  *
- * @param statsDir optional stats directory override (tests); defaults to ~/.graph-it/stats
+ * @param statsDir optional stats directory override (tests); defaults to ~/.skein/stats
  */
 export function executeGetSessionStats(statsDir?: string): GetSessionStatsResult {
   const currentSession = sessionStats.snapshot();
@@ -118,13 +118,11 @@ export function executeGetSessionStats(statsDir?: string): GetSessionStatsResult
     // History is best-effort — the current session must always be reported.
   }
 
-  // The MCP server never instantiates an LLM client (query_natural_language
-  // delegates synthesis to the calling LLM), so llmUsage can only be non-zero
-  // for CLI sessions (`graph-it query`). Say so instead of showing a section
-  // that looks broken.
+  // Skein makes no LLM API calls: query_natural_language delegates synthesis
+  // to the calling agent, so llmUsage stays 0 instead of showing a broken section.
   const llmUsageNote =
-    currentSession.source === "mcp" && currentSession.llmUsage.calls === 0
-      ? "llmUsage is tracked for CLI `graph-it query` only — the MCP server delegates LLM synthesis to the calling client and makes no LLM API calls itself"
+    currentSession.llmUsage.calls === 0
+      ? "llmUsage stays 0 — Skein delegates LLM synthesis to the calling agent and makes no LLM API calls itself"
       : "llmUsage is real provider-reported token consumption; it is never summed into the estimated encoding totals";
 
   return {

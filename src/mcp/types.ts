@@ -65,7 +65,7 @@ export interface McpWorkerConfig {
   excludeNodeModules: boolean;
   maxDepth: number;
   /**
-   * Restore and persist the indexes in `<rootDir>/.graph-it/cache/`, shared with
+   * Restore and persist the indexes in `<rootDir>/.skein/cache/`, shared with
    * the CLI and the VS Code extension so whichever starts first indexes for all.
    */
   shareIndexCache?: boolean;
@@ -472,7 +472,7 @@ export type GetImpactAnalysisParams = z.infer<
   typeof GetImpactAnalysisParamsSchema
 >;
 
-// Schema for `graph-it explain` (intra-file call hierarchy)
+// Schema for `skein_analyze_file_logic` (intra-file call hierarchy)
 export const AnalyzeFileLogicParamsSchema = z.object({
   filePath: FilePathSchema.describe("Absolute path to the file to analyze"),
   includeExternal: z
@@ -687,11 +687,11 @@ export const ExploreArchitectureParamsSchema = z.object({
     .min(1)
     .max(PAGINATION_LIMITS.MAX_OFFSET)
     .optional()
-    .describe("Analyse only the first maxFiles source files, like graph-it architecture --maxFiles (default: all)"),
+    .describe("Analyse only the first maxFiles source files, as the Architecture view's maxFiles (default: all)"),
   level: z
     .enum(["groups", "units"])
     .optional()
-    .describe("groups (default): folder or Louvain groups; units: packages (else top-level folders) with their layers, roles and role evidence, unit edges (down, upward, cycle) and cycles, like graph-it architecture --level units"),
+    .describe("groups (default): folder or Louvain groups; units: packages (else top-level folders) with their layers, roles and role evidence, unit edges (down, upward, cycle) and cycles, as `skein_explore_architecture` returns at the units level"),
   folder: z
     .string()
     .min(1)
@@ -701,7 +701,7 @@ export const ExploreArchitectureParamsSchema = z.object({
   view: z
     .enum(["matrix"])
     .optional()
-    .describe("matrix: the dependency structure matrix of the level (units with level units, a folder's groups with folder, else the groups): rows ordered by layer with each cycle's rows together, non-zero cells (row imports column, diagonal = pairs inside) paged by offset/limit, per-row Ce/Ca/instability with their formula, cycles and totals of every cell, like graph-it architecture --matrix"),
+    .describe("matrix: the dependency structure matrix of the level (units with level units, a folder's groups with folder, else the groups): rows ordered by layer with each cycle's rows together, non-zero cells (row imports column, diagonal = pairs inside) paged by offset/limit, per-row Ce/Ca/instability with their formula, cycles and totals of every cell, as `skein_explore_architecture` returns for a matrix"),
   group: GroupRefSchema.optional().describe("Return this group's files and its incoming / outgoing group edges"),
   from: GroupRefSchema.optional().describe("Source group of the edge whose file pairs to return (requires to); with level units, a unit key such as 'apps/web' or '(root)'"),
   to: GroupRefSchema.optional().describe("Target group of the edge whose file pairs to return (requires from); with level units, a unit key"),
@@ -1276,7 +1276,7 @@ export interface GetIndexStatusResult extends OutOfRootReport {
     relations: number;
   };
   /**
-   * On-disk size of the shared `.graph-it/cache/` payloads, 0 for one not written
+   * On-disk size of the shared `.skein/cache/` payloads, 0 for one not written
    * yet. Absent when this process runs without the shared cache.
    */
   cacheFiles?: {
@@ -1561,7 +1561,7 @@ export interface GetImpactAnalysisResult {
 }
 
 /**
- * Result of `graph-it explain` (intra-file call hierarchy)
+ * Result of `skein_analyze_file_logic` (intra-file call hierarchy)
  * Returns LSP-based intra-file call hierarchy with symbol nodes and edges
  */
 export interface AnalyzeFileLogicResult {

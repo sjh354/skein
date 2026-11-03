@@ -1,7 +1,7 @@
 /**
- * IndexCache — the `.graph-it/cache/` directory shared by the VS Code extension,
- * the MCP server and the CLI, so whichever starts first indexes the workspace
- * and the others start warm.
+ * IndexCache — the `.skein/cache/` directory shared by the VS Code extension and the
+ * MCP server, so whichever starts first indexes the workspace and the others
+ * start warm.
  *
  * NO vscode import — pure Node.js analyzer layer.
  *
@@ -23,7 +23,7 @@ import { configFingerprint } from "./configFingerprint";
 
 const log = getLogger("IndexCache");
 
-/** Layout version of .graph-it/cache/ itself. Bump when file names or roles change. */
+/** Layout version of .skein/cache/ itself. Bump when file names or roles change. */
 export const INDEX_CACHE_SCHEMA = 2;
 
 /** Injected at build time into every Node bundle; "0.0.0-dev" outside a bundle. */
@@ -117,7 +117,28 @@ export class IndexCache {
   }
 
   static dirFor(workspaceRoot: string): string {
+    return path.join(workspaceRoot, ".skein", "cache");
+  }
+
+  /** Cache location used by versions before the Skein rename. */
+  static legacyDirFor(workspaceRoot: string): string {
     return path.join(workspaceRoot, ".graph-it", "cache");
+  }
+
+  /**
+   * Move a pre-rename cache once, so upgrading does not force a full re-index.
+   * A failure is harmless: the caller simply starts with an empty cache.
+   */
+  private static migrateLegacyDir(workspaceRoot: string): void {
+    const current = IndexCache.dirFor(workspaceRoot);
+    const legacy = IndexCache.legacyDirFor(workspaceRoot);
+    try {
+      if (fs.existsSync(current) || !fs.existsSync(legacy)) return;
+      fs.mkdirSync(path.dirname(current), { recursive: true });
+      fs.renameSync(legacy, current);
+    } catch {
+      // Never block analysis on cache migration.
+    }
   }
 
   /**
@@ -130,6 +151,7 @@ export class IndexCache {
       yieldIntervalMs: 30,
       isCancelled: () => false,
     }).collectAllSourceFiles(workspaceRoot);
+    IndexCache.migrateLegacyDir(workspaceRoot);
     return new IndexCache(workspaceRoot, sourceFiles);
   }
 
@@ -332,7 +354,7 @@ export class IndexCache {
     return Date.now() - holder.acquiredAt > LOCK_STALE_MS || !isProcessAlive(holder.pid);
   }
 
-  /** `.graph-it/` holds only generated state, so it ignores itself in git. */
+  /** `.skein/` holds only generated state, so it ignores itself in git. */
   private ensureGitignore(): void {
     try {
       fs.writeFileSync(path.join(path.dirname(this.dir), ".gitignore"), "*\n", { flag: "wx" });

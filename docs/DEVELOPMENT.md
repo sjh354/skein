@@ -73,9 +73,14 @@ The build process creates the following files in `dist/`:
 ```
 dist/
 ├── wasm/
-│   ├── tree-sitter.wasm          # Core web-tree-sitter WASM runtime
-│   ├── tree-sitter-python.wasm   # Python grammar WASM
-│   └── tree-sitter-rust.wasm     # Rust grammar WASM
+│   ├── tree-sitter.wasm            # Core web-tree-sitter WASM runtime
+│   ├── tree-sitter-typescript.wasm # TypeScript / JavaScript grammar
+│   ├── tree-sitter-python.wasm     # Python grammar
+│   ├── tree-sitter-rust.wasm       # Rust grammar
+│   ├── tree-sitter-c_sharp.wasm    # C# grammar
+│   ├── tree-sitter-go.wasm         # Go grammar
+│   ├── tree-sitter-java.wasm       # Java grammar
+│   └── sqljs.wasm                  # sql.js call-graph database
 ├── extension.js                   # Main extension bundle (CommonJS)
 ├── indexerWorker.js               # Background indexing worker (CommonJS)
 ├── astWorker.js                   # Symbol analysis worker (CommonJS)
@@ -89,9 +94,9 @@ dist/
 The build process automatically:
 
 1. **Copies WASM files** from `node_modules` to `dist/wasm/`:
-   - `node_modules/web-tree-sitter/tree-sitter.wasm` → `dist/wasm/tree-sitter.wasm`
-   - `node_modules/tree-sitter-wasms/out/tree-sitter-python.wasm` → `dist/wasm/tree-sitter-python.wasm`
-   - `node_modules/tree-sitter-wasms/out/tree-sitter-rust.wasm` → `dist/wasm/tree-sitter-rust.wasm`
+   - `web-tree-sitter/tree-sitter.wasm` (runtime)
+   - `tree-sitter-wasms/out/tree-sitter-{typescript,python,rust,c_sharp,go,java}.wasm`
+   - `sql.js/dist/sql-wasm.wasm`
 
 2. **Includes WASM files in .vsix package** via `.vscodeignore` patterns
 
@@ -263,8 +268,12 @@ Skein uses WebAssembly (WASM) versions of tree-sitter parsers for improved insta
 VS Code Extension Host (Electron)
 ├── WasmParserFactory (Singleton)
 │   ├── tree-sitter.wasm (Core WASM runtime)
-│   ├── tree-sitter-python.wasm (Python grammar)
-│   └── tree-sitter-rust.wasm (Rust grammar)
+│   ├── tree-sitter-typescript.wasm
+│   ├── tree-sitter-python.wasm
+│   ├── tree-sitter-rust.wasm
+│   ├── tree-sitter-c_sharp.wasm
+│   ├── tree-sitter-go.wasm
+│   └── tree-sitter-java.wasm
 ├── PythonParser (uses WASM)
 ├── RustParser (uses WASM)
 └── Symbol Analyzers (use WASM)
@@ -334,10 +343,8 @@ npm run package:verify
 
 # 4. Verify WASM files are included
 npx vsce ls | grep "\.wasm$"
-# Expected output:
-# dist/wasm/tree-sitter.wasm
-# dist/wasm/tree-sitter-python.wasm
-# dist/wasm/tree-sitter-rust.wasm
+# Expected: 8 files (tree-sitter, typescript, python, rust,
+# c_sharp, go, java and sqljs WASM)
 
 # 5. Check package size
 ls -lh *.vsix
@@ -347,7 +354,7 @@ ls -lh *.vsix
 ### What to Verify
 
 1. **No .map files**: Source maps must be excluded from the package
-2. **WASM files included**: All three WASM files must be present
+2. **WASM files included**: All eight WASM files must be present
 3. **Package size**: Should be around 12 MB (reasonable size)
 4. **All tests pass**: Run `npm run test:vscode:vsix` before release
 
@@ -445,6 +452,7 @@ There is no release workflow in this fork: no Marketplace, Open VSX or npm publi
 ```bash
 npm test
 npm run test:coverage
+npm run test:viewstate && npm run test:change && npm run test:refactor && npm run test:diagnostics
 npm run test:vscode:vsix  # tests the packaged extension
 npm run build -- --production && npm run package && npm run package:verify
 code --install-extension skein-*.vsix  # check install in a clean VS Code instance

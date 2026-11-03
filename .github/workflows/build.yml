@@ -20,7 +20,6 @@ on:
       - 'tsconfig*.json'
       - 'vitest*.config.mts'
       - 'esbuild.js'
-      - 'scripts/mcpSession.ts'
       - 'eslint.config.mjs'
       - '.github/workflows/**'
   pull_request:
@@ -34,7 +33,6 @@ on:
       - 'tsconfig*.json'
       - 'vitest*.config.mts'
       - 'esbuild.js'
-      - 'scripts/mcpSession.ts'
       - 'eslint.config.mjs'
       - '.github/workflows/**'
 

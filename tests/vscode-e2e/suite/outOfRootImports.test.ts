@@ -25,7 +25,7 @@ suite('Out-of-root imports (#264)', function () {
     }
     const extension = vscode.extensions.getExtension('sjh354.skein');
     await extension?.activate();
-    // Index from source rather than whatever .graph-it/cache an earlier run left behind.
+    // Index from source rather than whatever .skein/cache an earlier run left behind.
     await vscode.commands.executeCommand('skein.forceReindex');
 
     let status: IndexStatus = {};

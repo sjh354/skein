@@ -57,10 +57,11 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 - 이전 이름으로 저장한 VS Code 사용자 설정과 에이전트의 MCP 설정은 이전되지 않는다. 필요한 곳에서 `skein`으로 바꿔야 한다.
 - 기존 `.graphitignore`·`graphit.architecture.json`을 쓰는 분석 대상 프로젝트는 파일 이름을 바꿔야 한다. 이전 이름을 읽는 호환 처리는 넣지 않았다.
 
-## 5. 남은 정리 후보
+## 5. 정리 결과
 
-- `sonar-project.properties`와 `.vscode/settings.json`의 SonarCloud 설정은 원작자 계정(`magic5644`)을 가리킨다. 사용하지 않으면 삭제하고, 쓸 거면 새 프로젝트로 바꾼다. 의도적으로 이번 변경에서 제외했다.
-- `.github/workflows/`는 검증만 수행하고 배포·비밀 값을 쓰지 않는다. 필요 없는 워크플로는 제거한다.
+- `sonar-project.properties`와 `.vscode/settings.json`의 원작자 SonarCloud·Snyk 설정을 제거했다.
+- `.github/workflows/`는 검증만 수행하고 배포·비밀 값을 쓰지 않는다. 모두 유지하고, 삭제된 `scripts/mcpSession.ts` 경로 필터만 정리했다.
+- 분석 캐시는 `<workspace>/.skein/cache/`, 세션 통계는 `~/.skein/stats/`로 옮겼다. 기존 `.graph-it/cache/`는 첫 실행에서 한 번 이동하며, 이동에 실패하면 재색인한다. 통계 비활성화 환경 변수는 `SKEIN_NO_STATS`로 바뀌었고 `GRAPH_IT_NO_STATS`는 읽지 않는다.
 - Claude Code 프로젝트 상태(`~/.claude.json`, `~/.claude/projects/`)는 작업 폴더 경로를 기준으로 저장된다. 폴더를 `skein`으로 옮겼으므로 새 경로에서 처음 열 때 신뢰 확인을 다시 거친다.
 
 ## 6. 4단계 완료 후 남은 확인 (나중에 한 번에)
@@ -137,3 +138,13 @@ npm run lint
   - [ ] M5 변경 차단·예외·사후 검증
   - [ ] M6 `skein_diagnose_structure` Codex 왕복
   - [ ] M7 대표 저장소 성능
+
+## 8. 8단계 완료 후 남은 확인
+
+- 대체표: `docs/verification/step8-replacement-table.md`
+- 수용 기준 기록: `docs/verification/step8-acceptance.md`
+- [ ] 하단 패널과 에디터 탭이 같은 분석 세션·선택·배치를 공유하는가
+- [ ] `skein.toggleViewMode`를 사용하는 키바인딩이 남아 있는가 (있으면 명령을 유지)
+- [ ] Copilot 언어 모델 도구를 제품 표면에서 계속 제공할지 결정
+- [ ] 삭제한 렌더러·모듈 대신 현재 화면이 같은 기능을 제공하는가
+- [ ] 4~7단계 수동 항목을 실제 창에서 완료하고 수용 기준 표의 "수동 대기"를 갱신

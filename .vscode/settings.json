@@ -1,5 +1,5 @@
 {
-"cSpell.words": [
+  "cSpell.words": [
     "skein",
     "metafile",
     "metafiles",
@@ -8,26 +8,5 @@
     "reindex",
     "toon",
     "venv"
-],
-"chat.promptFilesRecommendations": {
-    "speckit.constitution": true,
-    "speckit.specify": true,
-    "speckit.plan": true,
-    "speckit.tasks": true,
-    "speckit.implement": true
-},
-"chat.tools.terminal.autoApprove": {
-    ".specify/scripts/bash/": true,
-    ".specify/scripts/powershell/": true,
-    "/^node scripts/test-mcp\\.js$/": {
-        "approve": true,
-        "matchCommandLine": true
-    }
-},
-"snyk.advanced.organization": "6b710926-1f1b-40ee-bceb-66b9edbdcf42",
-"snyk.advanced.autoSelectOrganization": true,
-"sonarlint.connectedMode.project": {
-    "connectionId": "magic56",
-    "projectKey": "magic5644_Graph-It-Live"
-}
+  ]
 }

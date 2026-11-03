@@ -42,7 +42,7 @@ describe.runIf(HAS_WASM)("call graph cache", () => {
 
   beforeEach(() => {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "graph-it-cg-")));
-    cacheDir = path.join(tmpDir, ".graph-it", "cache");
+    cacheDir = path.join(tmpDir, ".skein", "cache");
     write("package.json", "{}");
     write("src/b.ts", "export function b() { return 1; }\n");
     for (let i = 0; i < 12; i++) {
@@ -67,7 +67,7 @@ describe.runIf(HAS_WASM)("call graph cache", () => {
   });
 
   it("keeps the in-memory index usable when cache persistence fails", async () => {
-    // A plain file where .graph-it/ belongs makes every write fail on every OS.
+    // A plain file where .skein/ belongs makes every write fail on every OS.
     fs.writeFileSync(path.dirname(cacheDir), "file");
 
     await expect(indexOnce()).resolves.toBeUndefined();

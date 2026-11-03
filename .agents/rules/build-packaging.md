@@ -10,7 +10,7 @@ paths:
 
 # Build, Dependencies, and Packaging
 
-- `esbuild.js` builds the extension, MCP server, workers, and two webviews; verify every target after build changes.
+- `esbuild.js` builds the extension, MCP server, workers, and the webview; verify every target after build changes.
 - WASM and Tree-sitter query files are copied assets, not normal bundled JavaScript. Keep required files in `dist/wasm/` and `dist/queries/`.
 - Production VSIX must contain zero `.map` files. Keep `**/*.map` excluded and avoid broad `node_modules` re-inclusions.
 - After build config or dependency changes run production build, `npm run package`, and `npm run package:verify`.

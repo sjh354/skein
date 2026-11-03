@@ -2,7 +2,7 @@
  * Memory benchmarks for CallGraphIndexer
  *
  * Measures sql.js database size growth: the exported bytes are what
- * `.graph-it/cache/callgraph.db` holds on disk.
+ * `.skein/cache/callgraph.db` holds on disk.
  *
  * Run with: npm run test:bench:memory
  */

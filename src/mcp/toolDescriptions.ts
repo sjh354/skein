@@ -1,6 +1,6 @@
 /**
  * Tool descriptions - single source of truth for the MCP server, the
- * `graph-it tool --list` summaries and the VS Code Language Model tool
+ * tool summaries and the VS Code Language Model tool
  * `modelDescription` fields in package.json.
  *
  * Each description is a one-sentence summary followed by labelled lines.
@@ -349,7 +349,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "Explores the workspace architecture step by step: groups, one group's boundary, then the file pairs behind a group edge.",
     lines: [
       `WHEN: "how is this project structured", "what depends on the analyzer layer", "why does group A import group B".`,
-      "WHY: aggregates the whole import graph by folder domain (communityMode 'path') or import structure ('louvain') before any paging, so counts match graph-it architecture --groups and every group edge is backed by its file pairs.",
+      "WHY: aggregates the whole import graph by folder domain (communityMode 'path') or import structure ('louvain') before any paging, so counts match `skein_explore_architecture` at the group level and every group edge is backed by its file pairs.",
       "RETURNS: no group/from/to - totals, unassigned files, the largest groups and group edges; group (a number is an id, a string a key or label) - its files and incoming / outgoing group edges; from + to - the distinct file pairs of that edge; level 'units' - packages (else top-level folders) with their layer (0 = depends on no other unit), role (function, micro-frontend, frontend, service, library, tooling, unknown) with its confidence (inferred, or declared in skein.architecture.json) and evidence, roleCounts, layerCount, unit edges flagged down, upward or cycle, and the cycle count; level 'units' + from + to (unit keys, e.g. 'apps/web', '(root)') - the file pairs of that unit edge, sorted by target then source, total = the edge's file-pair count; folder (a unit key, or a group key of a folder level, path mode) - the same views one level down: its sub-folders and own files as groups, nestedGroups those that go deeper; view 'matrix' (with level 'units', folder or neither) - the level's dependency structure matrix: rows by layer with each cycle's rows together, non-zero cells (row imports column, diagonal = pairs inside, upward = above the diagonal), Ce/Ca/instability per row with the formula, cycles and totals. Each response states its context (grouping, graph kind, truncation, revision) and separates code facts from computed groupings.",
       "LIMITS: import relations only (static analysis, not observed execution); every list (groups, group edges, files, incoming, outgoing, pairs, matrix cells) paginated by offset/limit (default 50) with totals, truncated and nextOffset; analyses every source file on each call, so pass the previous context.revision with a group id or offset: the call fails if the architecture changed, and you restart from the summary. Symbols and lines come from skein_find_referencing_files, skein_query_call_graph and skein_get_impact_analysis.",
     ],
@@ -359,7 +359,7 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "Checks the workspace imports against the architecture rules declared in skein.architecture.json.",
     lines: [
       `WHEN: "does this change break the architecture", "may the frontend import the backend", before adding an import across packages, or to list the violations a CI gate reports.`,
-      "WHY: rules are human annotation (elements selected by path patterns, units or unit roles; forbid, allowOnly, noCycles); the check compares every static import pair with them, as graph-it check-architecture does, and a baseline separates accepted violations from new ones.",
+      "WHY: rules are human annotation (elements selected by path patterns, units or unit roles; forbid, allowOnly, noCycles); the check compares every static import pair with them, as `skein_check_architecture` does, and a baseline separates accepted violations from new ones (`skein_check_architecture`).",
       "RETURNS: passed (false when an error-severity violation is new), totals per severity, each rule with its violation count and element pairs, the violating file pairs (source, target, import line, element pairs, new) sorted by rule, files no element selects, baseline entries no longer found (resolved), and config warnings (patterns matching nothing). Invalid configs fail with the JSON path of each error.",
       "LIMITS: import relations only (static analysis), no rule on symbols or calls; violations paginated by offset/limit (default 50) with totals; analyses every source file on each call, so pass the previous context.revision with an offset: the call fails if the code, rules or baseline changed. Pair it with skein_explore_architecture to see the units and edges the rules refer to.",
     ],
@@ -469,7 +469,7 @@ function render(name: DescribedToolName, surface: "mcp" | "lm"): string {
   return `${summary}\n\n${body.join("\n")}`;
 }
 
-/** One-sentence summary, as printed by `graph-it tool --list`. */
+/** One-sentence summary used by the tool list. */
 export function toolSummary(name: DescribedToolName): string {
   return TOOL_DESCRIPTIONS[name].summary;
 }

@@ -261,7 +261,7 @@ describe('LmToolsService', () => {
   it('reports the on-disk size of the shared cache files in get_index_status', async () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), 'graph-it-lm-cache-'));
     try {
-      const cacheDir = path.join(workspaceRoot, '.graph-it', 'cache');
+      const cacheDir = path.join(workspaceRoot, '.skein', 'cache');
       mkdirSync(cacheDir, { recursive: true });
       writeFileSync(path.join(cacheDir, 'callgraph.db'), new Uint8Array(3));
       const spider = {

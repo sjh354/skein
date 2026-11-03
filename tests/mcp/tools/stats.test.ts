@@ -42,16 +42,16 @@ describe("get_session_stats tool", () => {
     // Shared singleton — isolate every test.
     sessionStats.reset();
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gitl-stats-tool-"));
-    savedNoStats = process.env.GRAPH_IT_NO_STATS;
-    delete process.env.GRAPH_IT_NO_STATS;
+    savedNoStats = process.env.SKEIN_NO_STATS;
+    delete process.env.SKEIN_NO_STATS;
   });
 
   afterEach(() => {
     fs.rmSync(tempDir, { recursive: true, force: true });
     if (savedNoStats === undefined) {
-      delete process.env.GRAPH_IT_NO_STATS;
+      delete process.env.SKEIN_NO_STATS;
     } else {
-      process.env.GRAPH_IT_NO_STATS = savedNoStats;
+      process.env.SKEIN_NO_STATS = savedNoStats;
     }
   });
 
@@ -64,7 +64,7 @@ describe("get_session_stats tool", () => {
 
     expect(result.description).toBe("TOON encoding size vs JSON equivalent");
     expect(result.estimationNote).toBe("estimated (chars/4 heuristic)");
-    expect(result.llmUsageNote).toContain("never summed into the estimated encoding totals");
+    expect(result.llmUsageNote).toContain("stays 0");
     expect(result.currentSession.estimationMethod).toBe("chars/4 heuristic");
   });
 
@@ -75,8 +75,8 @@ describe("get_session_stats tool", () => {
       const result = executeGetSessionStats(tempDir);
 
       expect(result.currentSession.llmUsage.calls).toBe(0);
-      expect(result.llmUsageNote).toContain("CLI `graph-it query` only");
-      expect(result.llmUsageNote).toContain("delegates LLM synthesis to the calling client");
+      expect(result.llmUsageNote).toContain("makes no LLM API calls");
+      expect(result.llmUsageNote).toContain("delegates LLM synthesis to the calling agent");
     } finally {
       sessionStats.setSource(savedSource);
     }
@@ -103,7 +103,7 @@ describe("get_session_stats tool", () => {
       expect(result.currentSession.totals.toonTokens).toBe(140);
       // ...with zero provider LLM calls in the MCP process.
       expect(result.currentSession.llmUsage).toEqual({ calls: 0, tokensUsed: 0 });
-      expect(result.llmUsageNote).toContain("CLI `graph-it query` only");
+      expect(result.llmUsageNote).toContain("makes no LLM API calls");
     } finally {
       sessionStats.setSource(savedSource);
     }

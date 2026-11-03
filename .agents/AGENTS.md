@@ -6,6 +6,7 @@ VS Code extension and MCP server for dependency and call-graph analysis. Require
 
 - Build: `npm run build`; one test: `npx vitest run <test-file>`; unit suite: `npm test`.
 - Quality: `npm run lint`, `npm run check:types`, `npm run test:coverage`; E2E: `npm run test:vscode`.
+- Phase checks: `npm run test:viewstate`, `npm run test:change`, `npm run test:refactor`, `npm run test:diagnostics`.
 - Package: `npm run package && npm run package:verify`.
 
 Prefix shell commands with `rtk`; use `rtk proxy <command>` when no optimized wrapper exists.

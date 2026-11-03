@@ -1,5 +1,5 @@
 /**
- * statsPersistence — writes/reads session stats snapshots under ~/.graph-it/stats/.
+ * statsPersistence — writes/reads session stats snapshots under ~/.skein/stats/.
  *
  * NO vscode import — pure Node.js analyzer layer.
  *
@@ -9,7 +9,7 @@
  * - Atomic write: write to a temp file then renameSync (same directory).
  * - Synchronous on purpose: flush happens in process signal handlers.
  * - Idempotent: re-flushing the same session overwrites the same file.
- * - Opt-out: GRAPH_IT_NO_STATS=1 disables persistence (memory collection
+ * - Opt-out: SKEIN_NO_STATS=1 disables persistence (memory collection
  *   continues elsewhere).
  * - Rotation: max 50 files per source, oldest (mtime) evicted first.
  * - Snapshots contain no workspace paths nor code content by construction.
@@ -22,13 +22,13 @@ import type { SessionStatsSnapshot } from '@/shared/sessionStats';
 
 const MAX_FILES_PER_SOURCE = 50;
 
-/** Default stats directory: ~/.graph-it/stats */
+/** Default stats directory: ~/.skein/stats */
 export function getDefaultStatsDir(): string {
-  return path.join(os.homedir(), '.graph-it', 'stats');
+  return path.join(os.homedir(), '.skein', 'stats');
 }
 
 function isDisabled(): boolean {
-  return process.env.GRAPH_IT_NO_STATS === '1';
+  return process.env.SKEIN_NO_STATS === '1';
 }
 
 function ensureDir(dir: string): void {
@@ -43,12 +43,12 @@ function snapshotHasEntries(snapshot: SessionStatsSnapshot): boolean {
 /**
  * Persist a session snapshot to `<baseDir>/<source>-<sessionId>.json`.
  *
- * Skips silently when GRAPH_IT_NO_STATS=1 or when the snapshot has no entries.
+ * Skips silently when SKEIN_NO_STATS=1 or when the snapshot has no entries.
  * Upsert semantics: flushing twice for the same session rewrites the same file.
  * Triggers rotation after writing.
  *
  * @param snapshot snapshot to persist
- * @param baseDir override of the stats directory (tests); defaults to ~/.graph-it/stats
+ * @param baseDir override of the stats directory (tests); defaults to ~/.skein/stats
  */
 export function flushSession(snapshot: SessionStatsSnapshot, baseDir?: string): void {
   if (isDisabled()) {
@@ -78,7 +78,7 @@ export function flushSession(snapshot: SessionStatsSnapshot, baseDir?: string): 
  * - Missing directory → [] (covers "file absent" criterion).
  * - Corrupted / unreadable file → skipped with a stderr warning, never throws.
  *
- * @param baseDir override of the stats directory (tests); defaults to ~/.graph-it/stats
+ * @param baseDir override of the stats directory (tests); defaults to ~/.skein/stats
  */
 export function readAllSessions(baseDir?: string): SessionStatsSnapshot[] {
   const dir = baseDir ?? getDefaultStatsDir();
@@ -103,10 +103,10 @@ export function readAllSessions(baseDir?: string): SessionStatsSnapshot[] {
       if (parsed && typeof parsed === 'object' && parsed.schemaVersion === 1) {
         snapshots.push(parsed);
       } else {
-        console.warn(`graph-it stats: skipping invalid stats file: ${name}`);
+        console.warn(`skein stats: skipping invalid stats file: ${name}`);
       }
     } catch {
-      console.warn(`graph-it stats: skipping corrupted stats file: ${name}`);
+      console.warn(`skein stats: skipping corrupted stats file: ${name}`);
     }
   }
   return snapshots;
@@ -116,7 +116,7 @@ export function readAllSessions(baseDir?: string): SessionStatsSnapshot[] {
  * Enforce max 50 files per source (prefix of the file name before first '-').
  * Oldest files (mtime) are deleted first. Sources never evict each other.
  *
- * @param baseDir stats directory to rotate; defaults to ~/.graph-it/stats
+ * @param baseDir stats directory to rotate; defaults to ~/.skein/stats
  */
 export function rotate(baseDir?: string): void {
   const dir = baseDir ?? getDefaultStatsDir();

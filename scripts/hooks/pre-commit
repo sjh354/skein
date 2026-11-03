@@ -17,7 +17,7 @@ if echo "$CHANGED_FILES" | grep -qE "esbuild\.js|\.vscodeignore|package\.json|sr
     echo ""
     echo "❌ FAIL: vscode imports found in src/analyzer/"
     echo ""
-    echo "Analyzer layer must be VS Code-agnostic (shared by CLI and MCP server)."
+    echo "Analyzer layer must be VS Code-agnostic (shared by MCP server and workers)."
     echo "Fix: Remove vscode imports and pass required data as constructor parameters."
     echo ""
     echo "Run this to see violations:"

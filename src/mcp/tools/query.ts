@@ -3,13 +3,12 @@
  *
  * Converts a natural language question into a TOON-format subgraph by:
  *   1. Reusing the call graph index already built by callgraph.ts (ensureCallGraphReady)
- *   2. Instantiating QueryEngine with the sql.js Database and llmClient = null
+ *   2. Instantiating QueryEngine with the sql.js Database and no LLM client
  *   3. Delegating synthesis to the LLM caller — this tool only returns the subgraph
  *
  * NO vscode imports — this module is VS Code agnostic.
  */
 
-import type { LlmClient } from "../../analyzer/llm/LlmClient";
 import { QueryEngine } from "../../analyzer/QueryEngine";
 import type { QueryRequest, QueryResultEdge, QueryResultNode } from "../../shared/query-types";
 import { normalizePath } from "../../shared/path";
@@ -163,7 +162,6 @@ async function ensureCallGraphReadyForQuery(): Promise<void> {
 
 export async function executeQueryNaturalLanguage(
   params: QueryNaturalLanguageParams,
-  llmClient: LlmClient | null = null,
 ): Promise<QueryNaturalLanguageResult> {
   const config = workerState.getConfig();
   const workspaceRoot = config.rootDir;
@@ -180,9 +178,8 @@ export async function executeQueryNaturalLanguage(
 
   const db = indexer.getDb();
 
-  // Build QueryRequest. llmClient defaults to null: over MCP the calling LLM
-  // synthesizes the answer itself, so no second LLM round-trip is wanted.
-  // The CLI has no such caller and passes a resolved client for keyword extraction.
+  // Build QueryRequest. The calling agent synthesizes the answer itself, so
+  // Skein only extracts keywords locally and makes no LLM round-trip.
   const request: QueryRequest = {
     question: params.question,
     workspaceRoot,
@@ -192,7 +189,7 @@ export async function executeQueryNaturalLanguage(
     outputFormat: params.outputFormat === "json" ? "json" : "toon",
   };
 
-  const engine = new QueryEngine(db, llmClient);
+  const engine = new QueryEngine(db, null);
   const result = await engine.query(request);
 
   if (params.outputFormat === "json") {

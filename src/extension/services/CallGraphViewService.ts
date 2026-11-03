@@ -634,7 +634,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   }
 
   /**
-   * The `.graph-it/cache/` shared with the CLI and MCP server.
+   * The `.skein/cache/` shared with the MCP server.
    * Returns null when no workspace is open.
    */
   private getCache(): Promise<IndexCache> | null {

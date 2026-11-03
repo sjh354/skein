@@ -35,7 +35,7 @@ Use the same graph data to navigate code, review refactors, generate codemaps, a
 **Requirements:** VS Code 1.96 or later. Not yet published to the Marketplace: run `npm install && npm run build`, then press **F5** to launch the Extension Development Host, or run `npm run package` and install the generated VSIX.
 
 1. Open a project.
-2. Run **Skein: Show Dependency Graph** from the Command Palette; the view opens in the bottom panel.
+2. Click the graph icon in the editor title, or run **Skein: Show Dependency Graph** from the Command Palette. The editor-title action opens the graph in a tab beside the code; the Command Palette keeps the panel view.
 3. Click a file to open it, double-click it for the Symbol View, or use **Show Call Graph** for cross-file calls.
 
 Supported projects include TypeScript, JavaScript, Python, Rust, C#, Go, Java, Dart, Vue, Svelte, and GraphQL.
@@ -106,11 +106,11 @@ Quick start:
 4. Select a node, then *Dependents by group* to see every group that imports it.
 5. Click *Matrix* for the dependency structure matrix of the level.
 
-The Architecture view and the MCP tool `explore_architecture` report the same counts.
+The Architecture view and the MCP tool `skein_explore_architecture` report the same counts.
 
 ### Architecture rules
 
-Declare your intended architecture in `skein.architecture.json` at the workspace root: `elements` name sets of files, `rules` say what each may import, and `roles` declare what each unit is. `profiles`/`areas` add per-area layer directions and `exceptions` record known cases with a reason. The view lists each rule with its violations and the five structure diagnostics; the `check_architecture` MCP tool reports new `error` violations, supports a baseline for existing code, and can gate CI, while `skein_diagnose_structure` reports confirmed rule breaks and review candidates. See [the config file](docs/architecture.md#the-config-file) for a complete example.
+Declare your intended architecture in `skein.architecture.json` at the workspace root: `elements` name sets of files, `rules` say what each may import, and `roles` declare what each unit is. `profiles`/`areas` add per-area layer directions and `exceptions` record known cases with a reason. The view lists each rule with its violations and the five structure diagnostics; the `skein_check_architecture` MCP tool reports new `error` violations, supports a baseline for existing code, and can gate CI, while `skein_diagnose_structure` reports confirmed rule breaks and review candidates. See [the config file](docs/architecture.md#the-config-file) for a complete example.
 
 ### Unused dependencies and impact analysis
 
@@ -140,7 +140,7 @@ The graph-context tool is available as `#graphContext`. Other native references 
 
 ### MCP server
 
-The MCP server exposes 22 graph-analysis tools. Enable it in VS Code with `skein.enableMcpServer`, or point a client at the built bundle with `node <extension>/dist/mcpServer.mjs`.
+The MCP server exposes 31 graph-analysis tools. Enable it in VS Code with `skein.enableMcpServer`, or point a client at the built bundle with `node <extension>/dist/mcpServer.mjs`.
 
 For VS Code, add `.vscode/mcp.json`:
 
@@ -195,7 +195,7 @@ Set these options in VS Code settings:
 | `skein.excludeNodeModules` | `true` | Exclude dependencies from `node_modules` |
 | `skein.enableBackgroundIndexing` | `true` | Build reverse-dependency indexes in the background |
 | `skein.unusedDependencyMode` | `hide` | Hide or dim unused dependencies |
-| `skein.communityMode` | `path` | Group graph communities by folder (`path`) or by import structure (`louvain`); same as CLI `--communities` |
+| `skein.communityMode` | `path` | Group graph communities by folder (`path`) or by import structure (`louvain`) |
 | `skein.preIndexCallGraph` | `true` | Pre-index the Live Call Graph |
 | `skein.symbolViewLayout` | `hierarchical` | Select `hierarchical`, `force-directed`, or `radial` |
 
@@ -240,6 +240,10 @@ Press F5 in VS Code to launch the Extension Development Host.
 | `npm run build` | Build the extension and copy WASM assets |
 | `npm test` | Run unit tests |
 | `npm run test:vscode` | Run VS Code E2E tests |
+| `npm run test:viewstate` | Verify view-state save and restart restore |
+| `npm run test:change` | Verify plan → history → apply → undo/redo |
+| `npm run test:refactor` | Verify move, extract and inline |
+| `npm run test:diagnostics` | Verify profiles, diagnostics and change blocking |
 | `npm run lint` | Run ESLint |
 | `npm run check:types` | Run strict TypeScript checks |
 | `npm run package` | Build the VSIX package |

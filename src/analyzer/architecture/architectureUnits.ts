@@ -1,7 +1,7 @@
 /**
  * Architecture units: the packages of a workspace (every folder holding a package.json),
  * else its top-level folders, with their layers and the file pairs between them. Shared by
- * `graph-it architecture --level units`, explore_architecture and the extension's view.
+ * `skein_explore_architecture` at the units level and the extension's view.
  *
  * CRITICAL ARCHITECTURE RULE: This module is completely VS Code agnostic!
  */
@@ -252,7 +252,7 @@ export function layerGroupsWithinUnits(
 }
 
 /**
- * The level below a unit or folder key (path mode), as `graph-it architecture --folder` and
+ * The level below a unit or folder key (path mode), as `skein_explore_architecture` does for a folder and
  * explore_architecture `folder` report it: the files below it, grouped by its sub-folders.
  */
 export function folderLevel(graph: ArchitectureGraph, workspaceRoot: string, folder: string) {

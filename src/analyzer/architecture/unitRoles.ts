@@ -1,5 +1,5 @@
 /**
- * Unit roles: what a unit of `graph-it architecture --level units` is (a deployable function, a
+ * Unit roles: what a unit at the units level is (a deployable function, a
  * frontend, a service, a shared library...), inferred from its manifest and files with the
  * evidence behind it, or declared in skein.architecture.json. A role is an interpretation
  * (#300): it is always shown with its evidence and its confidence.

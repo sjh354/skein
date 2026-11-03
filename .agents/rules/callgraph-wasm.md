@@ -12,7 +12,7 @@ paths:
 - Keep analyzer call-graph code VS Code-agnostic.
 - Map `CallGraphEdge` before cycle detection: `edges.map(e => ({ source: e.sourceId, target: e.targetId }))`.
 - Cytoscape visibility uses collection APIs: reset with `cy.elements().removeStyle("display")`, then set collection `display`; do not call nonexistent singular-node `hide()`/`show()`.
-- Call-graph panel loads `dist/callgraph.js`, never `dist/webview.js`.
+- The call-graph view runs inside `dist/webview.js`; there is no separate call-graph bundle.
 - Keep sql.js at `dist/wasm/sqljs.wasm`; preserve runtime `locateFile` resolution through extension URI.
 - Keep language queries under `resources/queries/` and copy them to `dist/queries/` during build.
 - After WASM/query/build changes, build, package, verify assets in VSIX, and test extension activation.

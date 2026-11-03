@@ -1,6 +1,6 @@
 /**
  * Dependency structure matrix (DSM) of one architecture level: one row and one column per unit
- * or group, the distinct file pairs between them in each cell. Shared by `graph-it architecture
+ * or group, the distinct file pairs between them in each cell. Shared by `skein_explore_architecture
  * --matrix`, explore_architecture `view: "matrix"` and the extension's Matrix view.
  *
  * CRITICAL ARCHITECTURE RULE: This module is completely VS Code agnostic!
