@@ -23,6 +23,10 @@ import {
   type ChangeTask,
 } from "@/shared/change";
 
+import { normalizePath } from "@/shared/path";
+
+const joinPath = (...parts: string[]) => normalizePath(path.join(...parts));
+
 const logger = { debug: () => undefined, warn: () => undefined };
 
 class FakeHost implements ChangeEditorHost {
@@ -107,10 +111,10 @@ describe("ChangeService", () => {
   let service: ChangeService;
 
   beforeEach(async () => {
-    root = await fs.mkdtemp(path.join(os.tmpdir(), "skein-change-service-"));
-    await fs.mkdir(path.join(root, "src"), { recursive: true });
-    appPath = path.join(root, "src", "app.ts");
-    otherPath = path.join(root, "src", "other.ts");
+    root = await fs.mkdtemp(joinPath(os.tmpdir(), "skein-change-service-"));
+    await fs.mkdir(joinPath(root, "src"), { recursive: true });
+    appPath = joinPath(root, "src", "app.ts");
+    otherPath = joinPath(root, "src", "other.ts");
     const app = "export function alpha() {\n  return 1;\n}\n";
     const other = 'import { alpha } from "./app";\n\nexport const value = alpha();\n';
     await fs.writeFile(appPath, app, "utf8");
@@ -439,7 +443,7 @@ describe("ChangeService", () => {
   });
 
   it("moves a symbol to a new file, records creation and restores it on undo", async () => {
-    const movedPath = path.join(root, "src", "moved.ts");
+    const movedPath = joinPath(root, "src", "moved.ts");
     const app = [
       "export function alpha(x: number) {",
       "  return helper(x);",
@@ -571,10 +575,10 @@ describe("ChangeService", () => {
   });
 
   it("follows the active workspace area", async () => {
-    const otherRoot = await fs.mkdtemp(path.join(os.tmpdir(), "skein-other-area-"));
+    const otherRoot = await fs.mkdtemp(joinPath(os.tmpdir(), "skein-other-area-"));
     try {
-      await fs.mkdir(path.join(otherRoot, "src"), { recursive: true });
-      await fs.writeFile(path.join(otherRoot, "src", "app.ts"), "alpha\n", "utf8");
+      await fs.mkdir(joinPath(otherRoot, "src"), { recursive: true });
+      await fs.writeFile(joinPath(otherRoot, "src", "app.ts"), "alpha\n", "utf8");
       await service.setRoot(otherRoot);
       expect(service.getRoot()).toBe(otherRoot);
       expect(service.getRoot()).toBe(otherRoot);

@@ -6,6 +6,7 @@ import { ViewStateService } from '../../src/extension/services/ViewStateService'
 import { CommandBridgeService } from '../../src/extension/services/CommandBridgeService';
 import {
   createCommandId,
+  normalizeAreaKey,
   deleteCommandRequest,
   listCommandRequests,
   readCommandResult,
@@ -186,7 +187,7 @@ describe('ViewStateService', () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     await writeViewState(root, {
       schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
-      workspaceRoot: root,
+      workspaceRoot: normalizeAreaKey(root),
       updatedAt: 1,
       lastUserActionAt: 0,
       graphVersion: 9,
@@ -218,7 +219,7 @@ describe('ViewStateService', () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     await writeViewState(root, {
       schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
-      workspaceRoot: root,
+      workspaceRoot: normalizeAreaKey(root),
       updatedAt: 1,
       lastUserActionAt: 0,
       graphVersion: 9,

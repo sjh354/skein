@@ -408,11 +408,11 @@ export class VSCodeChangeHost implements ChangeEditorHost {
   }
 
   isDirty(path: string): boolean {
-    const normalized = path.replaceAll("\\", "/");
+    const normalized = normalizePath(path);
     return vscode.workspace.textDocuments.some(
       (document) =>
         document.uri.scheme === "file" &&
-        document.uri.fsPath.replaceAll("\\", "/") === normalized &&
+        normalizePath(document.uri.fsPath) === normalized &&
         document.isDirty,
     );
   }

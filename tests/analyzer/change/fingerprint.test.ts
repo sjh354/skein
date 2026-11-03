@@ -7,6 +7,7 @@ import {
   compareFingerprint,
   readFileState,
 } from "@/analyzer/change/fingerprint";
+import { normalizePath } from "@/shared/path";
 import { hashContent } from "@/shared/change";
 
 describe("change fingerprint", () => {
@@ -31,7 +32,7 @@ describe("change fingerprint", () => {
   it("describes a missing file", async () => {
     const state = await readFileState(path.join(root, "src", "missing.ts"));
     expect(state).toEqual({
-      path: path.join(root, "src", "missing.ts").replaceAll("\\", "/"),
+      path: normalizePath(path.join(root, "src", "missing.ts")),
       exists: false,
       sha256: null,
     });
@@ -47,7 +48,7 @@ describe("change fingerprint", () => {
     expect(await compareFingerprint(fingerprint)).toMatchObject({
       ok: false,
       reason: "stale-plan",
-      changed: [file.replaceAll("\\", "/")],
+      changed: [normalizePath(file)],
     });
   });
 

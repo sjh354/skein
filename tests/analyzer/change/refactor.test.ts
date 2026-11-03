@@ -1,3 +1,5 @@
+import * as path from "node:path";
+import { normalizePath } from "@/shared/path";
 import { describe, expect, it } from "vitest";
 import {
   buildExtractRefactor,
@@ -9,6 +11,8 @@ import {
   type RefactorSymbol,
 } from "@/analyzer/change/refactor";
 import { applyTextEdits, type ChangeFileEdit } from "@/shared/change";
+
+const REPO = normalizePath(path.resolve("/repo"));
 
 function symbol(
   name: string,
@@ -59,9 +63,9 @@ function afterOf(build: { files: ChangeFileEdit[] }, filePath: string, before: s
 }
 
 describe("move rule engine", () => {
-  const sourcePath = "/repo/src/a.ts";
-  const destinationPath = "/repo/src/b.ts";
-  const otherPath = "/repo/src/other.ts";
+  const sourcePath = `${REPO}/src/a.ts`;
+  const destinationPath = `${REPO}/src/b.ts`;
+  const otherPath = `${REPO}/src/other.ts`;
 
   const source = [
     'import { gamma } from "./util";',
@@ -183,8 +187,8 @@ describe("move rule engine", () => {
   });
 
   it("blocks a Dart private helper that the moved code keeps using", async () => {
-    const dartSource = "/repo/lib/a.dart";
-    const dartDestination = "/repo/lib/b.dart";
+    const dartSource = `${REPO}/lib/a.dart`;
+    const dartDestination = `${REPO}/lib/b.dart`;
     const content = [
       "void alpha() {",
       "  _helper();",
@@ -222,8 +226,8 @@ describe("move rule engine", () => {
   });
 
   it("moves a public Dart function and imports the kept helper library", async () => {
-    const dartSource = "/repo/lib/a.dart";
-    const dartDestination = "/repo/lib/b.dart";
+    const dartSource = `${REPO}/lib/a.dart`;
+    const dartDestination = `${REPO}/lib/b.dart`;
     const content = [
       "void alpha() {",
       "  helper();",
@@ -328,13 +332,13 @@ describe("move rule engine", () => {
   it("blocks entry points and unresolved reference imports", async () => {
     const main = "void main() {}\n";
     const entry = await buildMoveRefactor({
-      sourcePath: "/repo/lib/main.dart",
-      destinationPath: "/repo/lib/moved.dart",
+      sourcePath: `${REPO}/lib/main.dart`,
+      destinationPath: `${REPO}/lib/moved.dart`,
       symbol: symbol("main", 0, 0, { isExported: true }),
       io: io(
-        { "/repo/lib/main.dart": main },
-        { "/repo/lib/main.dart": [symbol("main", 0, 0, { isExported: true })] },
-        { "/repo/lib/main.dart:main": { references: [] } },
+        { [`${REPO}/lib/main.dart`]: main },
+        { [`${REPO}/lib/main.dart`]: [symbol("main", 0, 0, { isExported: true })] },
+        { [`${REPO}/lib/main.dart:main`]: { references: [] } },
       ),
     });
     expect(entry).toMatchObject({ ok: false, reason: "entry-point" });
@@ -370,7 +374,7 @@ describe("extract", () => {
       "",
     ].join("\n");
     const result = buildExtractRefactor({
-      sourcePath: "/repo/lib/a.dart",
+      sourcePath: `${REPO}/lib/a.dart`,
       content,
       symbols: [symbol("outer", 0, 4)],
       selection: { startLine: 2, startCharacter: 14, endLine: 2, endCharacter: 19 },
@@ -378,7 +382,7 @@ describe("extract", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const after = afterOf(result.build, "/repo/lib/a.dart", content);
+    const after = afterOf(result.build, `${REPO}/lib/a.dart`, content);
     expect(after).toContain("final sum = extracted(a, b);");
     expect(after).toContain("dynamic extracted(a, b)");
   });
@@ -393,7 +397,7 @@ describe("extract", () => {
       "",
     ].join("\n");
     const result = buildExtractRefactor({
-      sourcePath: "/repo/src/a.ts",
+      sourcePath: `${REPO}/src/a.ts`,
       content,
       symbols: [symbol("outer", 0, 4)],
       selection: { startLine: 2, startCharacter: 14, endLine: 2, endCharacter: 19 },
@@ -401,7 +405,7 @@ describe("extract", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const after = afterOf(result.build, "/repo/src/a.ts", content);
+    const after = afterOf(result.build, `${REPO}/src/a.ts`, content);
     expect(after).toContain("const sum = extracted(a, b);");
     expect(after).toContain("function extracted(a, b) {");
     expect(after).toContain("return a + b;");
@@ -417,7 +421,7 @@ describe("extract", () => {
       "",
     ].join("\n");
     const result = buildExtractRefactor({
-      sourcePath: "/repo/src/a.ts",
+      sourcePath: `${REPO}/src/a.ts`,
       content,
       symbols: [symbol("outer", 0, 4)],
       selection: { startLine: 2, startCharacter: 2, endLine: 2, endCharacter: 20 },
@@ -425,7 +429,7 @@ describe("extract", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const after = afterOf(result.build, "/repo/src/a.ts", content);
+    const after = afterOf(result.build, `${REPO}/src/a.ts`, content);
     expect(after).toContain("logSum(a, b);");
     expect(after).toContain("function logSum(a, b) {");
   });
@@ -443,14 +447,14 @@ describe("inline", () => {
       "",
     ].join("\n");
     const result = buildInlineRefactor({
-      sourcePath: "/repo/src/a.ts",
+      sourcePath: `${REPO}/src/a.ts`,
       content,
       symbol: symbol("twice", 0, 2),
-      references: [reference("/repo/src/a.ts", 0, 9), reference("/repo/src/a.ts", 4, 10), reference("/repo/src/a.ts", 5, 10)],
+      references: [reference(`${REPO}/src/a.ts`, 0, 9), reference(`${REPO}/src/a.ts`, 4, 10), reference(`${REPO}/src/a.ts`, 5, 10)],
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const after = afterOf(result.build, "/repo/src/a.ts", content);
+    const after = afterOf(result.build, `${REPO}/src/a.ts`, content);
     expect(after).toContain("const a = ((1) * 2);");
     expect(after).toContain("const b = ((a + 1) * 2);");
     expect(after).not.toContain("function twice");
@@ -465,10 +469,10 @@ describe("inline", () => {
       "",
     ].join("\n");
     const exported = buildInlineRefactor({
-      sourcePath: "/repo/src/a.ts",
+      sourcePath: `${REPO}/src/a.ts`,
       content,
       symbol: symbol("twice", 0, 2, { isExported: true }),
-      references: [reference("/repo/src/a.ts", 3, 10)],
+      references: [reference(`${REPO}/src/a.ts`, 3, 10)],
     });
     expect(exported).toMatchObject({ ok: false, reason: "inline-exported-unsupported" });
 
@@ -482,19 +486,19 @@ describe("inline", () => {
     ].join("\n");
     expect(
       buildInlineRefactor({
-        sourcePath: "/repo/src/a.ts",
+        sourcePath: `${REPO}/src/a.ts`,
         content: multi,
         symbol: symbol("twice", 0, 3),
-        references: [reference("/repo/src/a.ts", 4, 10)],
+        references: [reference(`${REPO}/src/a.ts`, 4, 10)],
       }),
     ).toMatchObject({ ok: false, reason: "inline-multiple-returns" });
 
     expect(
       buildInlineRefactor({
-        sourcePath: "/repo/src/a.ts",
+        sourcePath: `${REPO}/src/a.ts`,
         content,
         symbol: symbol("twice", 0, 2),
-        references: [reference("/repo/src/b.ts", 1, 10)],
+        references: [reference(`${REPO}/src/b.ts`, 1, 10)],
       }),
     ).toMatchObject({ ok: false, reason: "inline-external-references" });
   });

@@ -239,6 +239,14 @@ function host(): VSCodeChangeHost {
 }
 
 describe("VSCodeChangeHost", () => {
+  it("recognizes an unsaved Windows document across drive-letter and separator representations", () => {
+    const nativePath = String.raw`C:\workspace\src\app.ts`;
+    state.docs.set(nativePath, "unsaved");
+    state.dirty.add(nativePath);
+    expect(host().isDirty("c:/workspace/src/app.ts")).toBe(true);
+    expect(host().isDirty("c:/workspace/src/other.ts")).toBe(false);
+  });
+
   beforeEach(() => {
     state.docs.clear();
     state.dirty.clear();
