@@ -50,6 +50,8 @@ Supported projects include TypeScript, JavaScript, Python, Rust, C#, Go, Java, D
 | Find reverse dependencies | Use **Show Reverse Dependencies** |
 | Hide unused imports | Enable **Filter Unused Dependencies** |
 | Refresh analysis | Run **Refresh Graph** or **Force Skein re-index** |
+| Rename a symbol | Select it in the call graph, then run **Rename Selected Symbol** |
+| Review or revert tool changes | Run **Show Change History**, **Undo Last Tool Change** or **Re-apply Last Undone Change** |
 
 ## Features
 
@@ -75,6 +77,17 @@ The Live Call Graph shows cross-file symbol relationships in a Cytoscape.js pane
 - Highlight self-recursion and mutual recursion.
 - Filter by symbol type or folder.
 - Refresh automatically after file saves.
+
+### Rename and change history
+
+Select a symbol in the call graph and run **Skein: Rename Selected Symbol**. Skein asks the language service for the rename (the built-in TypeScript support or the installed Dart extension), shows a diff preview, and opens the change only after you confirm.
+
+- The plan is recorded against the exact saved content it was built from; if the file changed first, applying is refused.
+- Before and after snapshots are written to a separate Git repository under `.skein/history/`, never to your repository's branches or index.
+- Changes are verified by comparing diagnostics before and after. A new error marks the change `verification-failed` and keeps the diff instead of rolling back.
+- **Undo** and **Re-apply** use a three-way merge, so edits made after the change survive. A conflict is reported with the path and first conflicting hunk, and no file is overwritten.
+- Agents can use `skein_plan_change`, `skein_apply_change`, `skein_get_change_plan`, `skein_list_change_history`, `skein_undo_change` and `skein_redo_change`; they go through the same queue and checks as the UI.
+- Step 5 supports rename. Move, extract and inline are planned for step 6.
 
 The Live Call Graph supports TypeScript, JavaScript, Vue, Svelte, Python, Rust, C#, Go, Java, Dart, and GraphQL. C#, Go, Java, and GraphQL are supported in the file graph and Live Call Graph; Symbol View support is currently limited to TypeScript, JavaScript, Python, Rust, and Dart. Dart analysis is syntactic: imports resolve through package_config.json or the owning pubspec, and a cross-file call is linked only when its symbol name is unique in the workspace. In GraphQL, operations and fragments call the fragments they spread; an operation's default root type (`Query`, `Mutation`, `Subscription`), type conditions, field, argument and variable types, and union members are type-only references (`USES`, shown with `includeTypeOnly`); `implements` is an `IMPLEMENTS` edge.
 
