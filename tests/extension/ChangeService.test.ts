@@ -1,0 +1,446 @@
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ChangeService, describeReason } from "@/extension/services/ChangeService";
+import type { ChangeEditorHost, RenameFailure, RenameResolution } from "@/extension/services/changeHost";
+import { HistoryError, HistoryRepo } from "@/analyzer/change/historyRepo";
+import { fileAfterContent } from "@/analyzer/change/changePlan";
+import {
+  applyTextEdits,
+  hashContent,
+  normalizeEol,
+  readChangeHistory,
+  readChangeTask,
+  type ChangeDiagnosticSample,
+  type ChangeFileEdit,
+  type ChangeTask,
+} from "@/shared/change";
+
+const logger = { debug: () => undefined, warn: () => undefined };
+
+class FakeHost implements ChangeEditorHost {
+  files = new Map<string, string>();
+  dirty = new Set<string>();
+  diagnosticsByPath = new Map<string, ChangeDiagnosticSample>();
+  resolution: RenameResolution = { files: [] };
+  resolveFailure: RenameFailure | null = null;
+  previewCount = 0;
+  appliedCount = 0;
+  waitCount = 0;
+
+  async resolveRename(): Promise<RenameResolution | RenameFailure> {
+    return this.resolveFailure ?? this.resolution;
+  }
+  async readSavedContent(filePath: string): Promise<string | null> {
+    try {
+      return normalizeEol(await fs.readFile(filePath, "utf8"));
+    } catch {
+      return null;
+    }
+  }
+  isDirty(filePath: string): boolean {
+    return this.dirty.has(filePath);
+  }
+  async applyEdits(files: ChangeFileEdit[]): Promise<{ ok: true } | { ok: false; reason: string }> {
+    this.appliedCount += 1;
+    for (const file of files) {
+      const before = this.files.get(file.path) ?? file.beforeContent;
+      const after = applyTextEdits(before, file.edits);
+      if (after === null) return { ok: false, reason: "invalid-edit" };
+      this.files.set(file.path, after);
+      await fs.writeFile(file.path, after, "utf8");
+    }
+    return { ok: true };
+  }
+  diagnostics(filePath: string): ChangeDiagnosticSample {
+    return this.diagnosticsByPath.get(filePath) ?? { errors: 0, warnings: 0, messages: [] };
+  }
+  async waitForDiagnostics(): Promise<void> {
+    this.waitCount += 1;
+  }
+  async showPreview(): Promise<boolean> {
+    this.previewCount += 1;
+    return true;
+  }
+  async confirm(): Promise<boolean> {
+    return true;
+  }
+  report(): void {}
+}
+
+describe("ChangeService", () => {
+  let root: string;
+  let appPath: string;
+  let otherPath: string;
+  let host: FakeHost;
+  let service: ChangeService;
+
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), "skein-change-service-"));
+    await fs.mkdir(path.join(root, "src"), { recursive: true });
+    appPath = path.join(root, "src", "app.ts");
+    otherPath = path.join(root, "src", "other.ts");
+    const app = "export function alpha() {\n  return 1;\n}\n";
+    const other = 'import { alpha } from "./app";\n\nexport const value = alpha();\n';
+    await fs.writeFile(appPath, app, "utf8");
+    await fs.writeFile(otherPath, other, "utf8");
+
+    host = new FakeHost();
+    host.files.set(appPath, app);
+    host.files.set(otherPath, other);
+    host.resolution = {
+      files: [
+        {
+          path: appPath,
+          edits: [{ startLine: 0, startCharacter: 16, endLine: 0, endCharacter: 21, newText: "gamma" }],
+        },
+        {
+          path: otherPath,
+          edits: [
+            { startLine: 0, startCharacter: 9, endLine: 0, endCharacter: 14, newText: "gamma" },
+            { startLine: 2, startCharacter: 21, endLine: 2, endCharacter: 26, newText: "gamma" },
+          ],
+        },
+      ],
+    };
+    service = new ChangeService({ root, logger, host, sleep: async () => undefined });
+    await service.start();
+  });
+
+  afterEach(async () => {
+    await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  });
+
+  async function plan(): Promise<ChangeTask> {
+    const result = await service.planRename({
+      nodeId: `${appPath}:alpha:0`,
+      newName: "gamma",
+      source: "mcp",
+      graphVersion: 3,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.task).toBeDefined();
+    return result.task!;
+  }
+
+  it("creates a preview-ready plan without touching files", async () => {
+    const task = await plan();
+    expect(task.status).toBe("preview-ready");
+    expect(task.plan.files).toHaveLength(2);
+    expect(await fs.readFile(appPath, "utf8")).toContain("alpha");
+    expect(host.appliedCount).toBe(0);
+    expect((await readChangeTask(root, task.plan.id))?.plan.files).toHaveLength(2);
+  });
+
+  it("rejects a plan for a dirty editor", async () => {
+    host.dirty.add(appPath);
+    const result = await service.planRename({
+      path: appPath,
+      name: "alpha",
+      line: 0,
+      newName: "gamma",
+      source: "ui",
+      graphVersion: 1,
+    });
+    expect(result).toEqual({ ok: false, reason: "unsaved-changes", files: [appPath] });
+  });
+
+  it("applies the rename, records history and verifies diagnostics", async () => {
+    const task = await plan();
+    const result = await service.apply(task.plan.id);
+    expect(result.ok).toBe(true);
+    expect(result.task?.status).toBe("succeeded");
+    expect(result.history?.status).toBe("succeeded");
+    expect(await fs.readFile(appPath, "utf8")).toContain("gamma");
+    expect(await fs.readFile(otherPath, "utf8")).toContain("gamma");
+    expect(host.previewCount).toBe(0);
+    const history = await readChangeHistory(root);
+    expect(history.entries).toHaveLength(1);
+    expect(history.entries[0].beforeCommit).not.toBe(history.entries[0].afterCommit);
+    expect(history.entries[0].files.every((file) => file.change === "modified")).toBe(true);
+  });
+
+  it("refuses to apply a stale plan", async () => {
+    const task = await plan();
+    await fs.writeFile(appPath, "export function alpha() {\n  return 2;\n}\n", "utf8");
+    const result = await service.apply(task.plan.id);
+    expect(result).toMatchObject({ ok: false, reason: "stale-plan", files: [appPath] });
+    expect(await fs.readFile(appPath, "utf8")).toContain("return 2");
+    expect(host.appliedCount).toBe(0);
+  });
+
+  it("does not apply when the before snapshot cannot be recorded", async () => {
+    const failing = new (class extends HistoryRepo {
+      override async snapshot(): Promise<string> {
+        throw new HistoryError("git-unavailable", "no git");
+      }
+    })(root);
+    service = new ChangeService({ root, logger, host, history: failing });
+    const task = await plan();
+    const result = await service.apply(task.plan.id);
+    expect(result).toMatchObject({ ok: false, reason: "git-unavailable" });
+    expect(host.appliedCount).toBe(0);
+    expect(await fs.readFile(appPath, "utf8")).toContain("alpha");
+    expect((await readChangeTask(root, task.plan.id))?.status).toBe("apply-failed");
+  });
+
+  it("records verification failures without rolling back", async () => {
+    const task = await plan();
+    host.diagnosticsByPath.set(appPath, { errors: 0, warnings: 0, messages: [] });
+    const original = host.applyEdits.bind(host);
+    host.applyEdits = async (files) => {
+      const result = await original(files);
+      host.diagnosticsByPath.set(appPath, { errors: 1, warnings: 0, messages: ["boom"] });
+      return result;
+    };
+    const result = await service.apply(task.plan.id);
+    expect(result.ok).toBe(true);
+    expect(result.task?.status).toBe("verification-failed");
+    expect(result.task?.verification?.status).toBe("failed");
+    expect(await fs.readFile(appPath, "utf8")).toContain("gamma");
+  });
+
+  it("undoes cleanly and preserves later edits", async () => {
+    const task = await plan();
+    await service.apply(task.plan.id);
+    await fs.appendFile(appPath, "// later edit\n");
+    host.files.set(appPath, `${host.files.get(appPath)}// later edit\n`);
+
+    const result = await service.undo();
+    expect(result.ok).toBe(true);
+    const content = await fs.readFile(appPath, "utf8");
+    expect(content).toContain("alpha");
+    expect(content).toContain("// later edit");
+    expect(await fs.readFile(otherPath, "utf8")).toContain("alpha");
+    const history = await readChangeHistory(root);
+    expect(history.entries.at(-1)?.kind).toBe("undo");
+    expect(history.entries.at(-1)?.undoTargetId).toBe(history.entries[0].id);
+  });
+
+  it("reports a conflict and leaves the edit in place", async () => {
+    const task = await plan();
+    await service.apply(task.plan.id);
+    const conflicting = "export function delta() {\n  return 1;\n}\n";
+    await fs.writeFile(appPath, conflicting, "utf8");
+
+    const result = await service.undo();
+    expect(result).toMatchObject({ ok: false, reason: "conflict" });
+    expect(result.conflicts?.[0].path).toBe(appPath);
+    expect(await fs.readFile(appPath, "utf8")).toBe(conflicting);
+    expect((await readChangeHistory(root)).entries).toHaveLength(1);
+  });
+
+  it("re-applies an undone change", async () => {
+    const task = await plan();
+    await service.apply(task.plan.id);
+    expect((await service.undo()).ok).toBe(true);
+    expect(await fs.readFile(appPath, "utf8")).toContain("alpha");
+    const result = await service.redo();
+    expect(result.ok).toBe(true);
+    expect(await fs.readFile(appPath, "utf8")).toContain("gamma");
+    const history = await readChangeHistory(root);
+    expect(history.entries.at(-1)?.kind).toBe("redo");
+    expect(history.entries.at(-1)?.redoOfId).toBe(history.entries[1].id);
+    expect((await service.redo()).reason).toBe("nothing-to-redo");
+  });
+
+  it("maps MCP requests to results", async () => {
+    const planned = await service.handleRequest({
+      id: "request-1",
+      kind: "change",
+      createdAt: 1,
+      command: { action: "change_plan", kind: "rename", nodeId: `${appPath}:alpha:0`, newName: "gamma" },
+    });
+    expect(planned.status).toBe("applied");
+    const planId = planned.task!.plan.id;
+
+    const applied = await service.handleRequest({
+      id: "request-2",
+      kind: "change",
+      createdAt: 2,
+      command: { action: "change_apply", planId },
+    });
+    expect(applied.status).toBe("applied");
+    expect(applied.task?.status).toBe("succeeded");
+
+    const undone = await service.handleRequest({
+      id: "request-3",
+      kind: "change",
+      createdAt: 3,
+      command: { action: "change_undo" },
+    });
+    expect(undone.status).toBe("applied");
+
+    const rejected = await service.handleRequest({
+      id: "request-4",
+      kind: "change",
+      createdAt: 4,
+      command: { action: "change_apply", planId: "missing" },
+    });
+    expect(rejected.status).toBe("rejected");
+    expect(rejected.reason).toBe("plan-not-found");
+  });
+
+  it("returns the preview for a stored plan", async () => {
+    const task = await plan();
+    const preview = service.preview(task);
+    expect(preview).toHaveLength(2);
+    expect(preview[0].afterContent).toContain("gamma");
+    expect(preview[0].diff.added).toBe(1);
+  });
+
+  it("rejects an unresolvable target and a provider failure", async () => {
+    const noTarget = await service.planRename({
+      nodeId: "bad",
+      newName: "gamma",
+      source: "ui",
+      graphVersion: 1,
+    });
+    expect(noTarget.reason).toBe("target-not-found");
+
+    host.resolveFailure = { error: "symbol-not-found" };
+    const providerFailure = await service.planRename({
+      path: appPath,
+      name: "alpha",
+      line: 0,
+      newName: "gamma",
+      source: "ui",
+      graphVersion: 1,
+    });
+    expect(providerFailure.reason).toBe("symbol-not-found");
+  });
+
+  it("rejects a plan when an edited file cannot be read", async () => {
+    await fs.rm(otherPath);
+    const result = await service.planRename({
+      path: appPath,
+      name: "alpha",
+      line: 0,
+      newName: "gamma",
+      source: "ui",
+      graphVersion: 1,
+    });
+    expect(result).toMatchObject({ ok: false, reason: "file-not-readable", files: [otherPath] });
+  });
+
+  it("refuses to apply while the editor is dirty and only applies once", async () => {
+    const task = await plan();
+    host.dirty.add(appPath);
+    expect((await service.apply(task.plan.id)).reason).toBe("unsaved-changes");
+    host.dirty.clear();
+    expect((await service.apply(task.plan.id)).ok).toBe(true);
+    expect((await service.apply(task.plan.id)).reason).toBe("plan-not-ready");
+  });
+
+  it("marks a rejected edit as apply-failed", async () => {
+    const task = await plan();
+    host.applyEdits = async () => ({ ok: false, reason: "edit-rejected" });
+    const result = await service.apply(task.plan.id);
+    expect(result).toMatchObject({ ok: false, reason: "edit-rejected" });
+    expect(result.task?.status).toBe("apply-failed");
+  });
+
+  it("marks a partially applied change as recovery", async () => {
+    const task = await plan();
+    host.applyEdits = async (files) => {
+      const [first] = files;
+      const after = applyTextEdits(first.beforeContent, first.edits);
+      await fs.writeFile(first.path, after ?? "", "utf8");
+      return { ok: true };
+    };
+    const result = await service.apply(task.plan.id);
+    expect(result).toMatchObject({ ok: false, reason: "partial-apply" });
+    expect(result.task?.status).toBe("recovery");
+  });
+
+  it("records an incomplete verification when diagnostics are unavailable", async () => {
+    const task = await plan();
+    host.waitForDiagnostics = async () => {
+      throw new Error("no language service");
+    };
+    const result = await service.apply(task.plan.id);
+    expect(result.ok).toBe(true);
+    expect(result.task?.status).toBe("incomplete");
+    expect(result.task?.verification?.reason).toBe("diagnostics-unavailable");
+  });
+
+  it("keeps an applied change recoverable when the after snapshot fails", async () => {
+    const repo = new (class extends HistoryRepo {
+      private calls = 0;
+      override async snapshot(label: string, paths: string[]): Promise<string> {
+        if (this.calls === 0) {
+          this.calls += 1;
+          return super.snapshot(label, paths);
+        }
+        throw new HistoryError("history-record-failed", "boom");
+      }
+    })(root);
+    service = new ChangeService({ root, logger, host, history: repo });
+    const task = await plan();
+    const result = await service.apply(task.plan.id);
+    expect(result.reason).toBe("history-record-failed");
+    expect(result.task?.status).toBe("incomplete");
+    expect(await fs.readFile(appPath, "utf8")).toContain("gamma");
+    expect((await readChangeHistory(root)).entries).toHaveLength(0);
+  });
+
+  it("returns nothing to undo or redo when the history is empty", async () => {
+    expect((await service.undo()).reason).toBe("nothing-to-undo");
+    expect((await service.redo()).reason).toBe("nothing-to-redo");
+    const task = await plan();
+    await service.apply(task.plan.id);
+    expect((await service.undo()).ok).toBe(true);
+    expect((await service.undo()).reason).toBe("nothing-to-undo");
+  });
+
+  it("returns an error result when the host throws during a request", async () => {
+    host.resolveRename = async () => {
+      throw new Error("boom");
+    };
+    const result = await service.handleRequest({
+      id: "request-error",
+      kind: "change",
+      createdAt: 1,
+      command: { action: "change_plan", kind: "rename", nodeId: `${appPath}:alpha:0`, newName: "gamma" },
+    });
+    expect(result.status).toBe("error");
+    expect(result.reason).toBe("boom");
+  });
+
+  it("follows the active workspace area", async () => {
+    const otherRoot = await fs.mkdtemp(path.join(os.tmpdir(), "skein-other-area-"));
+    try {
+      await fs.mkdir(path.join(otherRoot, "src"), { recursive: true });
+      await fs.writeFile(path.join(otherRoot, "src", "app.ts"), "alpha\n", "utf8");
+      await service.setRoot(otherRoot);
+      expect(service.getRoot()).toBe(otherRoot);
+      expect(service.getRoot()).toBe(otherRoot);
+    } finally {
+      await fs.rm(otherRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+    }
+  });
+
+  it("describes known failure reasons", () => {
+    expect(describeReason("stale-plan")).toContain("changed");
+    expect(describeReason("custom")).toBe("custom");
+  });
+
+  it("keeps the plan fingerprint aligned with normalized line endings", async () => {
+    const crlf = "export function alpha() {\r\n  return 1;\r\n}\r\n";
+    await fs.writeFile(appPath, crlf, "utf8");
+    host.resolution = {
+      files: [
+        {
+          path: appPath,
+          edits: [{ startLine: 0, startCharacter: 16, endLine: 0, endCharacter: 21, newText: "gamma" }],
+        },
+      ],
+    };
+    const task = await plan();
+    expect(task.plan.fingerprint.files[0].sha256).toBe(hashContent(crlf));
+    const result = await service.apply(task.plan.id);
+    expect(result.ok).toBe(true);
+    expect(fileAfterContent(task.plan.files[0])).not.toBeNull();
+  });
+});

@@ -20,9 +20,12 @@ import { runTests, runVSCodeCommand } from '@vscode/test-electron';
 
 // The folder containing the Extension Manifest package.json
 const extensionDevelopmentPath = path.resolve(__dirname, '../../');
-// Use fixtures as workspace root to allow tests to access all test projects
-// Use absolute path from extension root to avoid path resolution issues
-const workspaceRoot = path.resolve(extensionDevelopmentPath, 'tests/fixtures');
+// Use fixtures as workspace root to allow tests to access all test projects.
+// E2E_WORKSPACE lets a suite run against a disposable sandbox (step 5 changes).
+// Use absolute paths from the extension root to avoid path resolution issues.
+const workspaceRoot = process.env.E2E_WORKSPACE
+  ? path.resolve(process.env.E2E_WORKSPACE)
+  : path.resolve(extensionDevelopmentPath, 'tests/fixtures');
 
 /**
  * The extension writes its shared index cache to <workspace>/.graph-it/. Under

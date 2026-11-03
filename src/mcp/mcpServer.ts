@@ -116,6 +116,29 @@ import {
   type GetViewStateResult,
 } from "./tools/viewState";
 import {
+  ApplyChangeSchema,
+  type ApplyChangeParams,
+  type ChangeToolResult,
+  executeApplyChange,
+  executeGetChangePlan,
+  executeListChangeHistory,
+  executePlanChange,
+  executeRedoChange,
+  executeUndoChange,
+  GetChangePlanSchema,
+  type GetChangePlanParams,
+  type GetChangePlanResult,
+  ListChangeHistorySchema,
+  type ListChangeHistoryParams,
+  type ListChangeHistoryResult,
+  PlanChangeSchema,
+  type PlanChangeParams,
+  RedoChangeSchema,
+  type RedoChangeParams,
+  UndoChangeSchema,
+  type UndoChangeParams,
+} from "./tools/change";
+import {
   AnalyzeBreakingChangesParamsSchema,
   type AnalyzeBreakingChangesResult,
   AnalyzeDependenciesParamsSchema,
@@ -1548,6 +1571,169 @@ server.registerTool(
       getWorkspaceRoot(),
     );
     return formatToolResponse(response, "json", "skein_control_view");
+  },
+);
+
+// Tool: skein_plan_change
+// Creates a plan against the saved code; no file is modified.
+server.registerTool(
+  "skein_plan_change",
+  {
+    title: "Plan a Change",
+    description: mcpToolDescription("plan_change"),
+    inputSchema: PlanChangeSchema,
+    outputSchema: McpToolResponseSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params: PlanChangeParams) => {
+    const startTime = Date.now();
+    const result = await executePlanChange(getWorkspaceRoot(), params);
+    const response = createSuccessResponse<ChangeToolResult>(
+      result,
+      Date.now() - startTime,
+      getWorkspaceRoot(),
+    );
+    return formatToolResponse(response, "json", "skein_plan_change");
+  },
+);
+
+// Tool: skein_apply_change
+server.registerTool(
+  "skein_apply_change",
+  {
+    title: "Apply a Change",
+    description: mcpToolDescription("apply_change"),
+    inputSchema: ApplyChangeSchema,
+    outputSchema: McpToolResponseSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params: ApplyChangeParams) => {
+    const startTime = Date.now();
+    const result = await executeApplyChange(getWorkspaceRoot(), params);
+    const response = createSuccessResponse<ChangeToolResult>(
+      result,
+      Date.now() - startTime,
+      getWorkspaceRoot(),
+    );
+    return formatToolResponse(response, "json", "skein_apply_change");
+  },
+);
+
+// Tool: skein_get_change_plan
+server.registerTool(
+  "skein_get_change_plan",
+  {
+    title: "Get a Change Plan",
+    description: mcpToolDescription("get_change_plan"),
+    inputSchema: GetChangePlanSchema,
+    outputSchema: McpToolResponseSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (params: GetChangePlanParams) => {
+    const startTime = Date.now();
+    const result = await executeGetChangePlan(getWorkspaceRoot(), params);
+    const response = createSuccessResponse<GetChangePlanResult>(
+      result,
+      Date.now() - startTime,
+      getWorkspaceRoot(),
+    );
+    return formatToolResponse(response, "json", "skein_get_change_plan");
+  },
+);
+
+// Tool: skein_list_change_history
+server.registerTool(
+  "skein_list_change_history",
+  {
+    title: "List Change History",
+    description: mcpToolDescription("list_change_history"),
+    inputSchema: ListChangeHistorySchema,
+    outputSchema: McpToolResponseSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (params: ListChangeHistoryParams) => {
+    const startTime = Date.now();
+    const result = await executeListChangeHistory(getWorkspaceRoot(), params);
+    const response = createSuccessResponse<ListChangeHistoryResult>(
+      result,
+      Date.now() - startTime,
+      getWorkspaceRoot(),
+    );
+    return formatToolResponse(response, "json", "skein_list_change_history");
+  },
+);
+
+// Tool: skein_undo_change
+server.registerTool(
+  "skein_undo_change",
+  {
+    title: "Undo a Change",
+    description: mcpToolDescription("undo_change"),
+    inputSchema: UndoChangeSchema,
+    outputSchema: McpToolResponseSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params: UndoChangeParams) => {
+    const startTime = Date.now();
+    const result = await executeUndoChange(getWorkspaceRoot(), params);
+    const response = createSuccessResponse<ChangeToolResult>(
+      result,
+      Date.now() - startTime,
+      getWorkspaceRoot(),
+    );
+    return formatToolResponse(response, "json", "skein_undo_change");
+  },
+);
+
+// Tool: skein_redo_change
+server.registerTool(
+  "skein_redo_change",
+  {
+    title: "Re-apply a Change",
+    description: mcpToolDescription("redo_change"),
+    inputSchema: RedoChangeSchema,
+    outputSchema: McpToolResponseSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (params: RedoChangeParams) => {
+    const startTime = Date.now();
+    const result = await executeRedoChange(getWorkspaceRoot(), params);
+    const response = createSuccessResponse<ChangeToolResult>(
+      result,
+      Date.now() - startTime,
+      getWorkspaceRoot(),
+    );
+    return formatToolResponse(response, "json", "skein_redo_change");
   },
 );
 

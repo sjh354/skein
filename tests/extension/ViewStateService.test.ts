@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ViewStateService } from '../../src/extension/services/ViewStateService';
+import { CommandBridgeService } from '../../src/extension/services/CommandBridgeService';
 import {
   createCommandId,
   deleteCommandRequest,
@@ -52,6 +53,7 @@ describe('ViewStateService', () => {
     hasNode: ReturnType<typeof vi.fn>;
   };
   let service: ViewStateService;
+  let bridge: CommandBridgeService;
 
   beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'skein-view-service-'));
@@ -67,9 +69,19 @@ describe('ViewStateService', () => {
     };
     service = new ViewStateService({ root, logger, host, pollIntervalMs: 10 });
     await service.start();
+    bridge = new CommandBridgeService({
+      root,
+      logger,
+      windowId: () => service.getWindowId(),
+      view: service,
+      change: { handleRequest: async (request) => ({ id: request.id, status: 'rejected', reason: 'change-not-used', completedAt: Date.now() }) },
+      pollIntervalMs: 10,
+    });
+    await bridge.start();
   });
 
   afterEach(async () => {
+    bridge.dispose();
     service.dispose();
     // Let an in-flight poll finish before removing the directory.
     await new Promise((resolve) => setTimeout(resolve, 25));
