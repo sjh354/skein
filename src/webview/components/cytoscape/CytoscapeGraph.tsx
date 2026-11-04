@@ -514,9 +514,16 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
     });
 
     // Persist the user's node placement and viewport (DESIGN 3.2, 5.2).
-    registerViewportReporting(cy, {
+    const stopViewportReporting = registerViewportReporting(cy, {
       onChange: scheduleLayoutReport,
       isProgrammatic: () => viewportProgrammaticRef.current,
+      onInteraction: (active) => {
+        try {
+          postMessageRef.current({ command: "callGraphUserInteraction", active });
+        } catch {
+          // postMessage not available outside webview (e.g., unit tests)
+        }
+      },
     });
 
     // Auto-resize when the webview panel is resized. Opening the detail panel
@@ -598,6 +605,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
 
     return () => {
       if (resizeTimer !== null) clearTimeout(resizeTimer);
+      stopViewportReporting();
       if (layoutTimerRef.current !== null) {
         clearTimeout(layoutTimerRef.current);
         layoutTimerRef.current = null;

@@ -274,6 +274,17 @@ export interface CallGraphLayoutChangedCommand {
   userInitiated: boolean;
 }
 
+/**
+ * Sent while the user is panning, zooming or dragging nodes. The extension
+ * rejects commands that arrive during an interaction instead of moving the
+ * screen under the user (DESIGN 10.2). `active` turns false once the
+ * interaction has been idle for a moment.
+ */
+export interface CallGraphUserInteractionCommand {
+  command: "callGraphUserInteraction";
+  active: boolean;
+}
+
 /** Discriminated union of all webview → extension messages for this feature */
 export type CallGraphWebviewCommand =
   | CallGraphMountedCommand
@@ -284,4 +295,5 @@ export type CallGraphWebviewCommand =
   | CallGraphFilterChangedCommand
   | CallGraphDepthChangedCommand
   | CallGraphSelectionChangedCommand
-  | CallGraphLayoutChangedCommand;
+  | CallGraphLayoutChangedCommand
+  | CallGraphUserInteractionCommand;

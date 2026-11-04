@@ -127,6 +127,9 @@ export class MessageDispatcher {
         callGraphLayoutChanged: async (m) => {
           deps.handleCallGraphMessage?.(m);
         },
+        callGraphUserInteraction: async (m) => {
+          deps.handleCallGraphMessage?.(m);
+        },
         architectureMounted: async (m) => {
           await deps.handleArchitectureMessage?.(m);
         },

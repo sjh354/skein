@@ -323,6 +323,34 @@ describe('ViewStateService', () => {
     expect(host.controlSurface).not.toHaveBeenCalled();
   });
 
+  it('rejects commands while the user is panning, zooming or dragging', async () => {
+    service.observeWebviewCommand({ command: 'callGraphUserInteraction', active: true });
+
+    const result = await service.handleCommand({
+      id: createCommandId(),
+      createdAt: Date.now(),
+      command: { action: 'set_depth', depth: 3 },
+    });
+
+    expect(result.status).toBe('rejected');
+    expect(result.reason).toBe('user-action-superseded');
+    expect(host.setDepth).not.toHaveBeenCalled();
+  });
+
+  it('accepts commands again once the interaction ends', async () => {
+    service.observeWebviewCommand({ command: 'callGraphUserInteraction', active: true });
+    service.observeWebviewCommand({ command: 'callGraphUserInteraction', active: false });
+
+    const result = await service.handleCommand({
+      id: createCommandId(),
+      createdAt: Date.now(),
+      command: { action: 'set_depth', depth: 3 },
+    });
+
+    expect(result.status).toBe('applied');
+    expect(host.setDepth).toHaveBeenCalledWith(3);
+  });
+
   it('rejects an in-flight renderer command if a real user acts before it completes', async () => {
     host.read.mockReturnValue({ snapshot: snapshot({ mode: 'file' }), graphVersion: 4 });
     host.controlSurface.mockImplementation(async () => { service.markUserAction(); return true; });

@@ -1061,6 +1061,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
         // Panel and editor have different canvas sizes. Never combine their viewport reports.
         if (this._view !== webviewView && [
           "surfaceState", "callGraphReady", "callGraphSelectionChanged", "callGraphLayoutChanged",
+          "callGraphUserInteraction",
           "architectureRendered", "architectureResized", "architectureInteracted", "architectureDetailRendered",
           "architectureMatrixRendered", "architectureDependentsRendered",
         ].includes(message.command)) return;
