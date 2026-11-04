@@ -580,7 +580,7 @@ const App: React.FC = () => {
         status: "in-progress",
         processed: undefined,
         total: undefined,
-        message: "Expansion globale en cours…",
+        message: "Expanding all…",
       });
     } else {
       setExpansionState(null);
@@ -836,7 +836,7 @@ const App: React.FC = () => {
       return {
         nodeId: "expandAll",
         status: "in-progress",
-        message: "Expansion globale en cours…",
+        message: "Expanding all…",
       };
     });
 

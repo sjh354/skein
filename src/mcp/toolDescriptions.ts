@@ -389,18 +389,18 @@ const TOOL_DESCRIPTIONS: Record<DescribedToolName, ToolDescription> = {
       "Returns the graph tab the user is looking at: mode, per-view selections, call graph root/depth, filters, graph version, and bounded rendered surface state with exact node IDs, expansions, search results, analysis counts and architecture diagnostic references.",
     lines: [
       "WHEN: before answering a question about what is on screen, or before controlling the view, so commands can be pinned to the graph the user sees.",
-      "RETURNS: available=false with reason state-file-missing when the VS Code extension has not published a view for this workspace yet - this tool never reads the index as a substitute for the screen.",
-      "LIMITS: reflects the last published state (sub-second polling); it is not a live stream.",
+      "RETURNS: available=false with reason state-file-missing when the VS Code extension has not published a view for this workspace yet - this tool never reads the index as a substitute for the screen. Layout reports its zoom, pan and positionCount, not the per-node position map, so the response stays within token limits.",
+      "LIMITS: reflects the last published state (sub-second polling); it is not a live stream. In a multi-root workspace, state belongs to the selected Skein workspace folder; paths from any workspace folder are accepted by control_view.",
     ],
   },
   control_view: {
     summary:
-      "Drives the user's graph tab: search rendered nodes, select/focus nodes, change call depth, open a file, toggle a filter, expand/collapse individual dependency nodes or architecture groups, and set architecture graph/matrix, unit, folder or minimum imports.",
+      "Drives the user's graph tab: switch view mode, search rendered nodes, select/focus nodes, change call depth, open a file, toggle a filter, expand/collapse individual dependency nodes or architecture groups, and set architecture graph/matrix, unit, folder or minimum imports.",
     lines: [
       "WHEN: the user asked to move or highlight something in the graph they are looking at.",
       "WHY: the same command queue the UI uses, so a human interaction always wins: a command queued before the user's last action is rejected with reason user-action-superseded.",
-      "RETURNS: applied, status, reason and the resulting state. Pass graphVersion from get_view_state to have stale commands rejected after a re-analysis.",
-      "LIMITS: requires the VS Code window with the graph tab to be open; without it the call fails with extension-not-responding.",
+      "RETURNS: applied, status, reason and the resulting state (no window snapshots or per-node positions). Pass graphVersion from get_view_state to have stale commands rejected after a re-analysis. When set_filter returns filter-not-found, get_view_state.surface.filters lists the accepted node types, folders and edge types.",
+      "LIMITS: requires the VS Code window with the graph tab to be open; without it the call fails with extension-not-responding. set_architecture changes one navigation level per call; unit \"\" returns to the top level. A command without windowId targets the window the user last interacted with, not merely the last state writer.",
     ],
   },
   plan_change: {

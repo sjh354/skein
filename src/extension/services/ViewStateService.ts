@@ -22,13 +22,17 @@ import {
     normalizeAreaKey,
     pruneWindowSnapshotsInFile,
     readViewState,
+    removeWindowSnapshot,
     type SkeinCommandRequest,
     type SkeinCommandResult,
     type SkeinFilterType,
+    type SkeinSelection,
+    type SkeinViewMode,
     type SkeinViewSnapshot,
     type SkeinViewState,
     type SkeinWindowView,
 } from "../../shared/viewState";
+import { normalizePath } from "../../shared/path";
 
 /**
  * A webview that stops reporting the end of an interaction (crash, reload)
@@ -42,6 +46,7 @@ export interface ViewStateHost {
     controlSurface?(action: SkeinCommandRequest["command"]): Promise<true | string>;
     select(nodeId: string): Promise<boolean>;
     setDepth(depth: number): Promise<boolean>;
+    setViewMode?(mode: SkeinViewMode): Promise<boolean>;
     openFile(path: string, line?: number, character?: number): Promise<boolean>;
     setFilter(filterType: SkeinFilterType, value: string, visible: boolean): Promise<true | string>;
     /** False when the node is not in the graph currently rendered. */
@@ -52,6 +57,8 @@ export interface ViewStateServiceOptions {
     root: string;
     logger: { debug(message: string, ...args: unknown[]): void; warn(message: string, ...args: unknown[]): void };
     host: ViewStateHost;
+    /** All workspace folders, so commands may use a path from another root. */
+    workspaceRoots?: () => readonly string[];
     /** Called once with the previous session's view, before the first publish. */
     onRestore?: (snapshot: SkeinViewSnapshot, graphVersion: number) => void;
     pollIntervalMs?: number;
@@ -86,14 +93,17 @@ export class ViewStateService implements vscode.Disposable {
         const restored = await readViewState(this.workspaceRoot);
         const previous = restored ? this.previousWindow(restored) : undefined;
         if (restored && previous && restored.workspaceRoot === normalizeAreaKey(this.workspaceRoot)) {
+            const snapshot = this.sanitizeForRoot(this.toSnapshot(previous));
             this.window = {
-                ...this.toSnapshot(previous),
+                ...snapshot,
                 windowId: this.windowId,
                 updatedAt: 0,
-                lastUserActionAt: previous.lastUserActionAt,
+                // A new window has not been touched yet; inheriting the previous
+                // window's timestamp would make it look like the active one.
+                lastUserActionAt: 0,
                 graphVersion: previous.graphVersion,
             };
-            this.options.onRestore?.(this.toSnapshot(previous), previous.graphVersion);
+            this.options.onRestore?.(snapshot, previous.graphVersion);
         }
         this.publishOnce().catch((err: unknown) => this.logError("initial publish", err));
         this.timer = setInterval(
@@ -106,17 +116,21 @@ export class ViewStateService implements vscode.Disposable {
     /** Switches the area whose state file this service owns (multi-root). */
     async setRoot(root: string): Promise<void> {
         if (normalizeAreaKey(root) === normalizeAreaKey(this.workspaceRoot)) return;
+        const previousRoot = this.workspaceRoot;
         await this.persistState();
+        // The window now belongs to the new area: leaving its snapshot in the
+        // old file would keep a dead entry (and its layout) there.
+        await removeWindowSnapshot(previousRoot, this.windowId);
         this.workspaceRoot = root;
         await ensureSkeinWorkspace(root);
         const restored = await readViewState(root);
         const previous = restored ? this.previousWindow(restored) : undefined;
         this.window = previous
             ? {
-                  ...this.toSnapshot(previous),
+                  ...this.sanitizeForRoot(this.toSnapshot(previous)),
                   windowId: this.windowId,
                   updatedAt: 0,
-                  lastUserActionAt: previous.lastUserActionAt,
+                  lastUserActionAt: 0,
                   graphVersion: previous.graphVersion,
               }
             : {
@@ -127,7 +141,12 @@ export class ViewStateService implements vscode.Disposable {
                   graphVersion: 0,
               };
         this.lastPublished = "";
-        if (previous) this.options.onRestore?.(this.toSnapshot(previous), previous.graphVersion);
+        if (previous) {
+            this.options.onRestore?.(
+                this.sanitizeForRoot(this.toSnapshot(previous)),
+                previous.graphVersion,
+            );
+        }
         await this.persistState();
     }
 
@@ -182,6 +201,8 @@ export class ViewStateService implements vscode.Disposable {
         this.timer = null;
         if (this.interactionTimer !== null) clearTimeout(this.interactionTimer);
         this.interactionTimer = null;
+        void removeWindowSnapshot(this.workspaceRoot, this.windowId)
+            .catch((err: unknown) => this.logError("window cleanup", err));
     }
 
     /**
@@ -248,13 +269,12 @@ export class ViewStateService implements vscode.Disposable {
                 return { ...base, status: "rejected", reason: "user-action-superseded", completedAt: Date.now() };
             }
             this.refreshFromHost();
-            // The webview reports the selection asynchronously; keep the applied
-            // node in the result so the caller sees what it selected. A report
-            // that already arrived carries path/name, so only fill the gap.
+            // The webview reports the selection asynchronously. Publish the
+            // applied node in this response instead of the previous selection;
+            // the later report fills in its path and name.
             if ((request.command.action === "select" || request.command.action === "focus")
-                && this.window.mode === "callgraph"
-                && this.window.selection === undefined) {
-                this.window.selection = { nodeId: request.command.nodeId };
+                && this.window.mode === "callgraph") {
+                this.window.selection = this.selectionFor(request.command.nodeId);
             }
             await this.persistState();
             return {
@@ -321,9 +341,40 @@ export class ViewStateService implements vscode.Disposable {
                 return this.options.host.controlSurface
                     ? this.options.host.controlSurface(action)
                     : "view-not-available";
+            case "set_view_mode":
+                return this.options.host.setViewMode
+                    ? (await this.options.host.setViewMode(action.mode)) ? true : "view-not-available"
+                    : "view-not-available";
             default:
                 return "view-not-available";
         }
+    }
+
+    /** Keeps path/name for the same node; a different node starts with just its id. */
+    private selectionFor(nodeId: string): SkeinSelection {
+        return this.window.selection?.nodeId === nodeId
+            ? { ...this.window.selection }
+            : { nodeId };
+    }
+
+    /**
+     * Drops restored data that belongs to another workspace area. A stale
+     * layout would otherwise mix one folder's node positions into another's.
+     */
+    private sanitizeForRoot(snapshot: SkeinViewSnapshot): SkeinViewSnapshot {
+        const root = `${normalizePath(this.workspaceRoot)}/`;
+        const layout = snapshot.layout;
+        if (!layout) return snapshot;
+        const positions = Object.fromEntries(
+            Object.entries(layout.positions).filter(([nodeId]) => normalizePath(nodeId).startsWith(root)),
+        );
+        const rootWithinArea = layout.rootSymbolId !== undefined
+            && normalizePath(layout.rootSymbolId).startsWith(root);
+        if (Object.keys(positions).length === 0 || (layout.rootSymbolId !== undefined && !rootWithinArea)) {
+            const { layout: _layout, ...rest } = snapshot;
+            return rest;
+        }
+        return { ...snapshot, layout: { ...layout, positions } };
     }
 
     private setHiddenFilter(filterType: SkeinFilterType, value: string, hidden: boolean): void {
@@ -374,6 +425,7 @@ export class ViewStateService implements vscode.Disposable {
         if (this.disposed) return;
         const merged = await mergeViewState(this.workspaceRoot, {
             workspaceRoot: this.workspaceRoot,
+            workspaceRoots: this.options.workspaceRoots?.() ?? [],
             windowId: this.windowId,
             snapshot: this.toSnapshot(this.window),
             graphVersion: this.window.graphVersion,
@@ -408,6 +460,7 @@ export class ViewStateService implements vscode.Disposable {
             ...window,
             schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
             workspaceRoot: normalizeAreaKey(this.workspaceRoot),
+            workspaceRoots: [...(this.options.workspaceRoots?.() ?? [])],
             activeWindowId: this.windowId,
             windows: { [this.windowId]: window },
         };

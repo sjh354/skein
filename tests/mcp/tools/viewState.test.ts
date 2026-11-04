@@ -89,6 +89,15 @@ describe('skein_get_view_state', () => {
       { windowId: 'w1', updatedAt: 1, lastUserActionAt: 0, mode: 'callgraph', graphVersion: 7 },
     ]);
   });
+
+  it('omits the node position map from the response', async () => {
+    const state = appliedState();
+    const window = state.windows.w1 as Record<string, unknown>;
+    window.layout = { positions: { n1: { x: 1, y: 2 }, n2: { x: 3, y: 4 } }, zoom: 1.5 };
+    await writeViewState(root, state);
+    const result = await executeGetViewState(root);
+    expect(result.state?.layout).toEqual({ zoom: 1.5, positionCount: 2 });
+  });
 });
 
 describe('skein_control_view', () => {
@@ -163,6 +172,28 @@ describe('skein_control_view', () => {
     expect(result.status).toBe('error');
     expect(result.reason).toBe('path-outside-workspace');
     expect(await listCommandRequests(root)).toEqual([]);
+  });
+
+  it('accepts a file from another published workspace folder', async () => {
+    const otherRoot = await mkdtemp(path.join(tmpdir(), 'skein-mcp-other-'));
+    await writeViewState(root, { ...appliedState(), workspaceRoots: [root, otherRoot] });
+    const answer = answerNextRequest();
+    const result = await executeControlView(root, {
+      action: 'open_file',
+      path: path.join(otherRoot, 'src', 'other.ts'),
+    });
+    await answer;
+    expect(result.status).toBe('applied');
+    await rm(otherRoot, { recursive: true, force: true });
+  });
+
+  it('queues a view mode change', async () => {
+    await writeViewState(root, appliedState());
+    const answer = answerNextRequest();
+    const result = await executeControlView(root, { action: 'set_view_mode', viewMode: 'architecture' });
+    await answer;
+    expect(result.applied).toBe(true);
+    expect(result.windowId).toBe('w1');
   });
 
   it.each<[string, ControlViewParams]>([

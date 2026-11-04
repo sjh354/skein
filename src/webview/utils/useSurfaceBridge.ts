@@ -106,10 +106,10 @@ export function useSurfaceBridge(options: {
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, []);
-  return { markUserAction: () => { lastLocalActionAt.current = Date.now(); syncTarget.current = undefined; userPending.current = true; }, selectedId: selection?.nodeId, select: (nodeId?: string, path?: string) => {
-    lastLocalActionAt.current = Date.now();
+  return { markUserAction: () => { lastLocalActionAt.current = Date.now(); syncTarget.current = undefined; userPending.current = true; }, selectedId: selection?.nodeId, select: (nodeId?: string, path?: string, name?: string, userInitiated = true) => {
+    if (userInitiated) lastLocalActionAt.current = Date.now();
     syncTarget.current = undefined;
-    current.current.selection = nodeId ? { nodeId, path } : undefined;
-    setSelection(current.current.selection); report(true);
+    current.current.selection = nodeId ? { nodeId, ...(path === undefined ? {} : { path }), ...(name === undefined ? {} : { name }) } : undefined;
+    setSelection(current.current.selection); report(userInitiated);
   } };
 }

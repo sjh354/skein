@@ -370,7 +370,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       return; // already indexed this session
     }
 
-    const indexer = await this.ensureIndexer();
+    const indexer = await this.ensureIndexer(normRoot);
     if (this.disposed) return;
     const extractor = this.ensureExtractor(normRoot);
 
@@ -421,11 +421,15 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     this.postMessage({ type: "callGraphIndexing", status: "started", message: "Extracting current file…" });
 
     try {
+      // In a multi-root workspace the active file's own folder decides which
+      // cache and index this graph belongs to; the first folder may be another project.
       const workspaceRoot = normalizePath(
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? path.dirname(filePath),
+        vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath))?.uri.fsPath
+          ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+          ?? path.dirname(filePath),
       );
       this.projectName = path.basename(workspaceRoot);
-      const indexer = await this.ensureIndexer();
+      const indexer = await this.ensureIndexer(workspaceRoot);
       if (this.disposed) return;
       const extractor = this.ensureExtractor(workspaceRoot);
 
@@ -616,13 +620,13 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  private async ensureIndexer(): Promise<CallGraphIndexer> {
+  private async ensureIndexer(workspaceRoot?: string): Promise<CallGraphIndexer> {
     if (!this.indexer) {
       const wasmPath = getSqlJsWasmPath(this.context.extensionPath);
       this.indexer = new CallGraphIndexer(wasmPath);
 
       // Try to restore the DB shared with the CLI and MCP server (fast path — avoids full re-index)
-      const cache = await this.getCache();
+      const cache = await this.getCache(workspaceRoot);
       if (cache && (await this.restoreDb(this.indexer, cache))) {
         this.log("[CallGraph] Restored DB from disk");
         return this.indexer;
@@ -655,8 +659,9 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
    * The `.skein/cache/` shared with the MCP server.
    * Returns null when no workspace is open.
    */
-  private getCache(): Promise<IndexCache> | null {
-    const workspaceRoot = this.workspaceIndexedRoot
+  private getCache(requestedRoot?: string): Promise<IndexCache> | null {
+    const workspaceRoot = requestedRoot
+      ?? this.workspaceIndexedRoot
       ?? normalizePath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "");
     if (!workspaceRoot) return null;
     if (this.cacheTask?.root !== workspaceRoot) {

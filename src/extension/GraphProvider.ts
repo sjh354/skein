@@ -4,7 +4,7 @@ import { Spider } from "../analyzer/Spider";
 import { SUPPORTED_SOURCE_FILE_REGEX } from "../shared/constants";
 import type { CallGraphWebviewCommand } from "../shared/callgraph-types";
 import { randomUUID } from "node:crypto";
-import type { SkeinViewAction, SkeinViewSnapshot, SkeinSurfaceState, SkeinViewSelections } from "../shared/viewState";
+import type { SkeinViewAction, SkeinViewMode, SkeinViewSnapshot, SkeinSurfaceState, SkeinViewSelections } from "../shared/viewState";
 import type {
   ExtensionToWebviewMessage,
   GraphData,
@@ -1308,6 +1308,19 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   public openCallGraph(): void {
     void this.setViewModeCallgraph();
     void this._callGraphViewService?.show();
+  }
+
+  /** Switches the graph tab to one of its modes for an MCP command. */
+  public async setViewMode(mode: SkeinViewMode): Promise<boolean> {
+    if (!this._view) return false;
+    switch (mode) {
+      case "file": await this.setViewModeFile(); break;
+      case "list": await this.setViewModeList(); break;
+      case "symbol": await this.setViewModeSymbol(); break;
+      case "architecture": await this.setViewModeArchitecture(); break;
+      case "callgraph": this.openCallGraph(); break;
+    }
+    return true;
   }
 
   /**

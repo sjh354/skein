@@ -82,10 +82,12 @@ export interface SkeinSurfaceState {
   expandedNodeIds: string[];
   /** Call-graph filters currently hidden in this surface. */
   hiddenFilters?: SkeinFilter[];
+  /** Values set_filter accepts for this surface. */
+  filters?: { nodeTypes: string[]; folders: string[]; edgeTypes: string[] };
   search?: { query: string; matches: string[]; total: number };
   architecture?: { revision?: string; unit?: string; folder?: string; view?: string; minImports?: number };
   analysis?: { revision?: string; nodes: number; edges: number; stale: boolean };
-  diagnostics?: { total: number; truncated: boolean; items: Array<{ id: string; kind: string; status: string }> };
+  diagnostics?: { revision?: string; total: number; truncated: boolean; items: Array<{ id: string; kind: string; status: string }> };
 }
 
 export interface SkeinViewSnapshot {
@@ -119,9 +121,43 @@ export interface SkeinWindowView extends SkeinViewSnapshot {
 export interface SkeinViewState extends SkeinWindowView {
   schemaVersion: number;
   workspaceRoot: string;
-  /** Window the top-level fields mirror (the most recent writer). */
+  /** Every VS Code workspace folder, so a path from another root is still valid. */
+  workspaceRoots?: string[];
+  /** Window the top-level fields mirror (the last one the user interacted with). */
   activeWindowId: string;
   windows: Record<string, SkeinWindowView>;
+}
+
+/** Layout without the node coordinates: what an agent needs to reason about the view, not to redraw it. */
+export interface SkeinCompactLayout {
+  zoom?: number;
+  pan?: SkeinPoint;
+  rootSymbolId?: string;
+  graphVersion?: number;
+  positionCount: number;
+}
+
+/** View state sized for an MCP response: no window snapshots and no position map. */
+export type SkeinCompactViewState = Omit<SkeinViewState, "windows" | "layout"> & {
+  layout?: SkeinCompactLayout;
+  windows?: SkeinWindowSummary[];
+};
+
+export function compactViewState(state: SkeinViewState): SkeinCompactViewState {
+  const { windows: _windows, layout, ...rest } = state;
+  return {
+    ...rest,
+    ...(layout ? {
+      layout: {
+        ...(layout.zoom === undefined ? {} : { zoom: layout.zoom }),
+        ...(layout.pan === undefined ? {} : { pan: layout.pan }),
+        ...(layout.rootSymbolId === undefined ? {} : { rootSymbolId: layout.rootSymbolId }),
+        ...(layout.graphVersion === undefined ? {} : { graphVersion: layout.graphVersion }),
+        positionCount: Object.keys(layout.positions).length,
+      },
+    } : {}),
+    windows: summarizeWindows(state),
+  };
 }
 
 /** Compact window list for MCP responses (no snapshots or layouts). */
@@ -164,7 +200,8 @@ export type SkeinViewAction =
   | { action: "set_depth"; depth: number }
   | { action: "open_file"; path: string; line?: number; character?: number }
   | { action: "set_filter"; filterType: SkeinFilterType; value: string; visible: boolean }
-  | { action: "set_expand_all"; expandAll: boolean };
+  | { action: "set_expand_all"; expandAll: boolean }
+  | { action: "set_view_mode"; mode: SkeinViewMode };
 
 export interface SkeinCommandRequest {
   id: string;
@@ -197,6 +234,7 @@ const ACTION_NAMES: ReadonlySet<string> = new Set<SkeinViewAction["action"]>([
   "open_file",
   "set_filter",
   "set_expand_all",
+  "set_view_mode",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -344,6 +382,15 @@ function parseSnapshot(value: Record<string, unknown>): SkeinViewSnapshot | null
     snapshot.surface = { nodeIds: strings(surface.nodeIds), expandedNodeIds: strings(surface.expandedNodeIds) };
     if (surface.nodeIdsTruncated === true) snapshot.surface.nodeIdsTruncated = true;
     if (Array.isArray(surface.hiddenFilters)) snapshot.surface.hiddenFilters = parseFilters(surface.hiddenFilters);
+    if (isRecord(surface.filters)) {
+      const filters = surface.filters;
+      const strings = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 1000) : [];
+      snapshot.surface.filters = {
+        nodeTypes: strings(filters.nodeTypes),
+        folders: strings(filters.folders),
+        edgeTypes: strings(filters.edgeTypes),
+      };
+    }
     if (isRecord(surface.search) && typeof surface.search.query === "string" && typeof surface.search.total === "number") {
       snapshot.surface.search = { query: surface.search.query.slice(0, 256), matches: strings(surface.search.matches).slice(0, 100), total: surface.search.total };
     }
@@ -395,6 +442,22 @@ function latestWindowId(windows: Record<string, SkeinWindowView>): string | unde
   return latest?.windowId;
 }
 
+/**
+ * The window a command without `windowId` targets: the one the user last
+ * interacted with, not merely the one that wrote its passive state last.
+ */
+export function userActiveWindowId(windows: Record<string, SkeinWindowView>): string | undefined {
+  let active: SkeinWindowView | undefined;
+  for (const window of Object.values(windows)) {
+    if (!active
+      || window.lastUserActionAt > active.lastUserActionAt
+      || (window.lastUserActionAt === active.lastUserActionAt && window.updatedAt > active.updatedAt)) {
+      active = window;
+    }
+  }
+  return active?.windowId;
+}
+
 function migrateLegacyViewState(
   parsed: Record<string, unknown>,
   workspaceRoot: string,
@@ -438,9 +501,10 @@ export function parseViewStateValue(parsed: unknown): SkeinViewState | null {
   const requestedActive =
     typeof parsed.activeWindowId === "string" ? parsed.activeWindowId : undefined;
   const activeWindowId =
-    requestedActive && windows[requestedActive]
-      ? requestedActive
-      : (latestWindowId(windows) ?? Object.keys(windows)[0]);
+    userActiveWindowId(windows)
+      ?? (requestedActive && windows[requestedActive] ? requestedActive : undefined)
+      ?? latestWindowId(windows)
+      ?? Object.keys(windows)[0];
   const active = windows[activeWindowId];
   if (!active) return null;
 
@@ -448,6 +512,9 @@ export function parseViewStateValue(parsed: unknown): SkeinViewState | null {
     ...active,
     schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
     workspaceRoot,
+    ...(Array.isArray(parsed.workspaceRoots)
+      ? { workspaceRoots: parsed.workspaceRoots.filter((root): root is string => typeof root === "string") }
+      : {}),
     activeWindowId,
     windows,
     updatedAt: Math.max(active.updatedAt, isFiniteNumber(parsed.updatedAt) ? parsed.updatedAt : 0),
@@ -507,6 +574,8 @@ function parseAction(value: unknown): SkeinViewAction | null {
       return typeof value.expandAll === "boolean"
         ? { action: "set_expand_all", expandAll: value.expandAll }
         : null;
+    case "set_view_mode":
+      return isViewMode(value.mode) ? { action: "set_view_mode", mode: value.mode } : null;
     default:
       return null;
   }
@@ -615,6 +684,8 @@ export async function writeViewState(root: string, state: SkeinViewState): Promi
 
 export interface WindowStateWrite {
   workspaceRoot: string;
+  /** All workspace folders, so commands may use a path from another root. */
+  workspaceRoots?: readonly string[];
   windowId: string;
   snapshot: SkeinViewSnapshot;
   graphVersion: number;
@@ -656,16 +727,39 @@ export async function mergeViewState(
       graphVersion: write.graphVersion,
     };
     const pruned = pruneWindowSnapshots(windows, write.windowId, now);
+    const activeWindowId = userActiveWindowId(pruned) ?? write.windowId;
     const merged: SkeinViewState = {
-      ...pruned[write.windowId],
+      ...(pruned[activeWindowId] ?? pruned[write.windowId]),
       schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
       workspaceRoot: normalizePath(write.workspaceRoot),
-      activeWindowId: write.windowId,
+      ...(write.workspaceRoots ? { workspaceRoots: write.workspaceRoots.map(normalizePath) } : {}),
+      activeWindowId,
       windows: pruned,
       updatedAt: now,
     };
     await writeJsonAtomic(viewStatePath(root), merged);
     return merged;
+  });
+}
+
+/** Drops this window's snapshot after it leaves an area or is disposed. */
+export async function removeWindowSnapshot(root: string, windowId: string): Promise<void> {
+  await withStateLock(root, async () => {
+    const existing = await readViewState(root);
+    if (!existing || !existing.windows[windowId]) return;
+    const windows = { ...existing.windows };
+    delete windows[windowId];
+    const activeWindowId = userActiveWindowId(windows);
+    const active = activeWindowId ? windows[activeWindowId] : undefined;
+    if (!active) return;
+    await writeJsonAtomic(viewStatePath(root), {
+      ...active,
+      schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
+      workspaceRoot: existing.workspaceRoot,
+      ...(existing.workspaceRoots ? { workspaceRoots: existing.workspaceRoots } : {}),
+      activeWindowId: active.windowId,
+      windows,
+    });
   });
 }
 
