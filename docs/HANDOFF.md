@@ -85,7 +85,7 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 - [ ] `M3` `set_filter`가 캔버스에서 노드·엣지를 실제로 숨기는가 (nodeType·folder·edgeType)
 - [ ] `M4` `set_expand_all`이 의존성 그래프를 실제로 펼치고 접는가
 - [ ] `M5` 재시작 후 노드 배치·줌·팬이 눈으로 같은 위치에 복원되는가
-- [ ] `M6` 드래그·줌·노드 이동 중에 보낸 명령이 `user-action-superseded`로 거부되고 화면이 유지되는가
+- [x] `M6` 드래그·줌·노드 이동 중에 보낸 명령이 `user-action-superseded`로 거부되고 화면이 유지되는가 (통과: 2026-11-04)
 - [ ] `M7` 멀티루트 폴더 전환과 같은 폴더 두 창에서 상태가 분리되는가 (`windows`, `windowId` 대상 지정)
 - [ ] `M8` Codex가 `get_view_state`의 `nodeId`·`filePath`·`windowId`를 그대로 `control_view`에 넘기는가
 - [ ] `M9` `open_file`이 미리보기 탭으로 열리는 동작이 불편하지 않은가
