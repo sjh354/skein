@@ -82,16 +82,16 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 
 - [x] `M1` 선택 하이라이트와 상세 패널이 `select` 명령에 반응하는가 (통과: 2026-11-04)
 - [x] `M2` `focus`가 뷰포트를 실제로 이동·확대하는가 (수정 후 통과: 2026-11-04, focus 재질의 → surface focus 라우팅)
-- [ ] `M3` `set_filter`가 캔버스에서 노드·엣지를 실제로 숨기는가 (nodeType·folder·edgeType) — **수정 완료: 렌더러 적용 확인 뒤 응답, 범례 상태 게시 수정. 실제 창 재확인 대기**
-- [ ] `M4` `set_expand_all`이 의존성 그래프를 실제로 펼치고 접는가 — **수정 완료: surface 명령으로 적용·새 `expandedNodeIds` 게시 뒤 응답, 오버레이 이벤트 정리. 실제 창 재확인 대기**
+- [x] `M3` `set_filter`가 캔버스에서 노드·엣지를 실제로 숨기는가 (nodeType·folder·edgeType) — **수정 후 실제 창 재확인 통과: 2026-11-04**
+- [x] `M4` `set_expand_all`이 의존성 그래프를 실제로 펼치고 접는가 — **수정 후 실제 창 재확인 통과: 2026-11-04 (오버레이 해제·응답 상태 일치)**
 - [x] `M5` 재시작 후 노드 배치·줌·팬이 눈으로 같은 위치에 복원되는가 (수정 후 통과: 2026-11-04, 드래그 팬 게시 수정)
 - [x] `M6` 드래그·줌·노드 이동 중에 보낸 명령이 `user-action-superseded`로 거부되고 화면이 유지되는가 (통과: 2026-11-04)
-- [ ] `M7` 멀티루트 폴더 전환과 같은 폴더 두 창에서 상태가 분리되는가 (`windows`, `windowId` 대상 지정)
-- [ ] `M8` Codex가 `get_view_state`의 `nodeId`·`filePath`·`windowId`를 그대로 `control_view`에 넘기는가
-- [ ] `M9` `open_file`이 미리보기 탭으로 열리는 동작이 불편하지 않은가
-- [ ] `M10` 파일·리스트·아키텍처 뷰의 선택·검색·조작이 `views`·`surface`와 일치하는가
+- [x] `M7` 멀티루트 폴더 전환과 같은 폴더 두 창에서 상태가 분리되는가 (2026-11-04 통과, 부수 문제는 6.4)
+- [ ] `M8` Codex가 `get_view_state`의 `nodeId`·`filePath`·`windowId`를 그대로 `control_view`에 넘기는가 (2026-11-04 부분 통과: 멀티루트 `filePath` 거부·응답 크기 문제 → 6.4 수정)
+- [x] `M9` `open_file`이 미리보기 탭으로 열리는 동작이 불편하지 않은가 (2026-11-04 통과: 사용자 "불편하지 않고 좋다")
+- [ ] `M10` 파일·리스트·아키텍처 뷰의 선택·검색·조작이 `views`·`surface`와 일치하는가 (2026-11-04 부분 통과: 리스트 뷰 전부 통과, 파일 그래프·아키텍처 문제 → 6.4 수정)
 
-2026-11-04 실창 기록: M1·M2·M5·M6은 통과했고, M2(`focus` 재질의 문제)·M5(드래그 팬 미게시)는 수정 후 재검증했다. M3는 `set_filter`가 `applied`로 끝나도 화면·범례가 바뀌지 않고 범례→상태 게시도 동작하지 않아 결함으로 확정했으며, 렌더러 확인 응답과 webview `postMessage` 전달로 수정했다. M4는 펼침·접힘 자체는 통과했으나 `true` 이후 로딩 오버레이가 남고 `expandedNodeIds`·응답 `state`가 한 박자 늦어, surface 명령과 렌더러 게시 뒤 응답으로 수정했다. 두 항목 모두 실제 창 재확인이 남아 있다. 상세 관찰과 후속 항목은 `docs/verification/step4-manual-checklist.md`의 D6~D10과 기록 표에 있다.
+2026-11-04 실창 기록: M1·M2·M5·M6은 통과했고, M2(`focus` 재질의 문제)·M5(드래그 팬 미게시)는 수정 후 재검증했다. M3는 `set_filter`가 `applied`로 끝나도 화면·범례가 바뀌지 않고 범례→상태 게시도 동작하지 않아 결함으로 확정했으며, 렌더러 확인 응답과 webview `postMessage` 전달로 수정한 뒤 실제 창에서 재확인해 닫았다. M4는 펼침·접힘 자체는 통과했으나 `true` 이후 로딩 오버레이가 남고 `expandedNodeIds`·응답 `state`가 한 박자 늦어, surface 명령과 렌더러 게시 뒤 응답으로 수정했고 실제 창에서 오버레이 해제까지 확인해 닫았다. M7·M8·M9·M10의 관찰과 후속 항목은 6.4와 `docs/verification/step4-manual-checklist.md`의 기록 표에 있다.
 
 ### 6.2 남은 연결 구현 (2026-11-03)
 
@@ -118,6 +118,33 @@ npm test                 # 단위 테스트
 npm run check:types
 npm run lint
 ```
+
+### 6.4 2026-11-04 실창 결과와 후속 수정
+
+| 항목 | 결과 | 관찰·후속 |
+|---|---|---|
+| M3 필터 | 통과(수정 후) | `set_filter`·범례가 화면과 `hiddenFilters`에 반영. 잘못된 값은 `filter-not-found` |
+| M4 펼침/접힘 | 통과(수정 후) | `expandAll`·`set_expanded`가 화면·`expandedNodeIds`에 반영, 오버레이 해제 |
+| M7 멀티루트·두 창 | 통과 + 부수 문제 | 두 창 선택 분리·`windowId` 지정 동작. 아래 D11~D14 |
+| M8 응답 값 재사용 | 부분 통과 | `nodeId` 재사용은 통과. `filePath`(다른 루트)·응답 토큰 초과는 D11·D12로 수정 |
+| M9 파일 열기 | 통과 | 미리보기 탭 동작, 사용자 의견 "불편하지 않고 좋다" |
+| M10 선택·검색·조작 | 부분 통과 | 리스트 뷰 전부 통과. 파일 그래프 클릭·MCP 선택 표시, 아키텍처 선택 표기는 D13·D14로 수정 |
+
+2026-11-04에 확인·수정한 항목:
+
+- **D11 멀티루트 경로 거부**: `get_view_state.filePath`가 다른 워크스페이스 루트를 가리키면 `open_file`이 `path-outside-workspace`로 거부됐다. `state.json`에 `workspaceRoots`를 게시하고, 명령 경로를 분석 루트 또는 게시된 워크스페이스 폴더 안에서 허용하도록 수정했다.
+- **D12 응답 크기**: `get_view_state`·`control_view` 응답이 `layout.positions`·`windows` 중복 스냅샷으로 최대 토큰을 넘겼다. MCP 응답에서는 노드 좌표와 창 스냅샷을 빼고 `layout.positionCount`·창 요약만 돌려주도록 수정했다. `windowId`를 지정해도 같은 스냅샷이 두 번 들어가지 않는다.
+- **D13 파일 그래프 클릭·선택 표시**: 파일 그래프 노드 클릭이 `surface.select`를 거치지 않아 `views.file`·`lastUserActionAt`이 갱신되지 않았고, MCP `select`도 `data.selectedNodeId`를 바꾸지 못해 파란 강조가 보이지 않았다. 클릭과 MCP 선택이 같은 선택 상태를 게시하고 `selectedNodeId`로 그리도록 수정했다.
+- **D14 창 대상·아키텍처 선택**: `windowId`가 없을 때 마지막 상태 기록 창이 아니라 사용자가 마지막으로 조작한 창(`lastUserActionAt`, 동률이면 `updatedAt`)을 대상으로 삼는다. 창을 옮기거나 닫을 때 이전 영역의 창 스냅샷을 지우고, 새 창이 이전 창의 `lastUserActionAt`을 물려받지 않게 했다. 아키텍처 선택은 `name`을 함께 게시하고, 다른 레벨로 이동하면 선택을 비우며, `surface.analysis`는 전체 프로젝트가 아니라 현재 레벨이 그리는 파일·엣지 수를 게시한다. `surface.architecture.revision`은 현재 레벨 revision, `surface.diagnostics.revision`은 진단 revision이다.
+- **D15 콜 그래프 선택 응답**: `select`/`focus` 응답의 `state.selection`이 웹뷰의 비동기 게시보다 먼저 읽혀 이전 노드로 보이던 문제를, 적용한 노드를 즉시 응답 상태에 넣도록 수정했다.
+- **D16 콜 그래프 인덱스 루트**: 멀티루트에서 활성 파일과 다른 첫 폴더를 인덱스·캐시 루트로 사용해 늦은 크롤·재색인이 반복될 수 있었다. 활성 파일의 워크스페이스 폴더를 인덱스·캐시 루트로 사용하도록 수정했다.
+- **D17 필터 허용 값·모드 전환**: `surface.filters`에 `set_filter`가 받는 nodeType·folder·edgeType 값을 게시하고, `control_view`에 `set_view_mode`(`file`·`list`·`symbol`·`callgraph`·`architecture`)를 추가했다. `set_architecture`의 `unit: ""`가 최상위 복귀라는 설명도 도구 설명에 넣었다. 펼침 오버레이 문구의 프랑스어도 영어로 바꿨다.
+
+남은 확인:
+
+- `folder` 파라미터(`set_architecture`), 아키텍처 `search`의 화면 반영
+- 콜 그래프 지연 시간의 정량 측정
+- 멀티루트에서 상태 영역은 `Skein: Set Workspace Folder`가 고른 영역을 따른다(활성 파일을 따라 자동 전환하지 않는다). 이 동작이 불편하면 별도 설계가 필요하다.
 
 ## 7. 5·6단계 수동 확인
 
@@ -155,7 +182,8 @@ npm run lint
 - [x] `skein.toggleViewMode` 제거 결정: 사용자가 기존 연결과 향후 사용 계획이 없음을 확인. 등록·기여·구현 제거, 테스트는 직접 모드 전환 명령 사용
 - [x] Copilot 네이티브 언어 모델 도구 계속 지원: 기존 `LmToolsService`·`languageModelTools` 유지
 - [ ] 삭제한 렌더러·모듈 대신 현재 화면이 같은 기능을 제공하는가
-- [ ] 리로드로 사라진 창의 `windows` 항목 정리: 지금은 7일(`WINDOW_SNAPSHOT_MAX_AGE_MS`)이 지나야 빠져 `get_view_state` 목록에 죽은 `windowId`가 남는다. 유예 기간을 줄일지, 살아 있는 창을 구분할지 결정
+- [x] 리로드로 사라진 창의 `windows` 항목 정리: 영역 전환·창 종료 시 해당 창 스냅샷을 지우고, 새 창은 이전 창의 `lastUserActionAt`을 물려받지 않는다. 비정상 종료처럼 정리 훅을 못 탄 경우는 여전히 7일(`WINDOW_SNAPSHOT_MAX_AGE_MS`) 뒤에 빠진다
+- [ ] `skein_control_view`에 뷰 모드 전환 명령 추가: `set_view_mode`(`file`·`list`·`symbol`·`callgraph`·`architecture`)를 구현했고 문서·도구 설명에 반영. 실제 창에서 각 모드 전환과 상태 복원을 확인해야 한다
 - [ ] 4~7단계 수동 항목을 실제 창에서 완료하고 수용 기준 표의 "수동 대기"를 갱신
 
 ### 실제 창 검증 진행 방식
