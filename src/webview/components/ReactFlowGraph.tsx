@@ -85,6 +85,8 @@ interface ReactFlowGraphProps {
   autoExpandNodeId?: string | null;
   expandAll: boolean;
   onExpandAllChange: (expand: boolean) => void;
+  /** Applies an agent-driven expand/collapse without echoing it back. */
+  onRemoteExpandAll?: (expand: boolean) => void;
   onRefresh?: () => void;
   onSwitchToSymbol?: () => void;
   onSwitchToListView?: () => void;
@@ -363,6 +365,7 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
   autoExpandNodeId,
   expandAll,
   onExpandAllChange,
+  onRemoteExpandAll,
   onRefresh,
   onSwitchToSymbol,
   onSwitchToListView,
@@ -994,7 +997,21 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     syncExpanded: ids => setExpandedNodes(new Set(ids)),
     clearSelection: () => setNodes(nodes.map(node => ({ ...node, selected: false }))),
     apply: action => {
-      if (action.action === "set_expanded") {
+      if (action.action === "set_expand_all") {
+        // Apply the target synchronously in this renderer. `useSurfaceBridge`
+        // publishes the resulting expandedNodeIds before acknowledging, so the
+        // command response cannot describe the previous screen.
+        onRemoteExpandAll?.(action.expandAll);
+        if (action.expandAll) {
+          if (data.edges && data.edges.length > 0) {
+            const sources = new Set<string>();
+            for (const edge of data.edges) sources.add(edge.source);
+            setExpandedNodes(sources);
+          }
+        } else {
+          setExpandedNodes(currentFilePath ? new Set([normalizePath(currentFilePath)]) : new Set());
+        }
+      } else if (action.action === "set_expanded") {
         setExpandedNodes(previous => { const next = new Set(previous); if (action.expanded) next.add(action.nodeId); else next.delete(action.nodeId); return next; });
         if (action.expanded) onExpandNode?.(action.nodeId);
       } else if (action.action === "select" || action.action === "focus") {

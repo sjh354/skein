@@ -49,7 +49,6 @@ describe('ViewStateService', () => {
     setDepth: ReturnType<typeof vi.fn>;
     openFile: ReturnType<typeof vi.fn>;
     setFilter: ReturnType<typeof vi.fn>;
-    setExpandAll: ReturnType<typeof vi.fn>;
     hasNode: ReturnType<typeof vi.fn>;
     controlSurface: ReturnType<typeof vi.fn>;
   };
@@ -64,7 +63,6 @@ describe('ViewStateService', () => {
       setDepth: vi.fn(async () => true),
       openFile: vi.fn(async () => true),
       setFilter: vi.fn(async () => true),
-      setExpandAll: vi.fn(async () => true),
       hasNode: vi.fn(() => true),
       controlSurface: vi.fn(async () => true),
     };
@@ -349,6 +347,45 @@ describe('ViewStateService', () => {
 
     expect(result.status).toBe('applied');
     expect(host.setDepth).toHaveBeenCalledWith(3);
+  });
+
+  it('waits for the renderer to confirm a call-graph filter', async () => {
+    const applied = await service.handleCommand({
+      id: createCommandId(),
+      createdAt: Date.now(),
+      command: { action: 'set_filter', filterType: 'nodeType', value: 'function', visible: false },
+    });
+    expect(applied.status).toBe('applied');
+    expect(host.setFilter).toHaveBeenCalledWith('nodeType', 'function', false);
+
+    host.setFilter.mockResolvedValueOnce('filter-not-found');
+    const rejected = await service.handleCommand({
+      id: createCommandId(),
+      createdAt: Date.now(),
+      command: { action: 'set_filter', filterType: 'nodeType', value: 'missing', visible: false },
+    });
+    expect(rejected.status).toBe('rejected');
+    expect(rejected.reason).toBe('filter-not-found');
+  });
+
+  it('routes expand-all only when a dependency graph surface is showing', async () => {
+    const callGraph = await service.handleCommand({
+      id: createCommandId(),
+      createdAt: Date.now(),
+      command: { action: 'set_expand_all', expandAll: true },
+    });
+    expect(callGraph.status).toBe('rejected');
+    expect(callGraph.reason).toBe('view-not-available');
+    expect(host.controlSurface).not.toHaveBeenCalled();
+
+    host.read.mockReturnValue({ snapshot: snapshot({ mode: 'file' }), graphVersion: 4 });
+    const applied = await service.handleCommand({
+      id: createCommandId(),
+      createdAt: Date.now(),
+      command: { action: 'set_expand_all', expandAll: true },
+    });
+    expect(applied.status).toBe('applied');
+    expect(host.controlSurface).toHaveBeenCalledWith({ action: 'set_expand_all', expandAll: true });
   });
 
   it('rejects an in-flight renderer command if a real user acts before it completes', async () => {

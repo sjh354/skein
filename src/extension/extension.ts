@@ -154,9 +154,8 @@ export async function activate(context: vscode.ExtensionContext) {
                     hasNode: (nodeId) => callGraphViewService.hasNode(nodeId),
                     setDepth: async (depth) => callGraphViewService.setDepth(depth),
                     openFile: (filePath, line, character) => provider.openFileAt(filePath, line, character),
-                    setFilter: async (filterType, value, visible) =>
+                    setFilter: (filterType, value, visible) =>
                         callGraphViewService.setFilter(filterType, value, visible),
-                    setExpandAll: (expandAll) => provider.setExpandAllState(expandAll),
                 },
                 onRestore: (snapshot, graphVersion) => {
                     callGraphViewService.restoreView(snapshot, graphVersion);

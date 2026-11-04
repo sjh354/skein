@@ -135,6 +135,8 @@ export interface CallGraphSetFilterMessage {
   filterType: "nodeType" | "folder" | "edgeType";
   value: string;
   visible: boolean;
+  /** Present when the extension waits for this renderer to confirm the change. */
+  requestId?: string;
 }
 
 /** Synchronises the depth slider without re-querying (the extension owns the query). */
@@ -230,6 +232,17 @@ export interface CallGraphFilterChangedCommand {
 }
 
 /**
+ * Confirms that a renderer applied (or rejected) a filter requested by the
+ * extension. The extension only reports `set_filter` as applied after this.
+ */
+export interface CallGraphFilterAppliedCommand {
+  command: "callGraphFilterApplied";
+  requestId: string;
+  /** Present when the filter could not be applied to the rendered graph. */
+  reason?: string;
+}
+
+/**
  * Sent when the user adjusts the depth slider in the call graph legend.
  * The extension re-queries the neighbourhood at the new depth and pushes
  * an updated `ShowCallGraphMessage` to the webview.
@@ -293,6 +306,7 @@ export type CallGraphWebviewCommand =
   | CallGraphCopyReferenceCommand
   | CallGraphReadyCommand
   | CallGraphFilterChangedCommand
+  | CallGraphFilterAppliedCommand
   | CallGraphDepthChangedCommand
   | CallGraphSelectionChangedCommand
   | CallGraphLayoutChangedCommand

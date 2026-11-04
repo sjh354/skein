@@ -136,13 +136,19 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   public async controlSurface(action: SkeinViewAction): Promise<true | string> {
     if (!this._view) return "view-not-available";
     const id = randomUUID();
-    return new Promise<true | string>((resolve) => {
+    const outcome = await new Promise<true | string>((resolve) => {
       const timer = setTimeout(() => { this.surfacePending.delete(id); resolve("view-not-responding"); }, 2000);
       this.surfacePending.set(id, result => { clearTimeout(timer); this.surfacePending.delete(id); resolve(result); });
       void this._view!.webview.postMessage({ command: "surfaceCommand", mode: this._stateManager.viewMode, id, action }).then(delivered => {
         if (!delivered) this.surfacePending.get(id)?.("view-not-available");
       }, () => this.surfacePending.get(id)?.("view-not-available"));
     });
+    // Persist the target only after the renderer confirmed it. Otherwise a
+    // rejected/timed-out command would still change the next updateGraph.
+    if (outcome === true && action.action === "set_expand_all") {
+      await this._graphState.setExpandAll(action.expandAll);
+    }
+    return outcome;
   }
 
   private readonly _activeDrillDowns = new Set<Promise<void>>();
@@ -232,7 +238,8 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   public async setExpandAllState(expandAll: boolean): Promise<boolean> {
     if (!this._view) return false;
     if (this._graphState.getExpandAll() === expandAll) return true;
-    await this.expandAllNodes();
+    await this._graphState.setExpandAll(expandAll);
+    void this.postToViews({ command: "setExpandAll", expandAll });
     return true;
   }
 
@@ -1067,6 +1074,9 @@ export class GraphProvider implements vscode.WebviewViewProvider {
         ].includes(message.command)) return;
         if (message.command === "surfaceState") {
           this.surfaceStates[message.mode] = message.state;
+          if (message.mode === "callgraph" && message.state.hiddenFilters) {
+            this._callGraphViewService?.setHiddenFilters(message.state.hiddenFilters);
+          }
           if (message.mode !== "callgraph") {
             if (message.selection) this.surfaceSelections[message.mode] = message.selection;
             else delete this.surfaceSelections[message.mode];
@@ -1413,14 +1423,6 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     log.info("Sending setExpandAll message to webview:", newExpandAll);
     this.postToViews(message);
     log.debug("Toggled expandAll from", currentExpandAll, "to", newExpandAll);
-    // Notify webview to show progress overlay when expanding a large graph
-    if (newExpandAll) {
-      this.postToViews({
-        command: "expansionProgress",
-        nodeId: "expandAll",
-        status: "started",
-      });
-    }
 
     return {
       expanded: newExpandAll,
