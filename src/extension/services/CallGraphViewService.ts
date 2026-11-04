@@ -310,28 +310,6 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     return true;
   }
 
-  /** Re-centres the graph on a node; false when it is not in the index. */
-  public focusNode(nodeId: string): boolean {
-    if (!this.sidebarWebview || !this.indexer) return false;
-    const rows = this.indexer.getDb().exec(
-      "SELECT path, start_line, start_col FROM nodes WHERE id = ? LIMIT 1",
-      [nodeId],
-    );
-    const row = rows[0]?.values?.[0];
-    if (!row) return false;
-    const [nodePath, startLine, startCol] = row as [string, number, number];
-    this.trackOperation(
-      this.handleSymbolFocus({
-        command: "callGraphSymbolFocus",
-        nodeId,
-        path: nodePath,
-        startLine,
-        startCol,
-      }),
-    ).catch((err: unknown) => this.log(`[CallGraph] focus error: ${errorMessage(err)}`));
-    return true;
-  }
-
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------

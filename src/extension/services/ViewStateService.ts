@@ -35,7 +35,6 @@ export interface ViewStateHost {
     read(): { snapshot: SkeinViewSnapshot; graphVersion: number };
     controlSurface?(action: SkeinCommandRequest["command"]): Promise<true | string>;
     select(nodeId: string): Promise<boolean>;
-    focus(nodeId: string): Promise<boolean>;
     setDepth(depth: number): Promise<boolean>;
     openFile(path: string, line?: number, character?: number): Promise<boolean>;
     setFilter(filterType: SkeinFilterType, value: string, visible: boolean): Promise<boolean>;
@@ -216,8 +215,11 @@ export class ViewStateService implements vscode.Disposable {
             }
             this.refreshFromHost();
             // The webview reports the selection asynchronously; keep the applied
-            // node in the result so the caller sees what it selected.
-            if (request.command.action === "select" && this.window.mode === "callgraph") {
+            // node in the result so the caller sees what it selected. A report
+            // that already arrived carries path/name, so only fill the gap.
+            if ((request.command.action === "select" || request.command.action === "focus")
+                && this.window.mode === "callgraph"
+                && this.window.selection === undefined) {
                 this.window.selection = { nodeId: request.command.nodeId };
             }
             await this.persistState();
@@ -254,7 +256,16 @@ export class ViewStateService implements vscode.Disposable {
                 return (await this.options.host.select(action.nodeId)) ? true : "view-not-available";
             case "focus":
                 if (this.window.mode !== "callgraph") return "view-not-available";
-                return (await this.options.host.focus(action.nodeId)) ? true : "view-not-available";
+                // `focus` re-centres the rendered graph; it must not re-query the
+                // neighbourhood (that would replace the graph under the user).
+                // The renderer applies the move and acknowledges it, so an
+                // unknown id is reported instead of silently ignored.
+                if (this.options.host.hasNode && !this.options.host.hasNode(action.nodeId)) {
+                    return "node-not-found";
+                }
+                return this.options.host.controlSurface
+                    ? this.options.host.controlSurface(action)
+                    : "view-not-available";
             case "set_depth":
                 if (this.window.mode !== "callgraph") return "view-not-available";
                 return (await this.options.host.setDepth(action.depth)) ? true : "view-not-available";

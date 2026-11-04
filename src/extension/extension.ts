@@ -152,7 +152,6 @@ export async function activate(context: vscode.ExtensionContext) {
                     controlSurface: (action) => provider.controlSurface(action),
                     select: async (nodeId) => callGraphViewService.selectNode(nodeId),
                     hasNode: (nodeId) => callGraphViewService.hasNode(nodeId),
-                    focus: async (nodeId) => callGraphViewService.focusNode(nodeId),
                     setDepth: async (depth) => callGraphViewService.setDepth(depth),
                     openFile: (filePath, line, character) => provider.openFileAt(filePath, line, character),
                     setFilter: async (filterType, value, visible) =>

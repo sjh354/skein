@@ -46,7 +46,6 @@ describe('ViewStateService', () => {
   let host: {
     read: ReturnType<typeof vi.fn>;
     select: ReturnType<typeof vi.fn>;
-    focus: ReturnType<typeof vi.fn>;
     setDepth: ReturnType<typeof vi.fn>;
     openFile: ReturnType<typeof vi.fn>;
     setFilter: ReturnType<typeof vi.fn>;
@@ -62,7 +61,6 @@ describe('ViewStateService', () => {
     host = {
       read: vi.fn(() => ({ snapshot: snapshot(), graphVersion: 4 })),
       select: vi.fn(async () => true),
-      focus: vi.fn(async () => true),
       setDepth: vi.fn(async () => true),
       openFile: vi.fn(async () => true),
       setFilter: vi.fn(async () => true),
@@ -297,6 +295,32 @@ describe('ViewStateService', () => {
     expect(host.controlSurface).toHaveBeenCalledWith({ action: 'select', nodeId: 'file-node' });
     expect(host.select).not.toHaveBeenCalled();
     expect(result.state?.views?.file?.nodeId).toBe('file-node');
+  });
+
+  it('re-centres a rendered call-graph node through the renderer surface', async () => {
+    const result = await service.handleCommand({
+      id: createCommandId(),
+      createdAt: Date.now(),
+      command: { action: 'focus', nodeId: 'n1' },
+    });
+
+    expect(result.status).toBe('applied');
+    expect(host.controlSurface).toHaveBeenCalledWith({ action: 'focus', nodeId: 'n1' });
+    expect(host.select).not.toHaveBeenCalled();
+    expect(result.state?.mode).toBe('callgraph');
+  });
+
+  it('rejects a focus for a node the rendered graph does not contain', async () => {
+    host.hasNode.mockReturnValue(false);
+    const result = await service.handleCommand({
+      id: createCommandId(),
+      createdAt: Date.now(),
+      command: { action: 'focus', nodeId: 'gone' },
+    });
+
+    expect(result.status).toBe('rejected');
+    expect(result.reason).toBe('node-not-found');
+    expect(host.controlSurface).not.toHaveBeenCalled();
   });
 
   it('rejects an in-flight renderer command if a real user acts before it completes', async () => {
