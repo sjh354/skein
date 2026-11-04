@@ -35,6 +35,7 @@ import { CallGraphDetail } from "./CallGraphDetail";
 import { aliasKey, type Point, planPositions } from "./CytoscapeLayout";
 import { buildCallGraphStylesheet } from "./CytoscapeTheme";
 import { GraphLegend } from "./GraphLegend";
+import { registerViewportReporting, focusZoomFor } from "./viewportReporting";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const fcose = require("cytoscape-fcose") as cytoscape.Ext;
 
@@ -332,6 +333,9 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
 
   // Positions survive save-driven refreshes and depth changes; a new root or an
   // explicit re-layout rebuilds them (DESIGN 3.2).
+  // True while the app moves the viewport on the user's behalf, so a remote
+  // focus or a resize re-centre is not recorded as a user action.
+  const viewportProgrammaticRef = useRef(false);
   useSurfaceBridge({
     mode: "callgraph", nodes: graphNodes.map(node => ({ id: node.id, label: node.name })), post: postMessageFn,
     state: { expandedNodeIds: [], analysis: { nodes: graphNodes.length, edges: graphEdges.length, stale: isLoading } },
@@ -342,7 +346,20 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       selectNode(cy, action.nodeId);
       setSelectedNodeId(action.nodeId); setSelectedEdgeId(undefined);
       reportSelection(action.nodeId, false);
-      if (action.action === "focus") cy.fit(cy.getElementById(action.nodeId), 60);
+      if (action.action === "focus") {
+        const node = cy.getElementById(action.nodeId);
+        viewportProgrammaticRef.current = true;
+        try {
+          cy.fit(node, 60);
+          const zoom = focusZoomFor(cy.zoom());
+          if (zoom !== cy.zoom()) {
+            cy.zoom(zoom);
+            cy.center(node);
+          }
+        } finally {
+          viewportProgrammaticRef.current = false;
+        }
+      }
       return undefined;
     },
   });
@@ -497,8 +514,10 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
     });
 
     // Persist the user's node placement and viewport (DESIGN 3.2, 5.2).
-    cy.on("dragfree", "node", () => scheduleLayoutReport(true));
-    cy.on("zoom", () => scheduleLayoutReport(true));
+    registerViewportReporting(cy, {
+      onChange: scheduleLayoutReport,
+      isProgrammatic: () => viewportProgrammaticRef.current,
+    });
 
     // Auto-resize when the webview panel is resized. Opening the detail panel
     // narrows the canvas; re-fitting there would shrink the whole graph on the
@@ -526,10 +545,16 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
         current.resize();
 
         if (centre && current.width() > 0 && current.height() > 0) {
-          current.pan({
-            x: current.width() / 2 - centre.x * zoom,
-            y: current.height() / 2 - centre.y * zoom,
-          });
+          // Keep the same content centred: the app moved the viewport, not the user.
+          viewportProgrammaticRef.current = true;
+          try {
+            current.pan({
+              x: current.width() / 2 - centre.x * zoom,
+              y: current.height() / 2 - centre.y * zoom,
+            });
+          } finally {
+            viewportProgrammaticRef.current = false;
+          }
         }
         triggerCanvasRepaint(current);
       }, 120);
