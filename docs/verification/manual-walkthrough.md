@@ -266,6 +266,17 @@
 - [ ] 뷰포트는 화면별로 분리되어 화면이 튀지 않는다.
 - [ ] 제거한 명령이 남아 있지 않다.
 
+## 진행 기록
+
+### 2026-11-04 — 4단계 M1·M2·M5·M6 통과, M3·M4 결함 기록
+
+- M1 통과: 클릭 선택과 `select`가 같은 상세 패널을 열고, 없는 노드는 `node-not-found`로 거부되며 화면이 유지됐다.
+- M2 수정 후 통과: `focus`가 그래프를 다시 질의해 루트만 바꾸던 문제를 렌더러 surface `focus` 라우팅으로 수정. 뷰포트 이동·확대를 확인했다.
+- M3 실패: `set_filter`는 `applied`·`hiddenFilters`만 남고 캔버스·범례는 그대로였다. 범례에서 Function·폴더·Incoming call을 꺼도 상태 게시가 바뀌지 않았다.
+- M4 부분 통과: `set_expand_all true/false`의 펼침·접힘은 실제 반영됐다. 다만 `true` 뒤 로딩 오버레이가 접기 전까지 남았고, `expandedNodeIds`와 응답 `state`가 화면보다 한 박자 늦었다.
+- M5 수정 후 통과: 재시작 뒤 노드 배치·줌·팬이 이전 화면과 같은 위치로 복원됐다.
+- M6 통과: 드래그 중 보낸 `set_depth`가 `user-action-superseded`로 거부되고 조작·뷰포트가 유지됐다. 상세는 [4단계 체크리스트](step4-manual-checklist.md)의 D6~D10과 기록 표에 있다.
+
 ## 21. 마무리
 
 1. 위 기록을 모아 `step8-acceptance.md`의 "남은 수동 확인" 상태를 갱신한다.
