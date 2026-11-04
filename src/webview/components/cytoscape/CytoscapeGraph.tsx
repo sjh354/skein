@@ -35,7 +35,7 @@ import { CallGraphDetail } from "./CallGraphDetail";
 import { aliasKey, type Point, planPositions } from "./CytoscapeLayout";
 import { buildCallGraphStylesheet } from "./CytoscapeTheme";
 import { GraphLegend } from "./GraphLegend";
-import { registerViewportReporting } from "./viewportReporting";
+import { registerViewportReporting, focusZoomFor } from "./viewportReporting";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const fcose = require("cytoscape-fcose") as cytoscape.Ext;
 
@@ -347,9 +347,15 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       setSelectedNodeId(action.nodeId); setSelectedEdgeId(undefined);
       reportSelection(action.nodeId, false);
       if (action.action === "focus") {
+        const node = cy.getElementById(action.nodeId);
         viewportProgrammaticRef.current = true;
         try {
-          cy.fit(cy.getElementById(action.nodeId), 60);
+          cy.fit(node, 60);
+          const zoom = focusZoomFor(cy.zoom());
+          if (zoom !== cy.zoom()) {
+            cy.zoom(zoom);
+            cy.center(node);
+          }
         } finally {
           viewportProgrammaticRef.current = false;
         }
@@ -511,12 +517,6 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
     registerViewportReporting(cy, {
       onChange: scheduleLayoutReport,
       isProgrammatic: () => viewportProgrammaticRef.current,
-      isPanUnchanged: () => {
-        const known = viewportRef.current;
-        return known !== null
-          && known.pan.x === cy.pan().x
-          && known.pan.y === cy.pan().y;
-      },
     });
 
     // Auto-resize when the webview panel is resized. Opening the detail panel
