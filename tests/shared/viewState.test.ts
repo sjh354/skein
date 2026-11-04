@@ -94,6 +94,30 @@ describe('view state file', () => {
     expect(parsed?.windows['window-b']).toMatchObject({ mode: 'file', graphVersion: 5 });
   });
 
+  it('makes the last user-touched window active, not the last passive writer', async () => {
+    const root = await tempRoot();
+    await mergeViewState(root, {
+      workspaceRoot: root,
+      windowId: 'window-a',
+      snapshot: { ...state(), mode: 'callgraph' },
+      graphVersion: 4,
+      lastUserActionAt: 900,
+      updatedAt: 1_000,
+    });
+    await mergeViewState(root, {
+      workspaceRoot: root,
+      windowId: 'window-b',
+      snapshot: { ...state(), mode: 'file' },
+      graphVersion: 5,
+      lastUserActionAt: 0,
+      updatedAt: 2_000,
+    });
+
+    const parsed = await readViewState(root);
+    expect(parsed?.activeWindowId).toBe('window-a');
+    expect(parsed?.mode).toBe('callgraph');
+  });
+
   it('migrates a schema 1 state file to a legacy window', async () => {
     const root = await tempRoot();
     const legacy: Record<string, unknown> = { ...state(), schemaVersion: 1 };

@@ -12,6 +12,7 @@ import { isPathWithinRoot } from "../../shared/pathSecurity";
 import {
     COMMAND_RESULT_POLL_MS,
     COMMAND_RESULT_TIMEOUT_MS,
+    compactViewState,
     createCommandId,
     deleteCommandFiles,
     readCommandResult,
@@ -20,9 +21,10 @@ import {
     writeCommandRequest,
     type SkeinCommandRequest,
     type SkeinCommandResult,
+    type SkeinCompactViewState,
     type SkeinFilterType,
     type SkeinViewAction,
-    type SkeinViewState,
+    type SkeinViewMode,
     type SkeinWindowSummary,
 } from "../../shared/viewState";
 
@@ -34,8 +36,8 @@ export interface GetViewStateResult {
     /** False when the extension has not written a state file for this workspace yet. */
     available: boolean;
     reason?: "state-file-missing" | "workspace-not-configured";
-    /** The active window's snapshot (top-level fields are kept for compatibility). */
-    state?: Omit<SkeinViewState, "windows">;
+    /** The active window's snapshot, without window snapshots or the position map. */
+    state?: SkeinCompactViewState;
     /** Other VS Code windows that published state for the same folder. */
     windows?: SkeinWindowSummary[];
 }
@@ -50,11 +52,12 @@ const ActionSchema = z.enum([
     "open_file",
     "set_filter",
     "set_expand_all",
+    "set_view_mode",
 ]);
 
 export const ControlViewSchema = z.object({
     action: ActionSchema.describe(
-        "search: search the rendered view; set_expanded: expand/collapse one file graph node or architecture group; set_architecture: change architecture view/unit/folder/minImports (one navigation level per call); select: highlight a node; focus: re-centre the graph on it; set_depth: re-query at 1-5; open_file: open a file at a line; set_filter: hide/show a node type or folder; set_expand_all: expand or collapse the dependency graph.",
+        "search: search the rendered view; set_expanded: expand/collapse one file graph node or architecture group; set_architecture: change architecture view/unit/folder/minImports (one navigation level per call; unit \"\" returns to the top level); select: highlight a node; focus: re-centre the graph on it; set_depth: re-query at 1-5; open_file: open a file at a line; set_filter: hide/show a node type or folder; set_expand_all: expand or collapse the dependency graph; set_view_mode: switch the graph tab to file, list, symbol, callgraph or architecture.",
     ),
     query: z.string().max(256).optional().describe("Search the current rendered view; empty clears the search. Results are in state.surface.search."),
     expanded: z.boolean().optional().describe("Target expansion for set_expanded."),
@@ -68,9 +71,10 @@ export const ControlViewSchema = z.object({
     line: z.number().int().min(0).optional().describe("0-based line for open_file."),
     character: z.number().int().min(0).optional().describe("0-based column for open_file."),
     filterType: z.enum(["nodeType", "folder", "edgeType"]).optional().describe("What set_filter toggles."),
-    value: z.string().optional().describe("Node type or folder id for set_filter."),
+    value: z.string().optional().describe("Node type (lowercase, e.g. function), folder id or edge type for set_filter. The response lists the accepted values when the value is unknown."),
     visible: z.boolean().optional().describe("Target visibility for set_filter."),
     expandAll: z.boolean().optional().describe("Target state for set_expand_all."),
+    viewMode: z.enum(["file", "list", "symbol", "callgraph", "architecture"]).optional().describe("Target mode for set_view_mode."),
     graphVersion: z
         .number()
         .int()
@@ -99,7 +103,7 @@ export interface ControlViewResult {
     reason?: string;
     /** Window the command was sent to (absent when no state file existed). */
     windowId?: string;
-    state?: SkeinViewState;
+    state?: SkeinCompactViewState;
 }
 
 function buildAction(params: ControlViewParams): SkeinViewAction | string {
@@ -137,6 +141,10 @@ function buildAction(params: ControlViewParams): SkeinViewAction | string {
             return params.expandAll === undefined
                 ? "set_expand_all requires expandAll"
                 : { action: "set_expand_all", expandAll: params.expandAll };
+        case "set_view_mode":
+            return params.viewMode === undefined
+                ? "set_view_mode requires viewMode"
+                : { action: "set_view_mode", mode: params.viewMode as SkeinViewMode };
         default:
             return `unsupported action: ${params.action as string}`;
     }
@@ -147,9 +155,16 @@ export async function executeGetViewState(rootDir: string | undefined): Promise<
     if (!rootDir) return { available: false, reason: "workspace-not-configured" };
     const state = await readViewState(rootDir);
     if (!state) return { available: false, reason: "state-file-missing" };
-    const { windows, ...active } = state;
-    void windows;
-    return { available: true, state: active, windows: summarizeWindows(state) };
+    return {
+        available: true,
+        state: { ...compactViewState(state), windows: undefined },
+        windows: summarizeWindows(state),
+    };
+}
+
+/** A path is accepted inside the analysed root or any workspace folder published with the state. */
+function isPathInWorkspace(filePath: string, rootDir: string, workspaceRoots: readonly string[] | undefined): boolean {
+    return [rootDir, ...(workspaceRoots ?? [])].some(root => isPathWithinRoot(filePath, root));
 }
 
 /** Queues a command and waits for the extension to apply it. */
@@ -164,11 +179,10 @@ export async function executeControlView(
     if (typeof action === "string") {
         return { applied: false, status: "error", reason: action };
     }
-    if (action.action === "open_file" && !isPathWithinRoot(action.path, rootDir)) {
+    const state = await readViewState(rootDir);
+    if (action.action === "open_file" && !isPathInWorkspace(action.path, rootDir, state?.workspaceRoots)) {
         return { applied: false, status: "error", reason: "path-outside-workspace" };
     }
-
-    const state = await readViewState(rootDir);
     if (params.windowId && state && !state.windows[params.windowId]) {
         return { applied: false, status: "error", reason: "window-not-found", windowId: params.windowId };
     }
@@ -196,7 +210,7 @@ export async function executeControlView(
                     status: result.status,
                     reason: result.reason,
                     windowId: targetWindowId,
-                    state: result.state,
+                    state: result.state ? compactViewState(result.state) : undefined,
                 };
             }
             if (Date.now() >= deadline) {

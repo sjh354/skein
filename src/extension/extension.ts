@@ -147,12 +147,14 @@ export async function activate(context: vscode.ExtensionContext) {
             viewStateService = new ViewStateService({
                 root: workspaceFolder.uri.fsPath,
                 logger: log,
+                workspaceRoots: () => (vscode.workspace.workspaceFolders ?? []).map(folder => folder.uri.fsPath),
                 host: {
                     read: () => provider.getViewStateSnapshot(),
                     controlSurface: (action) => provider.controlSurface(action),
                     select: async (nodeId) => callGraphViewService.selectNode(nodeId),
                     hasNode: (nodeId) => callGraphViewService.hasNode(nodeId),
                     setDepth: async (depth) => callGraphViewService.setDepth(depth),
+                    setViewMode: (mode) => provider.setViewMode(mode),
                     openFile: (filePath, line, character) => provider.openFileAt(filePath, line, character),
                     setFilter: (filterType, value, visible) =>
                         callGraphViewService.setFilter(filterType, value, visible),

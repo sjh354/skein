@@ -1579,11 +1579,16 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     const unitKey = node.data("unitKey");
     return unitKey === undefined ? { seed: { kind: "group", groupId: node.data("groupId") }, label } : { seed: { kind: "unit", key: unitKey }, label };
   };
+  /** A stable, readable name for the selection state (group ids alone are opaque). */
+  const nodeLabel = (node: cytoscape.NodeSingular): string => {
+    if (node.data("file")) return String(node.data("relativePath") ?? node.id());
+    return String(node.data("label") ?? "").split("\n")[0].split(" · ")[0] || node.id();
+  };
   /** The selected node: its focus ring and what the live region announces; none clears both. */
   const markSelected = (cy: cytoscape.Core, node: cytoscape.NodeSingular | undefined) => {
     setSelection(node ? selectionOf(node) : null);
     selectedIdRef.current = node?.id() ?? null;
-    surface.select(node?.id(), node?.data("relativePath"));
+    surface.select(node?.id(), node?.data("relativePath"), node ? nodeLabel(node) : undefined);
     markNodes(cy, "selected", node ?? cy.collection());
     const live = document.getElementById(LIVE_REGION);
     if (live) live.textContent = node ? describeNode(node) : "";
@@ -1870,11 +1875,21 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     post: message => { if (message.command === "surfaceState" || message.command === "surfaceResult") postMessage(message); },
     state: {
       expandedNodeIds: [...expansions.keys()].map(id => `group-${id}`),
-      architecture: { revision: summary?.revision, unit: unit ?? undefined, folder, view, minImports },
-      ...(summary ? { analysis: { revision: summary.revision, nodes: summary.totals.files, edges: summary.totals.fileEdges, stale: summary.stale } } : {}),
-      ...(summary?.diagnostics ? { diagnostics: { total: summary.diagnostics.totals.confirmed + summary.diagnostics.totals.candidate,
+      architecture: { revision: source?.revision, unit: unit ?? undefined, folder, view, minImports },
+      ...(drawn ? { analysis: {
+        revision: source?.revision,
+        // What this level draws, not the whole project: the file nodes of an
+        // entered unit/folder, or the units/groups of the top level.
+        nodes: renderedRef.current.renderedFiles || renderedRef.current.visibleGroups,
+        edges: renderedRef.current.groupLevelEdges,
+        stale: drawn.stale,
+      } } : {}),
+      ...(summary?.diagnostics ? { diagnostics: {
+        ...(summary.diagnostics.revision === undefined ? {} : { revision: summary.diagnostics.revision }),
+        total: summary.diagnostics.totals.confirmed + summary.diagnostics.totals.candidate,
         truncated: summary.diagnostics.totals.confirmed + summary.diagnostics.totals.candidate > 100,
-        items: summary.diagnostics.diagnostics.slice(0, 100).map(({ id, kind, status }) => ({ id, kind, status })) } } : {}),
+        items: summary.diagnostics.diagnostics.slice(0, 100).map(({ id, kind, status }) => ({ id, kind, status })),
+      } } : {}),
     },
     apply: action => {
       const cy = cyRef.current;
@@ -2071,8 +2086,13 @@ export function ArchitectureGraph({ postMessage }: Readonly<ArchitectureGraphPro
     cy.elements().remove();
     cy.add(elements);
     pinnedRef.current = pinnedIds.size > 0 ? cy.elements().filter((element) => pinnedIds.has(element.id())) : null;
-    // New elements carry no class: the same level keeps its find and selection rings.
-    if (freshLevel) selectedIdRef.current = null;
+    // New elements carry no class: the same level keeps its find and selection
+    // rings, a new level starts with nothing selected (the old group id would
+    // otherwise stay in `views.architecture` and name a node of another level).
+    if (freshLevel) {
+      selectedIdRef.current = null;
+      if (surface.selectedId !== undefined) surface.select(undefined, undefined, undefined, false);
+    }
     markNodes(cy, "found", freshLevel ? cy.collection() : cy.nodes().filter((node) => foundIdsRef.current.has(node.id())));
     markNodes(cy, "selected", selectedIdRef.current === null ? cy.collection() : cy.getElementById(selectedIdRef.current));
     renderedRef.current = { summary: drawn, unit, folder, ...countRendered(elements), visibleGroups: 0 };

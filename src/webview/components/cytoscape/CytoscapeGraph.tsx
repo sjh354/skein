@@ -370,7 +370,15 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
   const viewportProgrammaticRef = useRef(false);
   useSurfaceBridge({
     mode: "callgraph", nodes: graphNodes.map(node => ({ id: node.id, label: node.name })), post: postMessageFn,
-    state: { expandedNodeIds: [], hiddenFilters: filtersFromKeys(hiddenFilters), analysis: { nodes: graphNodes.length, edges: graphEdges.length, stale: isLoading } },
+    state: {
+      expandedNodeIds: [], hiddenFilters: filtersFromKeys(hiddenFilters),
+      filters: {
+        nodeTypes: graphNodeTypes,
+        folders: graphFolders,
+        edgeTypes: ["outgoing", "incoming", "lateral", "inherits", "implements", "uses", "cycle"],
+      },
+      analysis: { nodes: graphNodes.length, edges: graphEdges.length, stale: isLoading },
+    },
     apply: action => {
       if (action.action === "set_filter") {
         if (!isKnownFilter(action.filterType, action.value, graphNodeTypes, graphFolders)) return "filter-not-found";

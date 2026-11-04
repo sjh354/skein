@@ -482,6 +482,39 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     }
   }, [mode, onHighlight]);
 
+  const surface = useSurfaceBridge({
+    mode, nodes: data.nodes.map(id => ({ id, label: data.nodeLabels?.[id] })), post: postMessage,
+    state: { expandedNodeIds: [...expandedNodes], analysis: { nodes: data.nodes.length, edges: data.edges.length, stale: isReanalyzing } },
+    syncExpanded: ids => setExpandedNodes(new Set(ids)),
+    clearSelection: () => setNodes(nodes.map(node => ({ ...node, selected: false }))),
+    apply: action => {
+      if (action.action === "set_expand_all") {
+        // Apply the target synchronously in this renderer. `useSurfaceBridge`
+        // publishes the resulting expandedNodeIds before acknowledging, so the
+        // command response cannot describe the previous screen.
+        onRemoteExpandAll?.(action.expandAll);
+        if (action.expandAll) {
+          if (data.edges && data.edges.length > 0) {
+            const sources = new Set<string>();
+            for (const edge of data.edges) sources.add(edge.source);
+            setExpandedNodes(sources);
+          }
+        } else {
+          setExpandedNodes(currentFilePath ? new Set([normalizePath(currentFilePath)]) : new Set());
+        }
+      } else if (action.action === "set_expanded") {
+        setExpandedNodes(previous => { const next = new Set(previous); if (action.expanded) next.add(action.nodeId); else next.delete(action.nodeId); return next; });
+        if (action.expanded) onExpandNode?.(action.nodeId);
+      } else if (action.action === "select" || action.action === "focus") {
+        const rendered = nodes.find(node => node.id === action.nodeId);
+        if (!rendered) return "node-not-visible";
+        setNodes(nodes.map(node => ({ ...node, selected: node.id === action.nodeId })));
+        if (action.action === "focus") fitView({ nodes: [{ id: action.nodeId }], duration: 300 });
+      } else return "unsupported-view-action";
+      return undefined;
+    },
+  });
+
   // Use refs for callbacks to avoid including them in useMemo deps
   // This prevents constant re-renders when parent component recreates callbacks
   const callbacksRef = React.useRef<{
@@ -493,7 +526,7 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     onExpandRequest: (path: string) => void;
     onHighlight?: (symbolId: string) => void;
   }>({
-    onNodeClick,
+    onNodeClick: (path, line) => { surface.select(path); onNodeClick(path, line); },
     onDrillDown,
     onFindReferences,
     onToggleParents,
@@ -504,7 +537,7 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
 
   // Update ref on every render so buildGraph always uses latest callbacks
   callbacksRef.current = {
-    onNodeClick,
+    onNodeClick: (path, line) => { surface.select(path); onNodeClick(path, line); },
     onDrillDown,
     onFindReferences,
     onToggleParents,
@@ -538,7 +571,7 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
       mode,
       symbolData,
       layout,
-      selectedNodeId,
+      selectedNodeId: surface.selectedId ?? selectedNodeId,
       highlightState, // Étape 4
     });
     log.debug("🏗️ ReactFlowGraph: build graph END", {
@@ -569,6 +602,7 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     symbolData,
     layout,
     selectedNodeId,
+    surface.selectedId,
     highlightState, // Étape 4
   ]);
 
@@ -990,39 +1024,6 @@ const ReactFlowGraphContent: React.FC<ReactFlowGraphProps> = ({
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Store callback in ref to avoid re-render cascade (per copilot-instructions.md)
-  const surface = useSurfaceBridge({
-    mode, nodes: data.nodes.map(id => ({ id, label: data.nodeLabels?.[id] })), post: postMessage,
-    state: { expandedNodeIds: [...expandedNodes], analysis: { nodes: data.nodes.length, edges: data.edges.length, stale: isReanalyzing } },
-    syncExpanded: ids => setExpandedNodes(new Set(ids)),
-    clearSelection: () => setNodes(nodes.map(node => ({ ...node, selected: false }))),
-    apply: action => {
-      if (action.action === "set_expand_all") {
-        // Apply the target synchronously in this renderer. `useSurfaceBridge`
-        // publishes the resulting expandedNodeIds before acknowledging, so the
-        // command response cannot describe the previous screen.
-        onRemoteExpandAll?.(action.expandAll);
-        if (action.expandAll) {
-          if (data.edges && data.edges.length > 0) {
-            const sources = new Set<string>();
-            for (const edge of data.edges) sources.add(edge.source);
-            setExpandedNodes(sources);
-          }
-        } else {
-          setExpandedNodes(currentFilePath ? new Set([normalizePath(currentFilePath)]) : new Set());
-        }
-      } else if (action.action === "set_expanded") {
-        setExpandedNodes(previous => { const next = new Set(previous); if (action.expanded) next.add(action.nodeId); else next.delete(action.nodeId); return next; });
-        if (action.expanded) onExpandNode?.(action.nodeId);
-      } else if (action.action === "select" || action.action === "focus") {
-        const rendered = nodes.find(node => node.id === action.nodeId);
-        if (!rendered) return "node-not-visible";
-        setNodes(nodes.map(node => ({ ...node, selected: node.id === action.nodeId })));
-        if (action.action === "focus") fitView({ nodes: [{ id: action.nodeId }], duration: 300 });
-      } else return "unsupported-view-action";
-      return undefined;
-    },
-  });
   const onNodeClickRef = React.useRef(onNodeClick);
   React.useEffect(() => {
     onNodeClickRef.current = onNodeClick;
