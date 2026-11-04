@@ -152,6 +152,7 @@ npm run lint
 - [x] `skein.toggleViewMode` 제거 결정: 사용자가 기존 연결과 향후 사용 계획이 없음을 확인. 등록·기여·구현 제거, 테스트는 직접 모드 전환 명령 사용
 - [x] Copilot 네이티브 언어 모델 도구 계속 지원: 기존 `LmToolsService`·`languageModelTools` 유지
 - [ ] 삭제한 렌더러·모듈 대신 현재 화면이 같은 기능을 제공하는가
+- [ ] 리로드로 사라진 창의 `windows` 항목 정리: 지금은 7일(`WINDOW_SNAPSHOT_MAX_AGE_MS`)이 지나야 빠져 `get_view_state` 목록에 죽은 `windowId`가 남는다. 유예 기간을 줄일지, 살아 있는 창을 구분할지 결정
 - [ ] 4~7단계 수동 항목을 실제 창에서 완료하고 수용 기준 표의 "수동 대기"를 갱신
 
 ### 실제 창 검증 진행 방식
