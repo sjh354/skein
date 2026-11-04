@@ -82,8 +82,8 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 
 - [x] `M1` 선택 하이라이트와 상세 패널이 `select` 명령에 반응하는가 (통과: 2026-11-04)
 - [x] `M2` `focus`가 뷰포트를 실제로 이동·확대하는가 (수정 후 통과: 2026-11-04, focus 재질의 → surface focus 라우팅)
-- [ ] `M3` `set_filter`가 캔버스에서 노드·엣지를 실제로 숨기는가 (nodeType·folder·edgeType) — **결함 확정: `applied`·`hiddenFilters`만 바뀌고 화면·범례는 그대로, 범례→상태 게시도 안 됨**
-- [ ] `M4` `set_expand_all`이 의존성 그래프를 실제로 펼치고 접는가 — **화면은 통과, `true` 뒤 로딩 오버레이 지속·`expandedNodeIds` 게시 지연 결함**
+- [ ] `M3` `set_filter`가 캔버스에서 노드·엣지를 실제로 숨기는가 (nodeType·folder·edgeType) — **수정 완료: 렌더러 적용 확인 뒤 응답, 범례 상태 게시 수정. 실제 창 재확인 대기**
+- [ ] `M4` `set_expand_all`이 의존성 그래프를 실제로 펼치고 접는가 — **수정 완료: surface 명령으로 적용·새 `expandedNodeIds` 게시 뒤 응답, 오버레이 이벤트 정리. 실제 창 재확인 대기**
 - [x] `M5` 재시작 후 노드 배치·줌·팬이 눈으로 같은 위치에 복원되는가 (수정 후 통과: 2026-11-04, 드래그 팬 게시 수정)
 - [x] `M6` 드래그·줌·노드 이동 중에 보낸 명령이 `user-action-superseded`로 거부되고 화면이 유지되는가 (통과: 2026-11-04)
 - [ ] `M7` 멀티루트 폴더 전환과 같은 폴더 두 창에서 상태가 분리되는가 (`windows`, `windowId` 대상 지정)
@@ -91,7 +91,7 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 - [ ] `M9` `open_file`이 미리보기 탭으로 열리는 동작이 불편하지 않은가
 - [ ] `M10` 파일·리스트·아키텍처 뷰의 선택·검색·조작이 `views`·`surface`와 일치하는가
 
-2026-11-04 실창 기록: M1·M2·M5·M6은 통과했고, M2(`focus` 재질의 문제)·M5(드래그 팬 미게시)는 수정 후 재검증했다. M3는 `set_filter`가 `applied`로 끝나도 화면·범례가 바뀌지 않고 범례→상태 게시도 동작하지 않아 결함으로 확정했다. M4는 펼침·접힘 자체는 통과했으나 `true` 이후 로딩 오버레이가 남고 `expandedNodeIds`·응답 `state`가 한 박자 늦다. 상세 관찰과 후속 항목은 `docs/verification/step4-manual-checklist.md`의 D6~D10과 기록 표에 있다.
+2026-11-04 실창 기록: M1·M2·M5·M6은 통과했고, M2(`focus` 재질의 문제)·M5(드래그 팬 미게시)는 수정 후 재검증했다. M3는 `set_filter`가 `applied`로 끝나도 화면·범례가 바뀌지 않고 범례→상태 게시도 동작하지 않아 결함으로 확정했으며, 렌더러 확인 응답과 webview `postMessage` 전달로 수정했다. M4는 펼침·접힘 자체는 통과했으나 `true` 이후 로딩 오버레이가 남고 `expandedNodeIds`·응답 `state`가 한 박자 늦어, surface 명령과 렌더러 게시 뒤 응답으로 수정했다. 두 항목 모두 실제 창 재확인이 남아 있다. 상세 관찰과 후속 항목은 `docs/verification/step4-manual-checklist.md`의 D6~D10과 기록 표에 있다.
 
 ### 6.2 남은 연결 구현 (2026-11-03)
 
@@ -99,7 +99,7 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 - [x] `skein_control_view search`: 현재 렌더러가 로드한 노드의 ID·이름 검색, 첫 일치 대상 포커스. 전체 프로젝트 검색은 `skein_graph_context`의 검색 모드 사용
 - [x] `set_expanded`: 파일 의존성 그래프의 개별 노드, 아키텍처의 개별 그룹 펼침/접기
 - [x] `set_architecture`: graph/matrix·unit·folder·minImports 조작. 한 호출에 한 탐색 단계만 변경
-- [x] `state.json`의 `surface`: 노드 ID·펼침·검색·분석 개수/최신성·아키텍처 revision·진단 참조 게시. 노드 ID 10,000개, 검색 결과·진단 참조 각 100개 제한. 진단 상세 근거는 `skein_diagnose_structure`, 분석 상세는 기존 조회 도구로 조회
+- [x] `state.json`의 `surface`: 노드 ID·펼침·검색·콜그래프 필터·분석 개수/최신성·아키텍처 revision·진단 참조 게시. 노드 ID 10,000개, 검색 결과·진단 참조 각 100개 제한. 진단 상세 근거는 `skein_diagnose_structure`, 분석 상세는 기존 조회 도구로 조회
 - [x] 패널·에디터 탭에 같은 분석 결과 전달, 선택·펼침 상태와 호출 그래프 배치/뷰포트 동기화, 나중에 연 화면에 최근 결과 재전달
 - [x] 새 화면 명령은 렌더러가 React 상태를 반영하고 상태를 게시한 뒤 응답. 없는 노드·숨겨진 노드·지원하지 않는 조작·무응답은 명시적 거부
 - [x] 드래그·줌·노드 이동 중에는 렌더러가 상호작용 상태를 게시하고, 그동안 들어온 명령은 `user-action-superseded`로 거부 (마지막 이벤트 후 250ms 해제, 웹뷰 무응답 시 3초 만료)

@@ -272,8 +272,8 @@
 
 - M1 통과: 클릭 선택과 `select`가 같은 상세 패널을 열고, 없는 노드는 `node-not-found`로 거부되며 화면이 유지됐다.
 - M2 수정 후 통과: `focus`가 그래프를 다시 질의해 루트만 바꾸던 문제를 렌더러 surface `focus` 라우팅으로 수정. 뷰포트 이동·확대를 확인했다.
-- M3 실패: `set_filter`는 `applied`·`hiddenFilters`만 남고 캔버스·범례는 그대로였다. 범례에서 Function·폴더·Incoming call을 꺼도 상태 게시가 바뀌지 않았다.
-- M4 부분 통과: `set_expand_all true/false`의 펼침·접힘은 실제 반영됐다. 다만 `true` 뒤 로딩 오버레이가 접기 전까지 남았고, `expandedNodeIds`와 응답 `state`가 화면보다 한 박자 늦었다.
+- M3 수정: `set_filter`는 렌더러가 실제 적용한 뒤에만 `applied`로 응답하고, 지원하지 않는 값은 거부한다. 범례도 상위 webview의 `postMessage`로 상태를 게시한다. 실제 창 재확인 대기.
+- M4 수정: `set_expand_all`은 렌더러 surface 명령으로 적용되고 새 `expandedNodeIds`를 게시한 뒤 응답한다. 완료 없는 오버레이 이벤트도 제거했다. 실제 창 재확인 대기.
 - M5 수정 후 통과: 재시작 뒤 노드 배치·줌·팬이 이전 화면과 같은 위치로 복원됐다.
 - M6 통과: 드래그 중 보낸 `set_depth`가 `user-action-superseded`로 거부되고 조작·뷰포트가 유지됐다. 상세는 [4단계 체크리스트](step4-manual-checklist.md)의 D6~D10과 기록 표에 있다.
 

@@ -43,8 +43,7 @@ export interface ViewStateHost {
     select(nodeId: string): Promise<boolean>;
     setDepth(depth: number): Promise<boolean>;
     openFile(path: string, line?: number, character?: number): Promise<boolean>;
-    setFilter(filterType: SkeinFilterType, value: string, visible: boolean): Promise<boolean>;
-    setExpandAll(expandAll: boolean): Promise<boolean>;
+    setFilter(filterType: SkeinFilterType, value: string, visible: boolean): Promise<true | string>;
     /** False when the node is not in the graph currently rendered. */
     hasNode?(nodeId: string): boolean;
 }
@@ -309,14 +308,18 @@ export class ViewStateService implements vscode.Disposable {
                     ? true
                     : "view-not-available";
             case "set_filter":
-                this.setHiddenFilter(action.filterType, action.value, !action.visible);
-                return (await this.options.host.setFilter(action.filterType, action.value, action.visible))
-                    ? true
-                    : "view-not-available";
+                if (this.window.mode !== "callgraph") return "view-not-available";
+                // The renderer confirms the filter only after hiding/showing
+                // the matching elements. A dropped message is not success.
+                return this.options.host.setFilter(action.filterType, action.value, action.visible);
             case "set_expand_all":
-                this.window.expandAll = action.expandAll;
-                return (await this.options.host.setExpandAll(action.expandAll))
-                    ? true
+                if (this.window.mode !== "file" && this.window.mode !== "symbol") {
+                    return "view-not-available";
+                }
+                // ReactFlowGraph applies the target state and acknowledges only
+                // after it has rendered the new expanded node set.
+                return this.options.host.controlSurface
+                    ? this.options.host.controlSurface(action)
                     : "view-not-available";
             default:
                 return "view-not-available";

@@ -80,6 +80,8 @@ export interface SkeinSurfaceState {
   nodeIds: string[];
   nodeIdsTruncated?: boolean;
   expandedNodeIds: string[];
+  /** Call-graph filters currently hidden in this surface. */
+  hiddenFilters?: SkeinFilter[];
   search?: { query: string; matches: string[]; total: number };
   architecture?: { revision?: string; unit?: string; folder?: string; view?: string; minImports?: number };
   analysis?: { revision?: string; nodes: number; edges: number; stale: boolean };
@@ -341,6 +343,7 @@ function parseSnapshot(value: Record<string, unknown>): SkeinViewSnapshot | null
     const strings = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 10000) : [];
     snapshot.surface = { nodeIds: strings(surface.nodeIds), expandedNodeIds: strings(surface.expandedNodeIds) };
     if (surface.nodeIdsTruncated === true) snapshot.surface.nodeIdsTruncated = true;
+    if (Array.isArray(surface.hiddenFilters)) snapshot.surface.hiddenFilters = parseFilters(surface.hiddenFilters);
     if (isRecord(surface.search) && typeof surface.search.query === "string" && typeof surface.search.total === "number") {
       snapshot.surface.search = { query: surface.search.query.slice(0, 256), matches: strings(surface.search.matches).slice(0, 100), total: surface.search.total };
     }

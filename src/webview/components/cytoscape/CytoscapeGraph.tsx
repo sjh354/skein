@@ -31,6 +31,7 @@ import type {
   ShowCallGraphMessage,
   SymbolType,
 } from "../../../shared/callgraph-types";
+import type { SkeinFilter, SkeinFilterType } from "../../../shared/viewState";
 import { CallGraphDetail } from "./CallGraphDetail";
 import { aliasKey, type Point, planPositions } from "./CytoscapeLayout";
 import { buildCallGraphStylesheet } from "./CytoscapeTheme";
@@ -270,6 +271,33 @@ function detectIsDarkTheme(): boolean {
          !document.body.classList.contains("vscode-high-contrast-light");
 }
 
+const EDGE_FILTER_KEYS = new Set([
+  "outgoing", "incoming", "lateral", "inherits", "implements", "uses", "cycle",
+]);
+
+/** Rejects filters the current graph cannot apply instead of reporting success. */
+function isKnownFilter(
+  filterType: SkeinFilterType,
+  value: string,
+  nodeTypes: SymbolType[],
+  folders: string[],
+): boolean {
+  if (filterType === "nodeType") return nodeTypes.includes(value as SymbolType);
+  if (filterType === "folder") return folders.includes(value);
+  return EDGE_FILTER_KEYS.has(value);
+}
+
+/** Converts legend keys (`type:value`) to the published filter shape. */
+function filtersFromKeys(keys: Set<string>): SkeinFilter[] {
+  const filters: SkeinFilter[] = [];
+  for (const key of keys) {
+    const colon = key.indexOf(":");
+    if (colon <= 0) continue;
+    filters.push({ filterType: key.slice(0, colon) as SkeinFilterType, value: key.slice(colon + 1) });
+  }
+  return filters;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -318,6 +346,10 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
   const [graphNodeTypes, setGraphNodeTypes] = useState<SymbolType[]>([]);
   const [graphFolders, setGraphFolders] = useState<string[]>([]);
   const hiddenFiltersRef = useRef<Set<string>>(new Set());
+  const graphNodeTypesRef = useRef<SymbolType[]>([]);
+  const graphFoldersRef = useRef<string[]>([]);
+  graphNodeTypesRef.current = graphNodeTypes;
+  graphFoldersRef.current = graphFolders;
 
   // Depth slider state — synchronised with extension on each showCallGraph message
   const [currentDepth, setCurrentDepth] = useState(1);
@@ -338,8 +370,13 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
   const viewportProgrammaticRef = useRef(false);
   useSurfaceBridge({
     mode: "callgraph", nodes: graphNodes.map(node => ({ id: node.id, label: node.name })), post: postMessageFn,
-    state: { expandedNodeIds: [], analysis: { nodes: graphNodes.length, edges: graphEdges.length, stale: isLoading } },
+    state: { expandedNodeIds: [], hiddenFilters: filtersFromKeys(hiddenFilters), analysis: { nodes: graphNodes.length, edges: graphEdges.length, stale: isLoading } },
     apply: action => {
+      if (action.action === "set_filter") {
+        if (!isKnownFilter(action.filterType, action.value, graphNodeTypes, graphFolders)) return "filter-not-found";
+        handleFilterToggle(action.filterType, action.value, action.visible);
+        return undefined;
+      }
       if (action.action !== "select" && action.action !== "focus") return "unsupported-view-action";
       const cy = cyRef.current;
       if (!cy || cy.getElementById(action.nodeId).empty()) return "node-not-found";
@@ -698,7 +735,20 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       }
 
       if (msg.type === "callGraphSetFilter") {
-        applyRemoteFilter(msg.filterType, msg.value, msg.visible);
+        if (!msg.requestId) {
+          // Replayed/mirrored state: apply as-is, the extension already owns it.
+          applyRemoteFilter(msg.filterType, msg.value, msg.visible);
+          return;
+        }
+        const reason = isKnownFilter(msg.filterType, msg.value, graphNodeTypesRef.current, graphFoldersRef.current)
+          ? undefined
+          : "filter-not-found";
+        if (!reason) applyRemoteFilter(msg.filterType, msg.value, msg.visible);
+        postMessageRef.current({
+          command: "callGraphFilterApplied",
+          requestId: msg.requestId,
+          ...(reason ? { reason } : {}),
+        });
         return;
       }
 
@@ -951,8 +1001,9 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       .map((c) => c.id);
     setGraphNodeTypes(types);
     setGraphFolders(folders);
-    hiddenFiltersRef.current = new Set();
-    setHiddenFilters(new Set());
+    // Filters belong to the view, not to one graph payload. Keep them across
+    // refreshes and apply them to the newly added elements.
+    applyFilterSet(new Set(hiddenFiltersRef.current));
 
     lastRootRef.current = msg.rootSymbolId;
 
@@ -1196,6 +1247,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
           folders={graphFolders}
           hiddenFilters={hiddenFilters}
           onToggle={handleFilterToggle}
+          postMessage={postMessageFn}
         />
       )}
 

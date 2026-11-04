@@ -137,6 +137,11 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   private graphVersion = 0;
   /** Filters and selection survive graph refreshes and session restarts. */
   private hiddenFilters: SkeinFilter[] = [];
+  /** `set_filter` waits for the renderer that actually applied it. */
+  private readonly pendingFilterAcks = new Map<string, {
+    resolve: (result: true | string) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
   private lastSelection: SkeinSelection | undefined;
   private disposed = false;
   private disposePromise: Promise<void> | null = null;
@@ -249,6 +254,11 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     return [...this.hiddenFilters];
   }
 
+  /** Replaces the hidden-filter snapshot published by the active renderer. */
+  public setHiddenFilters(filters: SkeinFilter[]): void {
+    this.hiddenFilters = filters.map((filter) => ({ ...filter }));
+  }
+
   /** Pins MCP commands to the graph the agent saw. */
   public getCurrentGraphVersion(): number {
     return this.graphVersion;
@@ -295,19 +305,44 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     return true;
   }
 
-  /** Hides or shows a node type or folder in the webview. */
+  /**
+   * Hides or shows a node type or folder in every mounted renderer.
+   * Resolves only after one of them confirms it applied the change, so a
+   * dropped or unsupported filter is never reported as `applied`.
+   */
   public setFilter(
     filterType: SkeinFilter["filterType"],
     value: string,
     visible: boolean,
-  ): boolean {
-    if (!this.sidebarWebview) return false;
-    this.hiddenFilters = this.hiddenFilters.filter(
-      (filter) => !(filter.filterType === filterType && filter.value === value),
-    );
-    if (!visible) this.hiddenFilters.push({ filterType, value });
-    this.postMessage({ type: "callGraphSetFilter", filterType, value, visible });
-    return true;
+  ): Promise<true | string> {
+    const host = this.sidebarWebview;
+    if (!host) return Promise.resolve("view-not-available");
+    const requestId = crypto.randomUUID();
+    const message = { type: "callGraphSetFilter" as const, filterType, value, visible, requestId };
+    return new Promise<true | string>((resolve) => {
+      const finish = (result: true | string): void => {
+        const pending = this.pendingFilterAcks.get(requestId);
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        this.pendingFilterAcks.delete(requestId);
+        if (result === true) {
+          this.hiddenFilters = this.hiddenFilters.filter(
+            (filter) => !(filter.filterType === filterType && filter.value === value),
+          );
+          if (!visible) this.hiddenFilters.push({ filterType, value });
+        }
+        resolve(result);
+      };
+      const timer = setTimeout(() => finish("view-not-responding"), 2000);
+      this.pendingFilterAcks.set(requestId, { resolve: finish, timer });
+      Promise.resolve(host.webview.postMessage(message)).then(
+        (delivered) => { if (!delivered) finish("view-not-available"); },
+        (err: unknown) => {
+          this.log(`[CallGraph] filter postMessage failed: ${errorMessage(err)}`);
+          finish("view-not-available");
+        },
+      );
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -527,6 +562,11 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
 
   private async disposeResources(): Promise<void> {
     this.disposed = true;
+    for (const pending of this.pendingFilterAcks.values()) {
+      clearTimeout(pending.timer);
+      pending.resolve("view-not-available");
+    }
+    this.pendingFilterAcks.clear();
     this.clearSaveDebounce();
     this.saveListener?.dispose();
     this.saveListener = null;
@@ -987,6 +1027,8 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       this.log(
         `[CallGraph] Filter changed: ${msg.filterType}=${msg.value} visible=${String(msg.visible)}`,
       );
+    } else if (msg.command === "callGraphFilterApplied") {
+      this.pendingFilterAcks.get(msg.requestId)?.resolve(msg.reason ?? true);
     } else if (msg.command === "callGraphLayoutChanged") {
       this.layout = msg.layout;
     } else if (msg.command === "callGraphSelectionChanged") {

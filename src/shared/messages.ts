@@ -12,6 +12,7 @@ import type {
   CallGraphCopyReferenceCommand,
   CallGraphDepthChangedCommand,
   CallGraphFilterChangedCommand,
+  CallGraphFilterAppliedCommand,
   CallGraphIndexingMessage,
   CallGraphMountedCommand,
   CallGraphOpenFileCommand,
@@ -287,6 +288,7 @@ export type WebviewToExtensionMessage =
   | CallGraphReadyCommand
   | CallGraphDepthChangedCommand
   | CallGraphFilterChangedCommand
+  | CallGraphFilterAppliedCommand
   | CallGraphSymbolFocusCommand
   | CallGraphMountedCommand
   | CallGraphSelectionChangedCommand

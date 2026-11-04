@@ -607,6 +607,13 @@ const App: React.FC = () => {
         setExpansionState(null);
         clearExpansionTimeoutRef.current = null;
       }, 1500);
+    } else if (message.nodeId === "expandAll") {
+      // Whole-graph expansion has no progress stream; never leave its overlay up
+      // if a started/in-progress event arrives without a matching completion.
+      clearExpansionTimeoutRef.current = setTimeout(() => {
+        setExpansionState(null);
+        clearExpansionTimeoutRef.current = null;
+      }, 2000);
     }
   }, []);
 
@@ -988,6 +995,7 @@ const App: React.FC = () => {
             onToggleParents={(path) => handleFindReferences(path)}
             expandAll={expandAll}
             onExpandAllChange={handleExpandAllChange}
+            onRemoteExpandAll={setExpandAll}
             onRefresh={handleRefresh}
             onSwitchToSymbol={() => handleSwitchMode("symbol")}
             onSwitchToListView={() => setSymbolViewMode("list")}

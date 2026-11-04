@@ -60,6 +60,23 @@ describe('file graph interactions', () => {
     expect(flow.props.nodes?.map(n => n.id)).toEqual([a, b, x]);
   });
 
+  it('applies remote expand-all and publishes the resulting node set before acknowledging', () => {
+    const post = vi.fn();
+    const onRemoteExpandAll = vi.fn();
+    render(<ReactFlowGraph {...props} expandAll={false} postMessage={post} onRemoteExpandAll={onRemoteExpandAll} />);
+
+    act(() => window.dispatchEvent(new MessageEvent('message', {
+      data: { command: 'surfaceCommand', mode: 'file', id: 'expand-all', action: { action: 'set_expand_all', expandAll: true } },
+    })));
+
+    expect(onRemoteExpandAll).toHaveBeenCalledWith(true);
+    const messages = post.mock.calls.map(([message]) => message);
+    const stateIndex = messages.findIndex(message => message.state?.expandedNodeIds?.length === 3);
+    const resultIndex = messages.findIndex(message => message.command === 'surfaceResult');
+    expect(stateIndex).toBeGreaterThanOrEqual(0);
+    expect(resultIndex).toBeGreaterThan(stateIndex);
+  });
+
   it('explains the distinct participant count and uses the correct unit in each mode', () => {
     const cyclic: GraphData = { nodes: [a, b, c, d], edges: [
       { source: a, target: b }, { source: b, target: a }, { source: b, target: c },

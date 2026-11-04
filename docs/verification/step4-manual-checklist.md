@@ -53,9 +53,9 @@ npm run test:viewstate # phase 1 → phase 2
 | D5 | 드래그·줌·노드 이동 **진행 중**에는 `lastUserActionAt`이 갱신되지 않아(디바운스·종료 시점 기록) 조작 중에 들어온 명령이 거부되지 않고 화면을 갈아끼웠다. 렌더러가 상호작용 상태를 게시하고 확장이 그동안 명령을 거부하도록 수정 | 수정·M6 재검증 완료 |
 | D6 | M2: `focus`가 뷰포트를 이동시키지 않고 호출 그래프를 대상 심벌 기준으로 다시 질의해 루트·노드 구성만 바꿨다. 렌더러의 surface `focus`(선택 + fit)로 라우팅하고 적용 확인 뒤에만 응답하도록 수정. 단일 노드 확대 상한 2, programmatic 팬은 사용자 조작으로 기록하지 않음 | 수정·M2 재검증 완료 |
 | D7 | M5: 배경 드래그 팬이 `callGraphLayoutChanged`로 게시되지 않아 재시작 후 팬이 유실됐다. 드래그 팬도 배치로 게시하도록 수정 | 수정·M5 재검증 완료 |
-| D8 | M3: `set_filter`가 웹뷰의 전달·처리 확인 없이 `applied`로 끝난다. `CallGraphViewService.setFilter`가 `postMessage` 후 항상 `true`를 반환해, 웹뷰가 메시지를 못 받거나 처리하지 못해도 성공으로 기록된다. `hiddenFilters`만 남고 캔버스·범례는 그대로다 | 결함 확정·미수정 |
-| D9 | M3: 범례 조작이 확장 상태로 게시되지 않는다. 범례에서 Function·폴더를 꺼도 `hiddenFilters`가 바뀌지 않아 확장과 웹뷰가 서로 다른 인스턴스를 보는 가능성이 있다 | 결함 확정·미수정 |
-| D10 | M4: `set_expand_all true` 뒤 화면은 펼쳐지지만 로딩 오버레이가 접기 전까지 계속 돈다. `false`에서만 해제된다. 재현 조건 미확정. 같은 명령 응답의 `state`와 `expandedNodeIds`가 화면보다 한 박자 늦게 따라온다 | 결함 확정·미수정 |
+| D8 | M3: `set_filter`가 웹뷰의 전달·처리 확인 없이 `applied`로 끝났다. 이제 렌더러가 필터를 적용한 뒤 `callGraphFilterApplied`로 확인하고, 지원하지 않는 필터는 `filter-not-found`, 무응답은 `view-not-responding`으로 거부한다 | 수정·자동 검증 완료(수동 재확인 대기) |
+| D9 | M3: 범례 조작이 확장 상태로 게시되지 않았다. 범례가 직접 `acquireVsCodeApi()`를 다시 호출해 실패하고 있었으므로, 상위 webview의 `postMessage`를 넘기도록 수정. 필터 상태도 `surface.hiddenFilters`로 게시 | 수정·자동 검증 완료(수동 재확인 대기) |
+| D10 | M4: `set_expand_all true` 뒤 로딩 오버레이가 접기 전까지 계속 돌았다. 확장이 보내던 완료 없는 `expansionProgress started`를 제거하고, 렌더러는 surface 명령으로 펼침을 적용한 뒤 새 `expandedNodeIds`를 게시하고 응답한다 | 수정·자동 검증 완료(수동 재확인 대기) |
 
 ## 3. 사용자가 직접 확인할 항목
 
@@ -95,9 +95,9 @@ npm run test:viewstate # phase 1 → phase 2
 - [ ] `Outgoing call` 엣지를 끄고 엣지가 사라지는가
 - [ ] Codex `set_filter`로도 같은 변화가 일어나는가
 
-**결과: 실패 (2026-11-04, D8·D9).** 범례에서 Function·폴더를 꺼도 노드가 그대로이고 상태 게시도 바뀌지 않았다. 이 뷰에는 Outgoing call이 없어 Incoming call로 대체 확인했으나 같은 결과였다. MCP `set_filter`는 `applied`로 끝나고 `hiddenFilters`에는 기록됐지만 캔버스·범례는 변하지 않았다. 확장이 웹뷰의 전달·처리 결과를 기다리지 않고 성공으로 처리하며, 범례→확장 상태 게시도 함께 동작하지 않는다. 사용자가 보는 웹뷰와 확장이 메시지를 주고받는 인스턴스가 다를 가능성이 있어 런타임 확인이 필요하다.
+**결과: 결함 확인 후 수정 (2026-11-04, D8·D9).** 수정 전에는 범례에서 Function·폴더를 꺼도 상태 게시가 바뀌지 않았고, MCP `set_filter`는 `applied`로 끝나도 캔버스·범례가 변하지 않았다. 이제 범례는 상위 webview의 `postMessage`로 상태를 게시하고, MCP 필터는 렌더러가 실제 적용한 뒤에만 `applied`로 응답한다. 지원하지 않는 값은 `filter-not-found`, 웹뷰가 응답하지 않으면 `view-not-responding`으로 거부한다. **실제 창에서 재확인 필요.**
 
-자동화는 `state.json`의 `hiddenFilters`만 확인했다.
+자동화는 `state.json`의 `hiddenFilters`와 렌더러 확인 응답까지 검증했다.
 
 ### M4. 펼침/접힘
 
@@ -105,9 +105,9 @@ npm run test:viewstate # phase 1 → phase 2
 - [x] Codex `set_expand_all true` → 노드 묶음이 실제로 펼쳐지는가
 - [x] `set_expand_all false` → 접히는가
 
-**결과: 화면 동작 통과, 오버레이·게시 지연 결함 (2026-11-04, D10).** `true`에서 실제로 펼쳐지고 `false`에서 접히며 오버레이도 사라졌다. 다만 `true` 뒤 화면이 이미 펼쳐진 상태에서도 로딩 오버레이가 접기 전까지 계속 돌았고, `false`에서만 해제됐다. 재현 조건은 확정하지 못했다. 명령 응답의 `state`와 `expandedNodeIds`는 실제 반영보다 한 박자 늦다. 접힌 직후 읽으면 13개였다가 수 초 뒤 1개로 돌아왔고, `true` 직후에는 1개로 읽혔다. `expandAll`만으로 화면 동작을 보증할 수 없어 `expandedNodeIds`를 기준으로 삼을지 정해야 한다.
+**결과: 결함 확인 후 수정 (2026-11-04, D10).** 펼침·접힘 자체는 실제 반영됐지만, `true` 뒤 로딩 오버레이가 접기 전까지 남았고 응답의 `state`·`expandedNodeIds`가 한 박자 늦었다. 이제 `set_expand_all`은 렌더러 surface 명령으로 적용되고, 렌더러가 새 `expandedNodeIds`를 게시한 뒤 응답한다. 완료 없는 `expansionProgress started`도 제거했다. **실제 창에서 오버레이 해제와 응답 상태를 재확인 필요.**
 
-자동화는 `expandAll` 상태만 확인했다.
+자동화는 `expandAll` 상태와 렌더러 확인 응답까지 검증했다.
 
 ### M5. 재시작 후 배치·뷰포트
 
@@ -178,8 +178,8 @@ npm run test:viewstate # phase 1 → phase 2
 |---|---|---|---|---|
 | M1 | 통과 | 클릭 선택과 `select`가 같은 상세 패널을 열고, 없는 노드는 `node-not-found`로 거부되며 화면 유지 | - | - |
 | M2 | 통과 (수정 후) | `focus`가 재질의만 하고 뷰포트를 움직이지 않던 문제를 surface `focus` 라우팅으로 수정. 이동·확대 확인, 확대 상한 2 | - | D6 |
-| M3 | 실패 | `set_filter`는 `applied`·`hiddenFilters` 기록만 되고 캔버스·범례는 그대로. 범례 Function·폴더·Incoming call 조작도 상태 게시 안 됨 | 높음 | D8·D9 원인 확정 후 수정 |
-| M4 | 부분 통과 | 펼침·접힘은 실제 반영. `true` 뒤 로딩 오버레이가 접기 전까지 유지, `expandedNodeIds`·응답 `state`가 한 박자 지연 | 중간 | D10 기준(`expandedNodeIds`) 결정 |
+| M3 | 수정 후 재확인 대기 | `set_filter`가 렌더러 확인 뒤에만 `applied`로 응답하고, 범례가 상위 webview `postMessage`로 상태를 게시하도록 수정. 지원하지 않는 필터는 거부 | - | 실제 창에서 재확인 |
+| M4 | 수정 후 재확인 대기 | surface 명령으로 펼침을 적용하고 새 `expandedNodeIds` 게시 뒤 응답. 완료 없는 오버레이 이벤트 제거 | - | 실제 창에서 오버레이·응답 확인 |
 | M5 | 통과 (수정 후) | 재시작 뒤 노드 배치·줌·팬이 같은 위치로 복원. 드래그 팬 미게시 문제 수정 | - | D7 |
 | M6 | 통과 | 드래그 중 보낸 `set_depth`가 `user-action-superseded`로 거부되고 조작·뷰포트 유지, 종료 후 `applied` | - | - |
 | M7 | | | | |
@@ -190,8 +190,8 @@ npm run test:viewstate # phase 1 → phase 2
 ## 5. 완료 판정
 
 - [ ] `npm run test:viewstate` 통과
-- [ ] M1~M4에서 화면 변화 확인 (M1·M2 통과, M3 실패, M4 오버레이 결함)
+- [ ] M1~M4에서 화면 변화 확인 (M1·M2 통과, M3·M4는 수정 후 재확인 대기)
 - [x] M5에서 배치·뷰포트가 눈으로 복원되는지 확인 (통과: 2026-11-04)
 - [ ] M6~M8에서 실제 클릭·두 창·Codex 흐름 확인 (M6 통과)
 - [ ] M10의 다른 뷰 선택·검색·아키텍처 조작이 실제 화면과 공유 상태에서 일치
-- [ ] blocker 0건 (M3 결함 해소 전에는 미충족)
+- [ ] blocker 0건 (M3·M4 수동 재확인 전에는 미충족)
