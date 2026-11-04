@@ -30,6 +30,12 @@ import {
     type SkeinWindowView,
 } from "../../shared/viewState";
 
+/**
+ * A webview that stops reporting the end of an interaction (crash, reload)
+ * must not keep rejecting commands forever.
+ */
+const INTERACTION_SAFETY_MS = 3_000;
+
 export interface ViewStateHost {
     /** Current view mode, file, selection and filters. */
     read(): { snapshot: SkeinViewSnapshot; graphVersion: number };
@@ -60,6 +66,9 @@ export class ViewStateService implements vscode.Disposable {
     private timer: ReturnType<typeof setInterval> | null = null;
     private writing = false;
     private disposed = false;
+    /** True while the renderer reports an ongoing pan, zoom or node drag. */
+    private userInteracting = false;
+    private interactionTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(private readonly options: ViewStateServiceOptions) {
         this.workspaceRoot = options.root;
@@ -156,6 +165,9 @@ export class ViewStateService implements vscode.Disposable {
                 if (command.userInitiated) this.markUserAction();
                 else this.publishOnce().catch((err: unknown) => this.logError("layout publish", err));
                 break;
+            case "callGraphUserInteraction":
+                this.setUserInteracting(command.active);
+                break;
             case "callGraphOpenFile":
             case "callGraphSymbolFocus":
                 this.markUserAction();
@@ -169,6 +181,29 @@ export class ViewStateService implements vscode.Disposable {
         this.disposed = true;
         if (this.timer !== null) clearInterval(this.timer);
         this.timer = null;
+        if (this.interactionTimer !== null) clearTimeout(this.interactionTimer);
+        this.interactionTimer = null;
+    }
+
+    /**
+     * Tracks an ongoing pan, zoom or node drag. While it lasts, a queued command
+     * would move the screen under the user, so it is rejected (DESIGN 10.2).
+     * The heartbeat refreshes `lastUserActionAt`, and the safety timer drops a
+     * stale `active` if the webview never reports the end.
+     */
+    private setUserInteracting(active: boolean): void {
+        if (this.interactionTimer !== null) {
+            clearTimeout(this.interactionTimer);
+            this.interactionTimer = null;
+        }
+        this.userInteracting = active;
+        if (!active) return;
+        this.window.lastUserActionAt = Date.now();
+        this.interactionTimer = setTimeout(() => {
+            this.interactionTimer = null;
+            this.userInteracting = false;
+        }, INTERACTION_SAFETY_MS);
+        this.interactionTimer.unref?.();
     }
 
     private async tick(): Promise<void> {
@@ -198,7 +233,7 @@ export class ViewStateService implements vscode.Disposable {
     async handleCommand(request: SkeinCommandRequest): Promise<SkeinCommandResult> {
         this.refreshFromHost();
         const base = { id: request.id, completedAt: Date.now() };
-        if (isCommandSupersededByUser(request, this.window)) {
+        if (this.userInteracting || isCommandSupersededByUser(request, this.window)) {
             return { ...base, status: "rejected", reason: "user-action-superseded" };
         }
         if (isCommandStale(request, this.window)) {
@@ -210,7 +245,7 @@ export class ViewStateService implements vscode.Disposable {
             if (outcome !== true) {
                 return { ...base, status: "rejected", reason: outcome, completedAt: Date.now() };
             }
-            if (isCommandSupersededByUser(request, this.window)) {
+            if (this.userInteracting || isCommandSupersededByUser(request, this.window)) {
                 return { ...base, status: "rejected", reason: "user-action-superseded", completedAt: Date.now() };
             }
             this.refreshFromHost();

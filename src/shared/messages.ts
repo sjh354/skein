@@ -19,6 +19,7 @@ import type {
   CallGraphSelectionChangedCommand,
   CallGraphLayoutChangedCommand,
   CallGraphSymbolFocusCommand,
+  CallGraphUserInteractionCommand,
   ShowCallGraphMessage,
 } from "./callgraph-types";
 import type { CommunityMode, GraphData } from "./graph-types";
@@ -290,4 +291,5 @@ export type WebviewToExtensionMessage =
   | CallGraphMountedCommand
   | CallGraphSelectionChangedCommand
   | CallGraphLayoutChangedCommand
+  | CallGraphUserInteractionCommand
   | ArchitectureWebviewCommand;
