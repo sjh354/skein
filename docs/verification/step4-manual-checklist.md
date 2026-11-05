@@ -78,7 +78,7 @@ npm run test:viewstate # phase 1 → phase 2
 ### M1. 선택 하이라이트
 
 - [x] 그래프에서 노드를 클릭 → 해당 노드가 선택 표시되고 상세 패널이 열린다
-- [x] Codex에서 다른 노드를 `select` → 하이라이트와 상세 패널이 그 노드로 바뀐다
+- [x] 에이전트에서 다른 노드를 `select` → 하이라이트와 상세 패널이 그 노드로 바뀐다
 - [x] 없는 노드를 `select` → `node-not-found` 거부 응답이 오고 화면은 그대로인가
 
 **결과: 통과 (2026-11-04).** 클릭 선택과 MCP `select`가 같은 상세 패널을 열고, 없는 노드는 거부되며 화면이 유지됐다.
@@ -88,7 +88,7 @@ npm run test:viewstate # phase 1 → phase 2
 ### M2. 포커스 이동
 
 - [x] 그래프를 드래그·축소해 대상 노드를 화면 밖으로 보낸다
-- [x] Codex에서 그 노드를 `focus` → 뷰포트가 실제로 이동·확대되는가
+- [x] 에이전트에서 그 노드를 `focus` → 뷰포트가 실제로 이동·확대되는가
 - [x] 선택만 바뀌고 화면이 움직이지 않으면 결함으로 기록
 
 **결과: 결함 수정 후 통과 (2026-11-04, D6).** 수정 전에는 `focus`가 그래프를 다시 질의해 루트·노드 구성만 바뀌고 뷰포트는 그대로였다. 렌더러의 surface `focus`로 라우팅한 뒤 뷰포트가 실제로 이동·확대됐고, 확대 배율은 2로 제한됐다.
@@ -100,7 +100,7 @@ npm run test:viewstate # phase 1 → phase 2
 - [x] 범례에서 `Function` 타입을 끄고 노드가 사라지는가
 - [x] 폴더 필터를 끄고 해당 폴더 노드가 사라지는가
 - [x] `Outgoing call` 엣지를 끄고 엣지가 사라지는가
-- [x] Codex `set_filter`로도 같은 변화가 일어나는가
+- [x] 에이전트 `set_filter`로도 같은 변화가 일어나는가
 
 **결과: 결함 확인 후 수정, 실제 창 재확인 통과 (2026-11-04, D8·D9).** 수정 전에는 범례에서 Function·폴더를 꺼도 상태 게시가 바뀌지 않았고, MCP `set_filter`는 `applied`로 끝나도 캔버스·범례가 변하지 않았다. 이제 범례는 상위 webview의 `postMessage`로 상태를 게시하고, MCP 필터는 렌더러가 실제 적용한 뒤에만 `applied`로 응답한다. 지원하지 않는 값은 `filter-not-found`, 웹뷰가 응답하지 않으면 `view-not-responding`으로 거부한다. 실제 창에서 세 필터와 MCP 필터가 화면·`hiddenFilters`에 함께 반영되는 것을 확인했다. 허용 값은 `surface.filters`에 게시한다(D17).
 
@@ -109,7 +109,7 @@ npm run test:viewstate # phase 1 → phase 2
 ### M4. 펼침/접힘
 
 - [x] `Skein: Switch to Graph View`로 의존성 그래프로 전환
-- [x] Codex `set_expand_all true` → 노드 묶음이 실제로 펼쳐지는가
+- [x] 에이전트 `set_expand_all true` → 노드 묶음이 실제로 펼쳐지는가
 - [x] `set_expand_all false` → 접히는가
 
 **결과: 결함 확인 후 수정, 실제 창 재확인 통과 (2026-11-04, D10).** 펼침·접힘 자체는 실제 반영됐지만, `true` 뒤 로딩 오버레이가 접기 전까지 남았고 응답의 `state`·`expandedNodeIds`가 한 박자 늦었다. 이제 `set_expand_all`은 렌더러 surface 명령으로 적용되고, 렌더러가 새 `expandedNodeIds`를 게시한 뒤 응답한다. 완료 없는 `expansionProgress started`도 제거했다. 실제 창에서 오버레이가 정상 해제되고 응답의 `expandedNodeIds`가 화면과 일치하는 것을 확인했다.
@@ -130,7 +130,7 @@ npm run test:viewstate # phase 1 → phase 2
 `timeoutMs`는 MCP가 응답을 기다리는 시간이며, 확장이 명령 실행을 붙잡아 두는 값이 아니다. 명령은 받은 즉시 처리되므로 "호출이 끝나기 전에 클릭"으로는 재현되지 않는다. 확장은 렌더러가 드래그·줌·노드 이동 중이라고 보고하는 동안 들어온 명령을 거부한다.
 
 - [x] 그래프를 노드 드래그, 캔버스 팬 또는 휠 줌으로 계속 조작한다
-- [x] 조작을 멈추지 않은 상태에서 Codex로 `set_depth`(또는 `select`)를 보낸다
+- [x] 조작을 멈추지 않은 상태에서 에이전트로 `set_depth`(또는 `select`)를 보낸다
 - [x] 응답이 `rejected` / `user-action-superseded`인가
 - [x] 조작이 끊기지 않고 깊이·선택·뷰포트가 유지되는가
 - [x] 조작을 멈춘 뒤 같은 명령을 보내면 `applied`로 끝나는가
@@ -150,13 +150,13 @@ npm run test:viewstate # phase 1 → phase 2
 
 **결과: 통과 + 부수 문제 (2026-11-04).** 두 창의 선택이 서로 지우지 않고 `windowId` 지정 명령이 대상 창에만 적용됐다. 다만 `filePath` 재사용(다른 루트), 창 기록 잔존, `windowId` 생략 시 마지막 기록 창으로 가는 문제가 확인돼 D11·D14로 수정했다. 폴더 전환 복원에 다른 영역 배치가 섞이는 문제는 복원 전 스냅샷 정리(D14)로 막았다.
 
-### M8. Codex 실제 호출
+### M8. 에이전트 실제 호출
 
-- [x] Codex에서 `skein_get_view_state`를 호출해 상태를 읽는다
+- [x] 에이전트에서 `skein_get_view_state`를 호출해 상태를 읽는다
 - [x] 같은 응답의 `selection.nodeId` 또는 `callGraph.rootSymbolId`를 그대로 `select`에 넣는다
 - [ ] 같은 응답의 `filePath`를 그대로 `open_file`에 넣는다
 - [x] 두 창이면 `windows`의 `windowId`를 `control_view`에 넘겨 대상을 지정할 수 있는가
-- [x] Codex가 도구·인자를 스스로 고르는 흐름에서 혼동이 없는가
+- [x] 에이전트가 도구·인자를 스스로 고르는 흐름에서 혼동이 없는가
 
 **결과: 부분 통과, 수정 (2026-11-04).** `nodeId`·`windowId` 재사용은 통과했다. 멀티루트 복제 창에서 `filePath`를 그대로 넣으면 `path-outside-workspace`로 거부되고, 응답이 10만~20만 자로 최대 토큰을 넘었다. `workspaceRoots` 검증(D11)과 응답 축약(D12)으로 수정했으며, 같은 응답을 다시 왕복하는 실제 확인은 남아 있다.
 
@@ -199,6 +199,12 @@ npm run test:viewstate # phase 1 → phase 2
 - [ ] `npm run test:viewstate` 통과
 - [x] M1~M4에서 화면 변화 확인 (M1·M2·M3·M4 통과: 2026-11-04)
 - [x] M5에서 배치·뷰포트가 눈으로 복원되는지 확인 (통과: 2026-11-04)
-- [x] M6~M9에서 실제 클릭·두 창·Codex 흐름 확인 (M6·M7·M9 통과, M8 부분 통과 후 수정)
+- [x] M6~M9에서 실제 클릭·두 창·에이전트 흐름 확인 (M6·M7·M9 통과, M8 부분 통과 후 수정)
 - [ ] M10의 다른 뷰 선택·검색·아키텍처 조작이 실제 화면과 공유 상태에서 일치 (리스트 통과, 파일 그래프·아키텍처 수정 후 재확인 필요)
 - [ ] blocker 0건 (M8·M10 재확인과 `folder`·아키텍처 `search` 확인 전에는 미충족)
+
+## 2026-11-05 추가 확인
+
+- `set_architecture`의 `view`(graph/matrix)·`minImports`·`folder`와 아키텍처 `search`가 `surface.architecture`·`views`에 반영되고 화면과 일치했다. `search("infra")`는 해당 묶음 하나만 일치시켜 선택했다.
+- `set_view_mode` 5개 모드(`file`·`list`·`symbol`·`callgraph`·`architecture`)가 전환되고 호출 그래프로 돌아올 때 루트·배치·줌이 복원됐다.
+- 모드 전환 직후에는 아키텍처 `surface`가 아직 그려지기 전이라 비어 있을 수 있다. 조작 직후 응답 상태가 한 박자 늦는 경우가 있다.

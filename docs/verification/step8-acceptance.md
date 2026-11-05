@@ -52,10 +52,10 @@
 | 이동 범위 | `refactor` 단위·E2E(보조 함수·공유·private·순환·이름 충돌) | 자동 통과 | ggultarae 실제 사례 |
 | 구조 규칙 | `test:diagnostics`, `architectureRules` 단위 | 자동 통과 | 실제 프로젝트의 기준선·예외·악화 |
 | 진단 | `test:diagnostics`(다섯 영역, candidate/confirmed 구분) | 자동 통과 | 실제 화면 근거·한계 표시 |
-| 미리보기 | `test:change`(계획 지문·재계산·diff) | 자동 통과 | 편집기 미리보기와 확인 모달 |
+| 미리보기 | `test:change`(계획 지문·재계산·diff) | 자동 통과 | 확인 모달과 적용 후 파일 열기 |
 | 이력 | `test:change`(undo/redo·3-way 병합·충돌·중단 복구) | 자동 통과 | 충돌 hunk 표시와 해결 흐름 |
 | 격리 | `test:change`가 사용자 Git HEAD·인덱스·브랜치·`.skein` 비추적 확인 | 자동 통과 | 없음 |
-| MCP | `test:viewstate` MCP 왕복, MCP 단위 테스트 | 자동 통과 | Codex 실제 대화 왕복 |
+| MCP | `test:viewstate` MCP 왕복, MCP 단위 테스트 | 자동 통과 | 에이전트 MCP 왕복 |
 | 로컬성 | LLM 클라이언트 제거, 자동 LLM 호출 0, 재분석 설정 보존 테스트 | 자동 통과 | 없음(구조적 확인) |
 | 확장성 | 어댑터 등록·기능 선언 단위 테스트 | 자동 통과 | 새 어댑터 추가 시 UI 분기 없음 확인 |
 
@@ -69,6 +69,13 @@
 | 캐시·통계 경로 | `.skein/cache`, `~/.skein/stats`; 기존 `.graph-it/cache` 1회 이동 테스트 통과 |
 | 패키징 제외 | `.skein/**`, `dist/callgraph.js`, `**/*.map` 제외 확인 |
 | 문서 | README·DEVELOPMENT·HANDOFF·DESIGN·architecture·AGENTS 갱신 |
+
+## 2026-11-05 수동 확인 결과
+
+- 5단계 M1·M3·M4·M5, 6단계 M1·M2·M5·M6·M7, 7단계 M1~M6은 실제 창 또는 MCP로 통과했다. 상세는 각 단계 체크리스트의 "실제 창 기록"과 `docs/HANDOFF.md` 6.5에 있다.
+- 8단계: 패널·에디터 탭 동기화(선택 공유, 호출 그래프 뷰포트 분리, 재오픈 복원), 대체표 근거, `set_view_mode` 5모드는 통과했다.
+- 이 확인으로 변경 적용(디스크 직접 쓰기)·미리보기 제거·구조 가드·호출 그래프·추출·인라인·이동 등 결함 16건을 고쳤다. 결정 대기와 미해결 항목은 HANDOFF 6.5에 있다.
+- 이 환경에서 `test:change`·`test:refactor`·`test:vscode`는 실행하지 못했다. 위 변경의 실제 VS Code 호스트 검증이 남아 있다.
 
 ## 남은 수동 확인 (4~7단계 이월)
 

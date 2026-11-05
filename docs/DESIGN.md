@@ -56,7 +56,7 @@
 
 ## 2. 대표 작업과 전체 흐름
 
-사용자는 저장소를 열고 전체 구조를 확인한 후 관련 부분을 펼친다. 진단이나 직접 탐색으로 변경 대상을 고르고, 작업과 대상 위치를 지정한다. 도구가 변경 범위와 근거를 계산하고 구조 변화와 코드 diff를 보여준다. 적용 후에는 분석과 검사를 다시 실행하고 결과를 이력에 남긴다.
+사용자는 저장소를 열고 전체 구조를 확인한 후 관련 부분을 펼친다. 진단이나 직접 탐색으로 변경 대상을 고르고, 작업과 대상 위치를 지정한다. 도구가 변경 범위와 근거를 계산하고 구조 변화와 코드 diff를 계획 응답으로 제공한다. 편집기 명령은 diff 탭을 열지 않고 확인 모달에 파일별 변경 줄 수를 보인 뒤, 적용 후 바뀐 파일(최대 5개)을 일반 탭으로, Skein 그래프 탭이 없는 에디터 그룹에 연다(이미 열린 파일은 그 탭을 보여 준다). 적용 후에는 분석과 검사를 다시 실행하고 결과를 이력에 남긴다.
 
 ```mermaid
 flowchart TD
@@ -577,7 +577,7 @@ Graph-It-Live를 기반 후보로 채택하고 최소 동작 검증 후 포크·
 - 4단계 진행: `.skein/state.json`(스키마 2)의 뷰 상태(모드·파일·선택·호출 그래프 루트·깊이·필터·펼침·배치·뷰별 선택)와 `.skein/commands/` 명령 큐를 구현했다. 확장만 상태 파일을 쓰고, MCP 서버(`skein_get_view_state`, `skein_control_view`)는 명령 요청을 남긴 뒤 결과를 기다린다. 상태는 창별 스냅샷으로 병합되고 잠금으로 동시 쓰기를 직렬화하며, 영역(멀티루트 폴더)별로 각 루트의 상태 파일을 사용한다. 콜 그래프 배치와 뷰포트는 재시작 후 복원되고, `graphVersion`은 파일 변경·의존성 재분석·인덱스 재구축을 포함해 증가하며 재시작 후에도 유지된다. `graphVersion`이 다른 명령은 `stale-graph-version`, 사용자 조작 이후 대기한 명령은 `user-action-superseded`로 거부하고, 대상 창이 아닌 확장은 요청을 건드리지 않는다. 실제 확장 호스트와 MCP stdio 왕복, 재시작 복원은 `npm run test:viewstate`로 자동 검증한다. 이 과정에서 경로 축약이 노드 ID·파일 경로를 바꿔 명령 왕복을 깨뜨리던 문제, 없는 노드 선택을 수용하던 문제, 뷰 모드가 `file`일 때 복원 상태를 게시하지 않던 문제를 수정했다. 남은 확인은 실제 화면의 선택·포커스·필터·펼침 반영, 배치·뷰포트의 시각적 복원, 멀티루트·다중 창 실사용, Codex 실제 호출이다.
 
 - 5단계 결과: `.skein/history/repo.git`(별도 `--git-dir`·`--work-tree`)와 `index.json`·`tasks/<planId>.json`을 추가했다. 확장이 유일 작성자이며, 계획은 저장된 파일 내용과 코드 지문(SHA-256·존재·`graphVersion`)을 보관한다. 적용 순서는 지문 재확인 → 저장하지 않은 편집 확인 → before 스냅샷 → `WorkspaceEdit` 적용·저장 → after 스냅샷 → 진단 비교이며, before 기록이나 적용이 실패하면 코드를 진행하지 않는다. 되돌리기/다시 적용은 `git merge-file` 3-way 병합으로 이후 편집을 보존하고, 충돌 시 파일을 건드리지 않고 위치·첫 hunk를 반환한다. 중단된 `applying`/`verifying` 작업은 다음 활성화에서 디스크와 대조해 `recovery`로 분류하며 자동 적용·자동 롤백을 하지 않는다. 명령 큐는 `CommandBridgeService` 하나가 읽어 view/change를 나눠 처리하고, MCP에는 `skein_plan_change`·`skein_apply_change`·`skein_get_change_plan`·`skein_list_change_history`·`skein_undo_change`·`skein_redo_change`를 추가했다. UI에는 `skein.renameSymbol`·`skein.showChangeHistory`·`skein.undoLastChange`·`skein.redoLastChange`가 있다.
-- 5단계 검증: `npm run test:change`가 임시 샌드박스에서 계획→적용→이력→되돌리기→다시 적용→충돌→오래된 계획을 실제 VS Code 확장 호스트와 MCP stdio로 확인하고, 두 번째 실행에서 중단 작업 복구를 확인한다. 사용자 Git의 HEAD·인덱스·브랜치가 변하지 않고 `.skein`이 추적되지 않는 것도 검사한다. 기존 `npm run test:viewstate`와 단위 테스트 전체가 통과한다. 남은 확인은 실제 Dart 확장 환경의 이름 변경, 편집기 입력·미리보기·확인 모달의 시각 동작, 충돌 해결 후 재적용 흐름(단계 6), 프로젝트 테스트 명령 실행(단계 6~7)이다.
+- 5단계 검증: `npm run test:change`가 임시 샌드박스에서 계획→적용→이력→되돌리기→다시 적용→충돌→오래된 계획을 실제 VS Code 확장 호스트와 MCP stdio로 확인하고, 두 번째 실행에서 중단 작업 복구를 확인한다. 사용자 Git의 HEAD·인덱스·브랜치가 변하지 않고 `.skein`이 추적되지 않는 것도 검사한다. 기존 `npm run test:viewstate`와 단위 테스트 전체가 통과한다. 남은 확인은 실제 Dart 확장 환경의 이름 변경, 편집기 입력·확인 모달·적용 후 파일 열기의 시각 동작, 충돌 해결 후 재적용 흐름(단계 6), 프로젝트 테스트 명령 실행(단계 6~7)이다.
 
 - 6단계 결과: 이동은 `src/analyzer/change/refactor.ts`의 규칙 엔진이 대상과 helper의 참조 위치를 비교해 묶음을 계산한다. bundle 밖에서도 쓰이는 helper와 공개 symbol은 원위치에 남기고, 새 파일·기존 파일 모두에 필요한 import를 만들고, 참조 파일의 import 경로를 바꾼다. 진입점, Dart private helper, 이름 충돌, 순환 import, 해석되지 않은 import는 명시적으로 거부한다. 추출은 enclosing 함수의 매개변수·지역 변수를 읽어 인자를 만들고 식/문장 선택을 구분하며, `this`·동기 함수의 `await`·읽을 수 없는 매개변수 패턴을 거부한다. 인라인은 파일 내부에서만 쓰이는 비공개 단일 식 함수의 모든 호출(또는 MCP에서 지정한 한 호출)을 치환한다. 계획 파일에 생성·삭제 상태를 추가해 이동으로 만든 파일을 Undo에서 삭제하고 Redo에서 재생성하며, 내부 Git snapshot은 아직 존재하지 않는 경로와 삭제된 경로를 안전하게 기록한다. UI에는 `skein.moveSymbol`·`skein.extractFunction`·`skein.inlineFunction`을 추가했고, `skein_plan_change`는 `kind`에 `rename`·`move`·`extract`·`inline`을 받는다. `npm run test:refactor`가 실제 VS Code 확장 호스트와 MCP stdio로 TypeScript 이동·생성/삭제 Undo/Redo·추출·인라인·오래된 계획·Git 격리를 확인하고, `npm run test:change`와 단위 테스트 전체가 통과한다. 남은 확인은 Dart 실제 이동/추출/인라인, 경로 별칭·package·재수출·동적 import의 실패 처리, 편집기 선택·미리보기 UX, ggultarae 사례다.
 
@@ -586,6 +586,7 @@ Graph-It-Live를 기반 후보로 채택하고 최소 동작 검증 후 포크·
 - 8단계 결과: 대체표(`docs/verification/step8-replacement-table.md`)를 코드·테스트 근거로 작성했다. 런타임 로더가 없던 Call Graph 전용 번들(`src/webview/callgraph/index.tsx` → `dist/callgraph.js`), 위키/HTML 내보내기 잔재(`HtmlExporter`), 대체된 `useGraphData`·`clusterUtils`, 삭제된 CLI·Review Gate 보조 모듈(`removedNameImporters`·`workspaceText`), LLM 팩토리·클라이언트, 미사용 배럴(`src/shared/index.ts`)을 제거했다. 직접 의존성 `vis-network`·`ajv`도 제거했다. `QueryEngine`은 테스트용 주입 지점만 남기고 자동 LLM 호출 경로가 없음을 확인했다. 분석 캐시는 `<workspace>/.skein/cache/`, 세션 통계는 `~/.skein/stats/`로 통합했고 기존 `.graph-it/cache/`는 첫 실행에서 한 번 이동한다. `.vscodeignore`에 `.skein/**`와 제거된 번들을 추가하고, `skein.architecture.json`의 없는 `src/cli` 요소, 원작자 SonarCloud·Snyk 설정, CI의 오래된 경로 필터를 정리했다. `npm test` 4,302개, `npm run test:diagnostics` 465개, `test:viewstate`·`test:change`·`test:refactor`, 프로덕션 빌드와 VSIX 패키징(32개 파일·9.89MB·WASM 8개)이 통과했다. 전체 `test:vscode`는 188개 통과·3개 대기·7개 실패였고, 실패는 모두 변경 전 기준선과 같은 범주(샌드박스 미지정, phase 1 없이 phase 2 실행, 픽스처 기준값)로 새 실패가 없었다. 남은 확인은 패널/에디터 탭 동등성,  4~7단계 수동 항목이다. 수용 기준 기록은 `docs/verification/step8-acceptance.md`에 있다.
 
 - 물리 기반(force-directed) 자유 배치는 3.1 화면 통합과 전체 단계가 끝난 뒤 적용할 후속 후보로 둔다. 지금은 fCoSE와 폴더·파일 묶음을 유지한다.
+- 후속 후보(단계 8 이후): 이동으로 원본 파일에 남는 내용이 없어지면 그 파일을 같은 변경 작업 안에서 삭제한다. 지금은 빈 파일이 남는다. 삭제는 그래프에서 고립된 파일일 때만 한다. 조건은 (1) 다른 파일이 import·재수출하지 않고, (2) 진입점이 아니며, (3) 설정·빌드·`package.json`·`tsconfig` 등 경로 참조와 동적 import가 없는 것이다. 하나라도 해당하거나 확신할 수 없으면 파일을 남긴다. 해석하지 못한 참조는 그래프에서 빠질 수 있으므로 고립 판정은 그래프만으로 하지 않고 텍스트 참조 검색을 함께 쓴다. 삭제는 이력에 `deleted`로 기록하고 Undo로 복원되어야 한다.
 - 후속 후보(단계 8 이후): `graph_context` 결과 순위에 Personalized PageRank를 약하게 섞는다. 질의에 맞은 파일을 시드로 삼아 import 그래프에서 구조적 중요도를 계산하고, 기존 점수와 순위 결합(RRF)으로 보정한다. 참고는 [Graphweft](https://github.com/ThisaST/graphweft)(MIT)의 알고리즘 설명이며 코드는 가져오지 않고 직접 구현한다. 구조 신호가 항상 검색을 개선하는 것은 아니므로(Graphweft 자체 벤치마크에서 그래프만 쓴 hit@5가 grep보다 낮음) 정답 파일을 라벨링한 질의 집합으로 hit@1·hit@5·MRR을 기존 방식과 비교해 개선이 확인될 때만 켠다. 임베딩 기반 시맨틱 검색은 런타임·모델 크기 부담으로 이 후보에 포함하지 않는다.
 
 단계 0부터 Dart 변경 API·MCP 상태 연결·내부 Git 격리의 작은 기술 검증을 먼저 수행할 수 있다. 이는 단계 3~5 전체 구현을 앞당긴다는 뜻이 아니라 핵심 부적합을 조기에 찾기 위한 검증이다. API가 부족하면 구현 대안을 기록하고 핵심 수용 기준 미충족을 보고한다.
@@ -658,6 +659,9 @@ flowchart LR
 | 내부 Git은 별도 git-dir | `--git-dir`/`--work-tree`를 매 명령에 명시해 사용자 저장소의 HEAD·인덱스·브랜치·훅과 분리하고, 계획이 건드린 파일만 기록한다 |
 | 되돌리기는 3-way 병합 | reset/checkout으로 이후 편집을 지우지 않고, 충돌은 중단·보고한다 |
 | 변경 이력은 선형 | 가장 최근 항목만 되돌리기/다시 적용해 미리보기·검증·이력의 대응을 단순하게 유지한다 |
+| 변경 적용은 디스크에 직접 쓰기 | 편집기 저장은 사용자의 저장 시 포매터가 계획한 내용을 바꿔 적용 후 비교가 어긋나고 이력이 사라진다. 저장되지 않은 편집은 이미 거부하므로 열린 탭은 다시 읽는다. 편집기 자체 Ctrl+Z 스택에는 남지 않고 Skein의 되돌리기를 쓴다 |
+| 편집기 명령은 diff 탭 없이 모달 확인 | 적용 전 내용은 파일로 존재하지 않아 일반 에디터로 보여 줄 수 없다. 모달에 파일별 변경 줄 수를 보이고 적용 후 실제 파일을 Skein 그래프 탭이 없는 그룹에 연다 |
+| 화면별 뷰포트, 공유 위치 | 패널과 에디터 탭은 캔버스 크기가 달라 줌·팬을 섞으면 서로 반대로 움직인다. 노드 위치·선택·펼침만 공유한다 |
 | README·DESIGN·간결한 AGENTS | 문서별 원본과 역할을 구분해 중복 방지 |
 | 캐시·통계 경로를 `.skein`으로 통합 | 제품명과 저장 위치를 맞추고, 캐시는 첫 실행에서 한 번 이동한 뒤 재생성 가능하게 유지한다 |
 | LLM 클라이언트 제거·주입 지점 유지 | 자동 LLM 호출 금지 원칙을 코드에 반영하고, `QueryEngine`의 테스트용 주입 지점만 남긴다 |

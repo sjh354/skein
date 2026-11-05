@@ -75,7 +75,7 @@
 - [ ] `skein_diagnose_structure`가 같은 revision의 진단을 반환하는가
 - [ ] `kind`·`status`·`area`·`offset`/`limit`이 실제로 페이지를 나누는가
 - [ ] revision이 바뀐 뒤 이전 offset을 넘기면 거부되는가
-- [ ] Codex가 `candidate`를 확정 위반처럼 요약하지 않는가
+- [ ] 에이전트가 `candidate`를 확정 위반처럼 요약하지 않는가
 
 ### M7. 성능·규모
 
@@ -86,3 +86,19 @@
 ## 3. 이전 단계에서 남은 확인
 
 4·5·6단계의 수동 항목은 `step4-manual-checklist.md`, `step5-manual-checklist.md`, `step6-manual-checklist.md`에 그대로 남아 있다. 7단계 자동 검증은 그 항목을 대체하지 않는다.
+
+## 4. 실제 창 기록 (2026-11-05)
+
+샌드박스(`ui`/`infra` 프로필, 역방향 import, 700줄 파일, 중복 파일 포함)에서 에이전트가 MCP로 확인했다. 결함과 수정은 `docs/HANDOFF.md` 6.5에 있다.
+
+| 번호 | 결과 | 관찰 |
+|---|---|---|
+| M1 | 통과 | `ui→infra`는 위반이 아니고 `infra→ui`만 확정 위반, `strict`는 레이어 밖 파일 간 import를 추가로 보고 |
+| M2 | 통과 | 예외가 있으면 `excepted`와 이유 표시, 만료일 이후 다시 새 위반 |
+| M3 | 통과 | v1 호환, v2 값 `accepted`, 값이 커지면 `worsened`, 작아지면 `accepted`, 파일 제거 시 `resolved` |
+| M4 | 통과 | 책임 집중·중복·배치·추상화를 확인하고 후보와 확정을 구분, 한계 문구 표시. 의존 진단은 샘플에 사례가 없음 |
+| M5 | 통과 | 새 위반을 만드는 이동이 적용 전 차단되고 파일 무변경, 예외가 있으면 통과, 적용 후 새 위반은 `verification-failed`로 남고 롤백 없음. 규칙 파일이 없는 프로젝트는 미확인 |
+| M6 | 통과 | 페이지 연속성, 다른 `revision` 거부, `status`·`area` 필터 |
+| M7 | 일부 | TS 약 720개 파일에서 진단 0.9~1.0초, 구조 검사 1.2초. 메모리 증가는 미측정 |
+
+화면(Architecture 뷰)에서는 최상위 묶음, `infra→ui` 빨간 점선 엣지, 진단 패널 5건을 사용자가 확인했다.
