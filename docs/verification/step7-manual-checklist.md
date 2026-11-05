@@ -75,7 +75,7 @@
 - [ ] `skein_diagnose_structure`가 같은 revision의 진단을 반환하는가
 - [ ] `kind`·`status`·`area`·`offset`/`limit`이 실제로 페이지를 나누는가
 - [ ] revision이 바뀐 뒤 이전 offset을 넘기면 거부되는가
-- [ ] Codex가 `candidate`를 확정 위반처럼 요약하지 않는가
+- [ ] 에이전트가 `candidate`를 확정 위반처럼 요약하지 않는가
 
 ### M7. 성능·규모
 

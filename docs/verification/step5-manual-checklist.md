@@ -75,7 +75,7 @@ npm run test:change   # phase 1 → phase 2
 - [ ] `Skein: Set Workspace Folder`로 다른 루트를 선택한 뒤 변경 이력이 그 루트의 `.skein/history`를 쓰는가
 - [ ] 한 루트의 이력이 다른 루트에 섞이지 않는가
 
-### M7. Codex 실제 호출
+### M7. 에이전트 실제 호출
 
 - [ ] `skein_get_view_state`의 `selection`에서 nodeId를 복사해 `skein_plan_change`에 그대로 넣는다
 - [ ] 응답의 `plan.planId`로 `skein_apply_change`를 호출한다
@@ -119,6 +119,6 @@ npm run test:change   # phase 1 → phase 2
 - [ ] `npm run test:change` 통과
 - [ ] M1·M3·M4·M5에서 화면 동작 확인
 - [ ] M2에서 Dart 실제 이름 변경 확인 또는 미지원 사유 기록
-- [ ] M7에서 Codex 왕복 확인
+- [ ] M7에서 에이전트 왕복 확인
 - [ ] M8·M9에서 격리·복구 확인
 - [ ] blocker 0건

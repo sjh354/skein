@@ -95,7 +95,7 @@
 - [ ] 삭제된 파일을 편집기 탭이 열린 상태에서 Undo/Redo해도 `File Modified Since` 오류가 없는가
 - [ ] 이동·추출·인라인이 `Show Change History`에서 종류별 아이콘·상태로 보이는가
 
-### M8. Codex 실제 호출
+### M8. 에이전트 실제 호출
 
 - [ ] `skein_plan_change`에 `kind: "move"`, `path`, `name`, `line`, `newPath`를 넣어 계획을 받는가
 - [ ] `kind: "extract"`에 `startLine`/`startCharacter`/`endLine`/`endCharacter`를 넣어 계획을 받는가
@@ -130,6 +130,6 @@
 - [ ] M4에서 Dart 실제 이동 성공 또는 미지원 사유 기록
 - [ ] M3·M6에서 차단 사유가 파일을 바꾸지 않는지 확인
 - [ ] M7에서 생성·삭제 Undo/Redo와 충돌 보존 확인
-- [ ] M8에서 Codex 왕복 확인
+- [ ] M8에서 에이전트 왕복 확인
 - [ ] M9에서 ggultarae 사례 결과 기록
 - [ ] blocker 0건

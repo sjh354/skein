@@ -87,7 +87,7 @@ Open VSX(VS Code 포크 에디터용)는 선택이다. 필요하면 `ovsx publis
 - [x] `M5` 재시작 후 노드 배치·줌·팬이 눈으로 같은 위치에 복원되는가 (수정 후 통과: 2026-11-04, 드래그 팬 게시 수정)
 - [x] `M6` 드래그·줌·노드 이동 중에 보낸 명령이 `user-action-superseded`로 거부되고 화면이 유지되는가 (통과: 2026-11-04)
 - [x] `M7` 멀티루트 폴더 전환과 같은 폴더 두 창에서 상태가 분리되는가 (2026-11-04 통과, 부수 문제는 6.4)
-- [ ] `M8` Codex가 `get_view_state`의 `nodeId`·`filePath`·`windowId`를 그대로 `control_view`에 넘기는가 (2026-11-04 부분 통과: 멀티루트 `filePath` 거부·응답 크기 문제 → 6.4 수정)
+- [ ] `M8` 에이전트가 `get_view_state`의 `nodeId`·`filePath`·`windowId`를 그대로 `control_view`에 넘기는가 (2026-11-04 부분 통과: 멀티루트 `filePath` 거부·응답 크기 문제 → 6.4 수정)
 - [x] `M9` `open_file`이 미리보기 탭으로 열리는 동작이 불편하지 않은가 (2026-11-04 통과: 사용자 "불편하지 않고 좋다")
 - [ ] `M10` 파일·리스트·아키텍처 뷰의 선택·검색·조작이 `views`·`surface`와 일치하는가 (2026-11-04 부분 통과: 리스트 뷰 전부 통과, 파일 그래프·아키텍처 문제 → 6.4 수정)
 
@@ -155,7 +155,7 @@ npm run lint
   - [ ] M2 Dart 실제 이름 변경 (Dart 확장 유무)
   - [ ] M3 저장하지 않은 편집 거부
   - [ ] M5 충돌 hunk 표시
-  - [ ] M7 Codex 왕복
+  - [ ] M7 에이전트 MCP 왕복
   - [ ] M8·M9 사용자 Git 격리·중단 복구
 - 6단계: `docs/verification/step6-manual-checklist.md`
   - [ ] M1·M2 이동 UI·새 파일·공유 helper
@@ -163,7 +163,7 @@ npm run lint
   - [ ] M4 Dart 실제 이동·private helper
   - [ ] M5·M6 추출·인라인 UI와 실패 사유
   - [ ] M7 생성·삭제 Undo/Redo와 이후 편집 보존
-  - [ ] M8 Codex 왕복(`kind`: move/extract/inline)
+  - [ ] M8 에이전트 MCP 왕복(`kind`: move/extract/inline)
   - [ ] M9 ggultarae 실제 사례
 - 7단계: `docs/verification/step7-manual-checklist.md` (자동 검증은 완료)
   - [ ] M1 프로필 위반 방향·`strict`
@@ -171,7 +171,7 @@ npm run lint
   - [ ] M3 기준선 v2·악화
   - [ ] M4 다섯 진단과 근거·한계
   - [ ] M5 변경 차단·예외·사후 검증
-  - [ ] M6 `skein_diagnose_structure` Codex 왕복
+  - [ ] M6 `skein_diagnose_structure` 에이전트 MCP 왕복
   - [ ] M7 대표 저장소 성능
 
 ## 8. 8단계 완료 후 남은 확인
@@ -188,12 +188,14 @@ npm run lint
 
 ### 실제 창 검증 진행 방식
 
+MCP 왕복 확인은 특정 에이전트에 묶지 않는다. 이 환경의 에이전트(Claude Code)가 수행한 것으로 갈음하고, 에이전트별 확인 항목은 따로 남기지 않는다.
+
 기존 단계별 체크리스트를 기준으로 한 번에 M 항목 1~2개만 안내하고, 사용자가 관찰한 결과를 기록한 뒤 다음 묶음으로 진행한다. 자동 통과를 수동 통과로 바꾸지 않는다.
 
 1. 4단계 M1·M2: 개발 호스트 준비, 클릭/MCP 선택, 포커스 이동
 2. 4단계 M3·M4: 필터와 펼침/접기 (`set_expanded` 포함)
 3. 4단계 M5·M6: 재시작 배치 복원, 실제 클릭 우선
-4. 4단계 M7·M8: 멀티루트·두 창, Codex 실제 왕복
+4. 4단계 M7·M8: 멀티루트·두 창, 에이전트 MCP 왕복
 5. 4단계 M9·M10: 미리보기 탭 사용성, 모든 뷰 선택·검색·아키텍처 조작
 6. 5단계 M1·M3 → M4·M5 → M6·M7 → M8·M9 → M2·M10
 7. 6단계 M1·M2 → M3·M7 → M5·M6 → M4·M8 → M9

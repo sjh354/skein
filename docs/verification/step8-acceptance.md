@@ -55,7 +55,7 @@
 | 미리보기 | `test:change`(계획 지문·재계산·diff) | 자동 통과 | 편집기 미리보기와 확인 모달 |
 | 이력 | `test:change`(undo/redo·3-way 병합·충돌·중단 복구) | 자동 통과 | 충돌 hunk 표시와 해결 흐름 |
 | 격리 | `test:change`가 사용자 Git HEAD·인덱스·브랜치·`.skein` 비추적 확인 | 자동 통과 | 없음 |
-| MCP | `test:viewstate` MCP 왕복, MCP 단위 테스트 | 자동 통과 | Codex 실제 대화 왕복 |
+| MCP | `test:viewstate` MCP 왕복, MCP 단위 테스트 | 자동 통과 | 에이전트 MCP 왕복 |
 | 로컬성 | LLM 클라이언트 제거, 자동 LLM 호출 0, 재분석 설정 보존 테스트 | 자동 통과 | 없음(구조적 확인) |
 | 확장성 | 어댑터 등록·기능 선언 단위 테스트 | 자동 통과 | 새 어댑터 추가 시 UI 분기 없음 확인 |
 
