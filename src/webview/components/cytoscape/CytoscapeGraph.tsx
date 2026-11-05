@@ -718,9 +718,9 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
         suppressLayoutReportRef.current = true;
         try {
           cy.batch(() => {
+            // Only node placement is shared: each surface keeps its own zoom and pan
+            // (its canvas can have another size), so a drag here never moves the other view.
             for (const [id, point] of Object.entries(msg.layout.positions)) cy.getElementById(id).position(point);
-            if (msg.layout.zoom !== undefined) cy.zoom(msg.layout.zoom);
-            if (msg.layout.pan !== undefined) cy.pan(msg.layout.pan);
           });
           rememberLayout(cy);
         } finally { suppressLayoutReportRef.current = false; }
@@ -1296,6 +1296,19 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
           }}
           data-testid="loading-overlay"
         >
+          <style>{"@keyframes skein-spin{to{transform:rotate(360deg)}}"}</style>
+          <span
+            aria-hidden="true"
+            style={{
+              width: 16,
+              height: 16,
+              marginRight: 10,
+              border: "2px solid currentColor",
+              borderTopColor: "transparent",
+              borderRadius: "50%",
+              animation: "skein-spin 0.8s linear infinite",
+            }}
+          />
           <span>{loadingMessage}</span>
         </div>
       )}
