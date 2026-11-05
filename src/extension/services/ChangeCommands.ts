@@ -78,11 +78,11 @@ export function registerChangeCommands(options: ChangeCommandsOptions): vscode.D
     detail: string,
     success: string,
   ): Promise<void> => {
-    await host.showPreview(task.plan.id, service.preview(task));
     const confirmed = await host.confirm(title, detail);
     if (!confirmed) return;
     const applied = await service.apply(task.plan.id);
     reportResult(options, applied, success);
+    if (applied.ok) await host.openFiles(summarizeTask(task).files.map((file) => file.path));
   };
 
   const planDetail = (task: ChangeTask): string => {
@@ -247,6 +247,11 @@ export function registerChangeCommands(options: ChangeCommandsOptions): vscode.D
   const redo = vscode.commands.registerCommand("skein.redoLastChange", async () => {
     const result = await service.redo();
     reportResult(options, result, "Re-applied the change");
+    if (result.ok && result.task) {
+      const paths = summarizeTask(result.task).files.map((file) => file.path);
+      const existing = await Promise.all(paths.map(async (file) => ((await host.exists(file)) ? file : null)));
+      await host.openFiles(existing.filter((file): file is string => file !== null));
+    }
   });
 
   const history = vscode.commands.registerCommand("skein.showChangeHistory", async () => {

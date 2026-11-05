@@ -15,12 +15,18 @@ const state = vi.hoisted(() => ({
   saveResult: true,
   openFailure: null as string | null,
   confirmChoice: "Apply" as string | undefined,
-  diffCalls: [] as string[],
+  openedEditors: [] as Array<{ path: string; preview: unknown; viewColumn: unknown }>,
+  tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input: unknown }> }>,
   reports: [] as Array<{ kind: string; message: string }>,
-  provider: null as null | { provideTextDocumentContent(uri: unknown): string },
 }));
 
 vi.mock("vscode", () => {
+  class TabInputText {
+    constructor(readonly uri: { fsPath: string; scheme: string }) {}
+  }
+  class TabInputWebview {
+    constructor(readonly viewType: string) {}
+  }
   class Position {
     constructor(
       public line: number,
@@ -102,6 +108,9 @@ vi.mock("vscode", () => {
         toString: () => value,
       }),
     },
+    ViewColumn: { Beside: -2 },
+    TabInputText,
+    TabInputWebview,
     Position,
     Range,
     TextEdit,
@@ -155,10 +164,6 @@ vi.mock("vscode", () => {
         }
         return true;
       },
-      registerTextDocumentContentProvider(_scheme: string, provider: unknown) {
-        state.provider = provider as { provideTextDocumentContent(uri: unknown): string };
-        return { dispose: () => undefined };
-      },
       asRelativePath(filePath: string) {
         return filePath;
       },
@@ -184,14 +189,16 @@ vi.mock("vscode", () => {
           if (state.renameError) throw new Error(state.renameError);
           return state.rename?.(first.fsPath, position.line, position.character) ?? undefined;
         }
-        if (name === "vscode.diff") {
-          state.diffCalls.push(String(args[2]));
-          return undefined;
-        }
         return undefined;
       },
     },
     window: {
+      get tabGroups() {
+        return { all: state.tabGroups, close: async () => true };
+      },
+      async showTextDocument(uri: { fsPath: string }, options: { preview: unknown; viewColumn: unknown }) {
+        state.openedEditors.push({ path: uri.fsPath, preview: options.preview, viewColumn: options.viewColumn });
+      },
       async showWarningMessage(_message: string, _options: unknown, _action: string) {
         return state.confirmChoice;
       },
@@ -213,25 +220,14 @@ vi.mock("vscode", () => {
   };
 });
 
-import { ChangePreviewProvider } from "@/extension/services/ChangePreviewProvider";
 import { VSCodeChangeHost } from "@/extension/services/VSCodeChangeHost";
-import type { ChangePreviewFile } from "@/analyzer/change/changePlan";
 
 const logger = { warn: vi.fn() };
 const APP = "/workspace/src/app.ts";
 const OTHER = "/workspace/src/other.ts";
 
-function previewFile(): ChangePreviewFile {
-  return {
-    path: APP,
-    beforeContent: "alpha\n",
-    afterContent: "beta\n",
-    diff: { added: 1, removed: 1, unified: "-alpha\n+beta", truncated: false },
-  };
-}
-
 function host(): VSCodeChangeHost {
-  return new VSCodeChangeHost(new ChangePreviewProvider(), logger, {
+  return new VSCodeChangeHost(logger, {
     warmupDelayMs: 0,
     retryDelayMs: 0,
     stableRounds: 0,
@@ -261,7 +257,8 @@ describe("VSCodeChangeHost", () => {
     state.saveResult = true;
     state.openFailure = null;
     state.confirmChoice = "Apply";
-    state.diffCalls.length = 0;
+    state.openedEditors.length = 0;
+    state.tabGroups = [];
     state.reports.length = 0;
     state.docs.set(APP, "export function alpha() {}\n");
     state.docs.set(OTHER, 'import { alpha } from "./app";\n');
@@ -385,26 +382,19 @@ describe("VSCodeChangeHost", () => {
       },
     ]);
     expect(result).toEqual({ ok: true });
-    expect(state.docs.get(APP)).toContain("beta");
-    expect(state.saved).toEqual([APP]);
+    expect(state.docs.get(APP)).toBe("export function beta() {}\n");
+    // Written to disk, so format-on-save never runs on the planned content.
+    expect(state.saved).toEqual([]);
   });
 
-  it("reports rejected edits, unreadable files and failed saves", async () => {
+  it("refuses an edit that does not fit the planned content", async () => {
     const edit = {
       path: APP,
       beforeContent: "x",
-      edits: [{ startLine: 0, startCharacter: 0, endLine: 0, endCharacter: 0, newText: "y" }],
+      edits: [{ startLine: 4, startCharacter: 0, endLine: 4, endCharacter: 0, newText: "y" }],
     };
-    state.applyResult = false;
-    expect(await host().applyEdits([edit])).toEqual({ ok: false, reason: "edit-rejected" });
-
-    state.applyResult = true;
-    state.openFailure = APP;
-    expect(await host().applyEdits([edit])).toEqual({ ok: false, reason: "file-not-readable" });
-
-    state.openFailure = null;
-    state.saveResult = false;
-    expect(await host().applyEdits([edit])).toEqual({ ok: false, reason: "save-failed" });
+    expect(await host().applyEdits([edit])).toEqual({ ok: false, reason: "invalid-edit" });
+    expect(state.docs.get(APP)).toBe("export function alpha() {}\n");
   });
 
   it("summarizes diagnostics", async () => {
@@ -424,15 +414,28 @@ describe("VSCodeChangeHost", () => {
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
-  it("opens up to five preview diffs and serves the planned content", async () => {
-    const files = Array.from({ length: 6 }, (_, index) => ({
-      ...previewFile(),
-      path: `/workspace/src/file${index}.ts`,
-    }));
-    const service = host();
-    expect(await service.showPreview("plan-1", files)).toBe(true);
-    expect(state.diffCalls).toHaveLength(5);
-    expect(state.provider?.provideTextDocumentContent({ toString: () => "missing" })).toBe("");
+  it("opens up to five applied files in regular tabs", async () => {
+    const paths = Array.from({ length: 6 }, (_, index) => `/workspace/src/file${index}.ts`);
+    await host().openFiles(paths);
+    expect(state.openedEditors).toHaveLength(5);
+    expect(state.openedEditors.every((editor) => editor.preview === false)).toBe(true);
+    expect(state.openedEditors.every((editor) => editor.viewColumn === -2)).toBe(true);
+  });
+
+  it("opens files outside the group that holds the Skein graph", async () => {
+    const vscode = await import("vscode");
+    const graph = { viewColumn: 1, tabs: [{ input: new vscode.TabInputWebview("mainThreadWebview-skein.editorGraph") }] };
+    const code = { viewColumn: 2, tabs: [{ input: new vscode.TabInputText({ fsPath: APP, scheme: "file" } as never) }] };
+    state.tabGroups = [graph, code];
+    await host().openFiles([APP, OTHER]);
+    expect(state.openedEditors.map((editor) => editor.viewColumn)).toEqual([2, 2]);
+  });
+
+  it("opens beside when every group holds a Skein graph", async () => {
+    const vscode = await import("vscode");
+    state.tabGroups = [{ viewColumn: 1, tabs: [{ input: new vscode.TabInputWebview("mainThreadWebview-skein.editorGraph") }] }];
+    await host().openFiles([APP]);
+    expect(state.openedEditors[0].viewColumn).toBe(-2);
   });
 
   it("asks for confirmation and reports messages", async () => {
@@ -443,16 +446,5 @@ describe("VSCodeChangeHost", () => {
     service.report("error", "bad");
     service.report("warning", "careful");
     service.report("info", "done");
-  });
-});
-
-describe("ChangePreviewProvider", () => {
-  it("stores and clears planned content", () => {
-    const provider = new ChangePreviewProvider();
-    const uri = provider.set("plan-1", APP, "beta\n");
-    expect(provider.provideTextDocumentContent(uri)).toBe("beta\n");
-    provider.clear();
-    expect(provider.provideTextDocumentContent(uri)).toBe("");
-    provider.dispose();
   });
 });

@@ -146,4 +146,21 @@ describe("structure diagnostics", () => {
     expect(page.page.total).toBeGreaterThanOrEqual(1);
     expect(() => exploreDiagnostics(result, { revision: "0".repeat(64) })).toThrow(/revision/);
   });
+
+  it("accepts a finding whose violation the baseline lists", async () => {
+    const config = JSON.stringify({ ...CONFIG, exceptions: [] });
+    const violation = { rule: "profile:web", source: "infra/db.ts", target: "ui/a.ts" };
+    write(root, "skein.architecture.json", config);
+    write(root, "skein.architecture.baseline.json", formatBaseline([violation]));
+    try {
+      const result = await runWorkspaceDiagnostics(graph, root);
+      const placement = result.diagnostics.find((diagnostic) => diagnostic.kind === "placement");
+
+      expect(placement).toMatchObject({ status: "confirmed", baseline: "accepted" });
+      expect(result.totals.placement.new).toBe(0);
+    } finally {
+      write(root, "skein.architecture.json", JSON.stringify(CONFIG, null, 2));
+      write(root, "skein.architecture.baseline.json", formatBaseline([], [{ id: "responsibility:large.ts", value: 0.5 }]));
+    }
+  });
 });

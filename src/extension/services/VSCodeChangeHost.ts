@@ -15,7 +15,6 @@ import type {
   ChangeFileEdit,
   ChangeTextEdit,
 } from "@/shared/change";
-import type { ChangePreviewFile } from "@/analyzer/change/changePlan";
 import { normalizePath } from "@/shared/path";
 import type {
   ChangeEditorHost,
@@ -26,9 +25,8 @@ import type {
   RenameFailure,
   RenameResolution,
 } from "./changeHost";
-import { ChangePreviewProvider } from "./ChangePreviewProvider";
 
-const MAX_PREVIEW_FILES = 5;
+const MAX_OPEN_FILES = 5;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -158,7 +156,6 @@ export class VSCodeChangeHost implements ChangeEditorHost {
   private readonly requiredStableRounds: number;
 
   constructor(
-    private readonly preview: ChangePreviewProvider,
     private readonly logger: { warn(message: string, ...args: unknown[]): void },
     options: VSCodeChangeHostOptions = {},
   ) {
@@ -449,7 +446,6 @@ export class VSCodeChangeHost implements ChangeEditorHost {
   }
 
   async applyEdits(files: ChangeFileEdit[]): Promise<{ ok: true } | { ok: false; reason: string }> {
-    const editable: ChangeFileEdit[] = [];
     /* eslint-disable no-await-in-loop -- file operations run in plan order */
     for (const file of files) {
       const uri = vscode.Uri.file(file.path);
@@ -477,53 +473,13 @@ export class VSCodeChangeHost implements ChangeEditorHost {
           created = true;
         }
       }
-      if (created) {
-        const after = applyTextEdits(file.beforeContent, file.edits);
-        if (after === null) return { ok: false, reason: "invalid-edit" };
-        await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(file.path)));
-        await vscode.workspace.fs.writeFile(uri, Buffer.from(after, "utf8"));
-        continue;
-      }
-      editable.push(file);
-    }
-    /* eslint-enable no-await-in-loop */
-
-    const documents: vscode.TextDocument[] = [];
-    /* eslint-disable no-await-in-loop -- open each edited document in order */
-    for (const file of editable) {
-      try {
-        documents.push(await vscode.workspace.openTextDocument(vscode.Uri.file(file.path)));
-      } catch (err) {
-        this.logger.warn(`[Change] could not open ${file.path}:`, err);
-        return { ok: false, reason: "file-not-readable" };
-      }
-    }
-    /* eslint-enable no-await-in-loop */
-    const edit = new vscode.WorkspaceEdit();
-    editable.forEach((file, position) => {
-      const document = documents[position];
-      const edits = file.edits.map(
-        (textEdit) =>
-          new vscode.TextEdit(
-            new vscode.Range(
-              textEdit.startLine,
-              textEdit.startCharacter,
-              textEdit.endLine,
-              textEdit.endCharacter,
-            ),
-            textEdit.newText,
-          ),
-      );
-      edit.set(document.uri, edits);
-    });
-    const applied = await vscode.workspace.applyEdit(edit, { isRefactoring: true });
-    if (!applied) return { ok: false, reason: "edit-rejected" };
-    /* eslint-disable no-await-in-loop -- save the documents we just edited */
-    for (const document of documents) {
-      if (document.isDirty) {
-        const saved = await document.save();
-        if (!saved) return { ok: false, reason: "save-failed" };
-      }
+      // Written to disk, not through the editor: a save would run the user's
+      // format-on-save and change what the plan computed. Dirty files were rejected
+      // before apply, so open tabs simply reload.
+      const after = applyTextEdits(file.beforeContent, file.edits);
+      if (after === null) return { ok: false, reason: "invalid-edit" };
+      if (created) await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(file.path)));
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(after, "utf8"));
     }
     /* eslint-enable no-await-in-loop */
     return { ok: true };
@@ -563,27 +519,46 @@ export class VSCodeChangeHost implements ChangeEditorHost {
     /* eslint-enable no-await-in-loop */
   }
 
-  async showPreview(planId: string, files: ChangePreviewFile[]): Promise<boolean> {
-    this.preview.clear();
-    const shown = files.slice(0, MAX_PREVIEW_FILES);
-    /* eslint-disable no-await-in-loop -- one diff editor per changed file */
-    for (const file of shown) {
-      const after = this.preview.set(planId, file.path, file.afterContent);
-      const before = file.created
-        ? this.preview.setBefore(planId, file.path, file.beforeContent)
-        : vscode.Uri.file(file.path);
-      const label = file.deleted ? "deleted" : file.created ? "created" : "planned";
-      const title = `Skein: ${vscode.workspace.asRelativePath(file.path)} (${label})`;
-      await vscode.commands.executeCommand(
-        "vscode.diff",
-        before,
-        after,
-        title,
-        { preview: true },
-      );
+  /**
+   * Column for an opened file: the group already showing it, else the first
+   * group without a Skein graph tab, so the graph stays visible. Beside when
+   * every group holds a graph.
+   */
+  private editorColumnFor(filePath: string): vscode.ViewColumn {
+    const target = normalizePath(filePath);
+    const kinds = vscode as { TabInputText?: typeof vscode.TabInputText; TabInputWebview?: typeof vscode.TabInputWebview };
+    const withoutGraph = (vscode.window.tabGroups?.all ?? []).filter(
+      (group) =>
+        !group.tabs.some(
+          (tab) => kinds.TabInputWebview && tab.input instanceof kinds.TabInputWebview && tab.input.viewType.includes("skein."),
+        ),
+    );
+    const showing = withoutGraph.find((group) =>
+      group.tabs.some(
+        (tab) =>
+          kinds.TabInputText &&
+          tab.input instanceof kinds.TabInputText &&
+          normalizePath(tab.input.uri.fsPath) === target,
+      ),
+    );
+    return (showing ?? withoutGraph[0])?.viewColumn ?? vscode.ViewColumn.Beside;
+  }
+
+  async openFiles(paths: string[]): Promise<void> {
+    const shown = paths.slice(0, MAX_OPEN_FILES);
+    /* eslint-disable no-await-in-loop -- editors open in order so the last one keeps focus */
+    for (const [index, filePath] of shown.entries()) {
+      try {
+        await vscode.window.showTextDocument(vscode.Uri.file(filePath), {
+          viewColumn: this.editorColumnFor(filePath),
+          preview: false,
+          preserveFocus: index < shown.length - 1,
+        });
+      } catch (error) {
+        this.logger.warn(`Could not open ${filePath}`, error);
+      }
     }
     /* eslint-enable no-await-in-loop */
-    return shown.length > 0;
   }
 
   async confirm(message: string, detail?: string): Promise<boolean> {
