@@ -88,9 +88,11 @@ function splitLines(content: string): string[] {
   return content.replace(/\r\n/g, "\n").split("\n");
 }
 
+/** Joins lines into content that ends in exactly one newline, as editors with trimFinalNewlines save it. */
 function joinLines(lines: string[]): string {
-  const content = lines.join("\n");
-  return content.endsWith("\n") ? content : `${content}\n`;
+  let end = lines.length;
+  while (end > 0 && lines[end - 1].trim() === "") end -= 1;
+  return end === 0 ? "\n" : `${lines.slice(0, end).join("\n")}\n`;
 }
 
 function collapseBlankLines(lines: string[]): string[] {
@@ -813,6 +815,23 @@ export async function buildMoveRefactor(input: MoveRefactorInput): Promise<Refac
   // Destination: merge import lines and append the moved declarations.
   let destinationLines = destinationContent === null ? [] : splitLines(destinationContent);
   if (isTsLanguage(language) && destinationContent !== null) {
+    // The destination may import the moved names from the source; they are declared there now.
+    const movedNames = new Set(bundle.map((symbol) => symbol.name));
+    for (const statement of parseImports(destinationContent, language).reverse()) {
+      if (statement.isExport || !importResolvesTo(destinationPath, statement.specifier, sourcePath, language)) continue;
+      const kept = statement.names.filter((item) => !movedNames.has(item.local));
+      if (kept.length === statement.names.length) continue;
+      const count = statement.endLine - statement.startLine + 1;
+      if (kept.length === 0 && !statement.defaultName && !statement.namespaceName) {
+        destinationLines.splice(statement.startLine, count);
+      } else {
+        destinationLines.splice(
+          statement.startLine,
+          count,
+          renderTsImport(statement.specifier, kept, statement.defaultName, statement.namespaceName),
+        );
+      }
+    }
     destinationLines = mergeTsImports(destinationLines, destinationImportLines, language);
   } else {
     const missing = destinationImportLines.filter(
@@ -982,6 +1001,51 @@ function parseParameterNames(text: string, language: RefactorLanguage): string[]
   return names;
 }
 
+/** Type annotations of the first parameter list in `text` (TypeScript only), by parameter name. */
+function parseParameterTypes(text: string): Map<string, string> {
+  const types = new Map<string, string>();
+  const open = text.indexOf("(");
+  if (open === -1) return types;
+  let depth = 0;
+  let close = -1;
+  for (let index = open; index < text.length; index += 1) {
+    if (text[index] === "(") depth += 1;
+    else if (text[index] === ")" && --depth === 0) {
+      close = index;
+      break;
+    }
+  }
+  if (close === -1) return types;
+  const parts: string[] = [];
+  let current = "";
+  let nested = 0;
+  const raw = text.slice(open + 1, close);
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (char === "=" && raw[index + 1] === ">") {
+      current += "=>";
+      index += 1;
+      continue;
+    }
+    if ("{[(<".includes(char)) nested += 1;
+    if ("}])>".includes(char)) nested -= 1;
+    if (char === "," && nested === 0) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  parts.push(current);
+  for (const part of parts) {
+    const match = /^\s*(?:\.\.\.)?([A-Za-z_$][\w$]*)(\??)\s*:\s*([\s\S]+?)\s*$/.exec(part);
+    if (!match) continue;
+    const type = match[3].replace(/\s*=(?!>)[\s\S]*$/, "").trim();
+    types.set(match[1], match[2] ? `${type} | undefined` : type);
+  }
+  return types;
+}
+
 function parameterName(raw: string, language: RefactorLanguage): string | null {
   let value = raw.trim();
   if (value.length === 0) return null;
@@ -1074,6 +1138,14 @@ export function buildExtractRefactor(input: ExtractRefactorInput): RefactorResul
     collectDeclaredNames(beforeSelection, language).forEach((name) => params.add(name));
   }
   const declaredInside = collectDeclaredNames(selectedText, language);
+  const afterSelection = [
+    lines[selection.endLine].slice(selection.endCharacter),
+    ...lines.slice(selection.endLine + 1, enclosing ? enclosing.endLine + 1 : lines.length),
+  ].join("\n");
+  const usedAfter = collectIdentifierUsage(afterSelection, language);
+  if ([...declaredInside].some((name) => usedAfter.has(name))) {
+    return { ok: false, reason: "extract-declaration-used-after" };
+  }
   const topLevel = new Set(
     input.symbols.filter((symbol) => !symbol.parentName).map((symbol) => symbol.name),
   );
@@ -1100,7 +1172,12 @@ export function buildExtractRefactor(input: ExtractRefactorInput): RefactorResul
   }
   parameterNames.sort();
 
-  const dedented = dedent(selectedLines);
+  const startIndent = lines[selection.startLine].slice(0, startOffset);
+  const dedented = dedent(
+    selection.startLine !== selection.endLine && startIndent.trim() === ""
+      ? [startIndent + selectedLines[0], ...selectedLines.slice(1)]
+      : selectedLines,
+  );
   const isExpression =
     selectedLines.length === 1 &&
     !/[;{}]/.test(dedented.trim()) &&
@@ -1112,8 +1189,13 @@ export function buildExtractRefactor(input: ExtractRefactorInput): RefactorResul
     return { ok: false, reason: "extract-await-in-sync" };
   }
   const call = `${input.name}(${parameterNames.join(", ")})`;
+  // Only parameters of the enclosing function carry a known type; locals stay untyped.
+  const types = isTsLanguage(language) ? parseParameterTypes(enclosingText) : new Map<string, string>();
+  const declaredParameters = parameterNames
+    .map((name) => (types.has(name) ? `${name}: ${types.get(name)}` : name))
+    .join(", ");
   const declaration = isTsLanguage(language)
-    ? `${usesAwait ? "async " : ""}function ${input.name}(${parameterNames.join(", ")}) {\n${indent(body, "  ")}\n}`
+    ? `${usesAwait ? "async " : ""}function ${input.name}(${declaredParameters}) {\n${indent(body, "  ")}\n}`
     : `dynamic ${input.name}(${parameterNames.join(", ")})${usesAwait ? " async" : ""} {\n${indent(body, "  ")}\n}`;
 
   // Replace the selection with the call, then insert the declaration after the
@@ -1430,7 +1512,10 @@ export function buildInlineRefactor(input: InlineRefactorInput): RefactorResult 
     after = after.slice(0, call.start) + call.replacement + after.slice(call.end);
   }
   const afterLines = splitLines(after);
-  afterLines.splice(input.symbol.startLine, input.symbol.endLine - input.symbol.startLine + 1);
+  // The declaration stays while calls that were not selected still need it.
+  if (selected.length === references.length) {
+    afterLines.splice(input.symbol.startLine, input.symbol.endLine - input.symbol.startLine + 1);
+  }
   const finalContent = joinLines(collapseBlankLines(afterLines));
 
   return {

@@ -45,7 +45,8 @@ npm run test:change   # phase 1 → phase 2
 ### M1. 편집기에서 이름 변경
 
 - [ ] 심벌 선택 후 `Skein: Rename Selected Symbol` 실행 → 이름 입력 창
-- [ ] 미리보기 diff가 열리고, 확인 모달에서 Apply를 눌러야만 파일이 바뀌는가
+- [ ] diff 탭 없이 확인 모달(파일별 +n -n)이 뜨고, Apply를 눌러야만 파일이 바뀌는가
+- [ ] Apply 후 바뀐 파일이 일반 에디터 탭(미리보기 탭 아님)으로 열리는가
 - [ ] 성공 후 "Undo is available" 안내가 나오고 `Skein: Undo Last Tool Change`로 복원되는가
 
 ### M2. Dart 실제 이름 변경
@@ -75,7 +76,7 @@ npm run test:change   # phase 1 → phase 2
 - [ ] `Skein: Set Workspace Folder`로 다른 루트를 선택한 뒤 변경 이력이 그 루트의 `.skein/history`를 쓰는가
 - [ ] 한 루트의 이력이 다른 루트에 섞이지 않는가
 
-### M7. Codex 실제 호출
+### M7. 에이전트 실제 호출
 
 - [ ] `skein_get_view_state`의 `selection`에서 nodeId를 복사해 `skein_plan_change`에 그대로 넣는다
 - [ ] 응답의 `plan.planId`로 `skein_apply_change`를 호출한다
@@ -119,6 +120,22 @@ npm run test:change   # phase 1 → phase 2
 - [ ] `npm run test:change` 통과
 - [ ] M1·M3·M4·M5에서 화면 동작 확인
 - [ ] M2에서 Dart 실제 이름 변경 확인 또는 미지원 사유 기록
-- [ ] M7에서 Codex 왕복 확인
+- [ ] M7에서 에이전트 왕복 확인
 - [ ] M8·M9에서 격리·복구 확인
 - [ ] blocker 0건
+
+## 5. 실제 창 기록 (2026-11-05)
+
+샌드박스 작업공간에서 에이전트(MCP)와 사용자가 확인했다. 결함과 수정은 `docs/HANDOFF.md` 6.5에 있다.
+
+| 번호 | 결과 | 관찰 |
+|---|---|---|
+| M1 | 통과 | 모달에 파일별 변경 줄 수, Apply 후 일반 탭으로 열림, Undo 복원 (diff 탭은 제거됨) |
+| M2 | 미확인 | Dart 확장 환경 필요 |
+| M3 | 통과 | 저장하지 않은 편집 거부, 저장 후 적용 |
+| M4 | 통과 | 이력 화면 항목·상태 |
+| M5 | 통과 | 충돌 hunk 표시, 파일 보존 |
+| M6 | 미확인 | 멀티루트 영역 전환의 이력 분리 |
+| M7 | 일부 | 이동의 계획·적용·되돌리기·이력 확인, 이름 변경 도구 호출은 아직 |
+| M8·M9 | 미확인 | 사용자 Git 격리 비교, 강제 종료 복구 |
+| M10 | 미확인 | 검증 실패 처리 |

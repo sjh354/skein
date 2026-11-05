@@ -28,6 +28,15 @@ export class SharedWebviewHub {
     }
   }
 
+  /** The call graph renders only once it mounts, so a surface that just mounted gets its messages again. */
+  async restoreCallGraph(peer: { postMessage(message: unknown): Thenable<boolean> }): Promise<void> {
+    for (const key of ["showCallGraph", "callGraphSelectNode", "callGraphSetFilter"]) {
+      const message = this.replay.get(key);
+      // eslint-disable-next-line no-await-in-loop -- the graph must arrive before its selection and filters
+      if (message !== undefined) await peer.postMessage(message);
+    }
+  }
+
   async mirror(source: { postMessage(message: unknown): Thenable<boolean> }, message: unknown): Promise<void> {
     if (typeof message === "object" && message !== null) {
       const m = message as { command?: string; type?: string; mode?: string; layout?: { rootSymbolId?: string } };

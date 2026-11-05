@@ -718,9 +718,9 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
         suppressLayoutReportRef.current = true;
         try {
           cy.batch(() => {
+            // Only node placement is shared: each surface keeps its own zoom and pan
+            // (its canvas can have another size), so a drag here never moves the other view.
             for (const [id, point] of Object.entries(msg.layout.positions)) cy.getElementById(id).position(point);
-            if (msg.layout.zoom !== undefined) cy.zoom(msg.layout.zoom);
-            if (msg.layout.pan !== undefined) cy.pan(msg.layout.pan);
           });
           rememberLayout(cy);
         } finally { suppressLayoutReportRef.current = false; }
@@ -780,6 +780,16 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
 
     return () => window.removeEventListener("message", handleMessage);
   }, []);
+
+  /** A render moves the viewport on the app's behalf: that is not a user interaction and must not supersede agent commands. */
+  function moveViewportProgrammatically(move: () => void): void {
+    viewportProgrammaticRef.current = true;
+    try {
+      move();
+    } finally {
+      viewportProgrammaticRef.current = false;
+    }
+  }
 
   /** Remember where the user left every node and the current viewport. */
   function rememberLayout(cy: cytoscape.Core): void {
@@ -881,7 +891,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
         safetyTimerRef.current = null;
       }
 
-      cy.fit(undefined, 60);
+      moveViewportProgrammatically(() => cy.fit(undefined, 60));
       cy.style().update();
       triggerCanvasRepaint(cy);
       setIsLoading(false);
@@ -898,7 +908,8 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
         if (!cyRef.current) return;
         suppressLayoutReportRef.current = true;
         cyRef.current.resize();
-        cyRef.current.fit(undefined, 60);
+        const retryCy = cyRef.current;
+        moveViewportProgrammatically(() => retryCy.fit(undefined, 60));
         triggerCanvasRepaint(cyRef.current);
         suppressLayoutReportRef.current = false;
       }, 500);
@@ -1040,11 +1051,10 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       }
     });
     cy.layout({ name: "preset", fit: false } as cytoscape.LayoutOptions).run();
-    if (viewportRef.current) {
-      cy.viewport(viewportRef.current);
-    } else {
-      cy.fit(undefined, 60);
-    }
+    moveViewportProgrammatically(() => {
+      if (viewportRef.current) cy.viewport(viewportRef.current);
+      else cy.fit(undefined, 60);
+    });
     setIsLoading(false);
     cy.style().update();
     triggerCanvasRepaint(cy);
@@ -1296,6 +1306,19 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
           }}
           data-testid="loading-overlay"
         >
+          <style>{"@keyframes skein-spin{to{transform:rotate(360deg)}}"}</style>
+          <span
+            aria-hidden="true"
+            style={{
+              width: 16,
+              height: 16,
+              marginRight: 10,
+              border: "2px solid currentColor",
+              borderTopColor: "transparent",
+              borderRadius: "50%",
+              animation: "skein-spin 0.8s linear infinite",
+            }}
+          />
           <span>{loadingMessage}</span>
         </div>
       )}

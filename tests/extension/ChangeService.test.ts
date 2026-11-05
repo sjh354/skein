@@ -37,7 +37,7 @@ class FakeHost implements ChangeEditorHost {
   resolveFailure: RenameFailure | null = null;
   symbols = new Map<string, ChangeSymbolInfo[]>();
   references = new Map<string, ChangeReferenceLocation[] | { error: string }>();
-  previewCount = 0;
+  openCount = 0;
   appliedCount = 0;
   waitCount = 0;
 
@@ -93,9 +93,8 @@ class FakeHost implements ChangeEditorHost {
   async waitForDiagnostics(): Promise<void> {
     this.waitCount += 1;
   }
-  async showPreview(): Promise<boolean> {
-    this.previewCount += 1;
-    return true;
+  async openFiles(): Promise<void> {
+    this.openCount += 1;
   }
   async confirm(): Promise<boolean> {
     return true;
@@ -188,7 +187,7 @@ describe("ChangeService", () => {
     expect(result.history?.status).toBe("succeeded");
     expect(await fs.readFile(appPath, "utf8")).toContain("gamma");
     expect(await fs.readFile(otherPath, "utf8")).toContain("gamma");
-    expect(host.previewCount).toBe(0);
+    expect(host.openCount).toBe(0);
     const history = await readChangeHistory(root);
     expect(history.entries).toHaveLength(1);
     expect(history.entries[0].beforeCommit).not.toBe(history.entries[0].afterCommit);
@@ -535,7 +534,7 @@ describe("ChangeService", () => {
     expect(applied.ok).toBe(true);
     const after = await fs.readFile(appPath, "utf8");
     expect(after).toContain("const sum = extracted(a, b);");
-    expect(after).toContain("function extracted(a, b)");
+    expect(after).toContain("function extracted(a: number, b)");
   });
 
   it("inlines a function at every call site", async () => {

@@ -156,6 +156,7 @@ const REASON_MESSAGES: Record<string, string> = {
   "extract-params-unsupported": "The enclosing function has parameters this tool cannot read.",
   "extract-uses-this": "Extracting code that uses this is not supported yet.",
   "extract-await-in-sync": "The selection awaits inside a synchronous function.",
+  "extract-declaration-used-after": "The selection declares a name that is used after it, so it cannot be extracted as is.",
   "inline-exported-unsupported": "Exported functions cannot be inlined because other modules import them.",
   "inline-unsupported-symbol": "Only top-level functions can be inlined.",
   "inline-async-unsupported": "Async or generator functions cannot be inlined yet.",

@@ -49,7 +49,7 @@
 
 - [ ] 콜 그래프에서 함수를 선택하고 `Skein: Move Selected Symbol to File` 실행
 - [ ] 대상 경로 입력 창에서 상대 경로를 넣으면 워크스페이스 기준으로 해석되는가
-- [ ] 미리보기에서 새 파일 탭이 "created"로 열리고 확인 후에만 파일이 생기는가
+- [ ] 확인 모달(파일별 +n -n)에서 Apply를 누르기 전에는 새 파일이 생기지 않고, Apply 후 새 파일이 일반 탭으로 열리는가
 - [ ] 이동 후 원본·대상·참조 파일의 import가 실제 TypeScript 진단 오류 없이 유지되는가
 
 ### M2. 이동 — 기존 파일·공유 helper
@@ -95,7 +95,7 @@
 - [ ] 삭제된 파일을 편집기 탭이 열린 상태에서 Undo/Redo해도 `File Modified Since` 오류가 없는가
 - [ ] 이동·추출·인라인이 `Show Change History`에서 종류별 아이콘·상태로 보이는가
 
-### M8. Codex 실제 호출
+### M8. 에이전트 실제 호출
 
 - [ ] `skein_plan_change`에 `kind: "move"`, `path`, `name`, `line`, `newPath`를 넣어 계획을 받는가
 - [ ] `kind: "extract"`에 `startLine`/`startCharacter`/`endLine`/`endCharacter`를 넣어 계획을 받는가
@@ -130,6 +130,22 @@
 - [ ] M4에서 Dart 실제 이동 성공 또는 미지원 사유 기록
 - [ ] M3·M6에서 차단 사유가 파일을 바꾸지 않는지 확인
 - [ ] M7에서 생성·삭제 Undo/Redo와 충돌 보존 확인
-- [ ] M8에서 Codex 왕복 확인
+- [ ] M8에서 에이전트 왕복 확인
 - [ ] M9에서 ggultarae 사례 결과 기록
 - [ ] blocker 0건
+
+## 5. 실제 창 기록 (2026-11-05)
+
+샌드박스 작업공간에서 에이전트(MCP)와 사용자가 확인했다. 결함과 수정은 `docs/HANDOFF.md` 6.5에 있다.
+
+| 번호 | 결과 | 관찰 |
+|---|---|---|
+| M1·M2 | 통과 | 새 파일 이동, 공유 helper 유지·import, 기존 파일로 이동 시 import 병합과 중복 없음 |
+| M3 | 일부 | MCP로 `name-collision`·`entry-point`·`circular-import`가 서로 다른 사유로 거부되고 파일 무변경. 경로 별칭·재수출, UI 문구는 아직 |
+| M4 | 미확인 | Dart 환경 필요 |
+| M5·M6 | 통과 | 실제 UI 확인. 선택 뒤에서 쓰는 선언 거부, 매개변수 타입 유지, 부분 호출 인라인의 선언 유지는 수정 후 반영 |
+| M7 | 통과 | 생성·삭제 Undo/Redo, 새 파일 편집 후 Undo 충돌과 수정 보존, 이력 화면 아이콘 |
+| M8 | 일부 | 계획과 `callLine` 지정 확인, 같은 `planId` 두 번 적용은 아직 |
+| M9 | 미확인 | ggultarae 실제 사례 |
+
+이동으로 원본이 비면 빈 파일이 남는다. 삭제 규칙은 DESIGN 13.2의 후속 후보다.

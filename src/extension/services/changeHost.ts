@@ -11,7 +11,6 @@ import type {
   ChangeFileEdit,
   ChangeTextEdit,
 } from "@/shared/change";
-import type { ChangePreviewFile } from "@/analyzer/change/changePlan";
 import type { RefactorReference, RefactorSymbol } from "@/analyzer/change/refactor";
 
 export interface RawRenameEdit {
@@ -65,8 +64,8 @@ export interface ChangeEditorHost {
   diagnostics(path: string): ChangeDiagnosticSample;
   /** Waits until diagnostics for the paths stop changing. */
   waitForDiagnostics(paths: string[], timeoutMs?: number): Promise<void>;
-  /** Opens a diff per changed file; false when the user has no editor UI. */
-  showPreview(planId: string, files: ChangePreviewFile[]): Promise<boolean>;
+  /** Opens the applied files in regular editor tabs. */
+  openFiles(paths: string[]): Promise<void>;
   confirm(message: string, detail?: string): Promise<boolean>;
   report(kind: "info" | "warning" | "error", message: string): void;
 }

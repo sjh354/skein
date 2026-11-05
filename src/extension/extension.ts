@@ -12,7 +12,6 @@ import { CallGraphViewService } from './services/CallGraphViewService';
 import { CommandCoordinator } from './services/CommandCoordinator';
 import { CommandRegistrationService } from './services/CommandRegistrationService';
 import { CommandBridgeService } from './services/CommandBridgeService';
-import { ChangePreviewProvider } from './services/ChangePreviewProvider';
 import { ChangeService } from './services/ChangeService';
 import { VSCodeChangeHost } from './services/VSCodeChangeHost';
 import { createArchitectureChangeGuard } from './services/ArchitectureChangeGuard';
@@ -129,7 +128,6 @@ export async function activate(context: vscode.ExtensionContext) {
     let viewStateStart: Promise<void> | null = null;
     let changeService: ChangeService | null = null;
     let commandBridge: CommandBridgeService | null = null;
-    let changePreview: ChangePreviewProvider | null = null;
 
     const setupWorkspaceServices = (): void => {
         const workspaceFolder = resolvePreferredWorkspaceFolder();
@@ -174,9 +172,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
 
         if (!changeService) {
-            changePreview = new ChangePreviewProvider();
-            disposables.push(changePreview);
-            const host = new VSCodeChangeHost(changePreview, log);
+            const host = new VSCodeChangeHost(log);
             const service = new ChangeService({
                 root: workspaceFolder.uri.fsPath,
                 logger: log,
@@ -187,6 +183,9 @@ export async function activate(context: vscode.ExtensionContext) {
                         const spider = provider.getSpiderForLmTools();
                         if (!spider) throw new Error('The analyzer is not ready.');
                         return spider.analyzeFromIndex(filePath);
+                    },
+                    invalidate: (files) => {
+                        provider.getSpiderForLmTools()?.invalidateFiles([...files]);
                     },
                     logger: log,
                 }),

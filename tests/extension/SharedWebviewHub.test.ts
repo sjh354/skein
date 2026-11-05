@@ -31,6 +31,14 @@ describe("shared panel/editor session", () => {
     expect(reopened.postMessage).toHaveBeenCalledWith({ type: "showCallGraph", rootSymbolId: "r", nodes: [], layout });
     expect(reopened.postMessage.mock.calls.at(-1)?.[0]).toEqual({ command: "switchViewMode", mode: "callgraph" });
   });
+  it("sends the call graph again to a surface that mounted after the replay", async () => {
+    const hub = new SharedWebviewHub(); const panel = peer(); hub.add(panel);
+    const graph = { type: "showCallGraph", rootSymbolId: "r", nodes: [] };
+    const select = { type: "callGraphSelectNode", nodeId: "a" };
+    await hub.post(graph); await hub.mirror(panel, select);
+    const editor = peer(); await hub.restoreCallGraph(editor);
+    expect(editor.postMessage.mock.calls.map(([message]) => message)).toEqual([graph, select]);
+  });
   it("does not let one closed surface prevent delivery to the remaining one", async () => {
     const hub = new SharedWebviewHub(); const live = peer(); hub.add(live);
     hub.add({ postMessage: vi.fn(async () => { throw new Error("closed"); }) });

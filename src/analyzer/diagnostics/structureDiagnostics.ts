@@ -72,6 +72,8 @@ interface Draft {
   value: number;
   /** A rule exception already accepts this finding. */
   excepted?: string;
+  /** The violation behind this finding is accepted by the baseline's violation list. */
+  baselined?: boolean;
 }
 
 /** Thresholds of a config, with the defaults for everything it leaves out. */
@@ -264,6 +266,7 @@ function placementDiagnostics(violations: readonly ArchitectureViolation[]): Dra
       metrics: { violations: 1 },
       value: 1,
       ...(violation.excepted === undefined ? {} : { excepted: violation.excepted.reason }),
+      ...(violation.excepted === undefined && !violation.new ? { baselined: true } : {}),
     });
   }
   return drafts;
@@ -361,6 +364,7 @@ function dependencyDiagnostics(
       metrics: { violations: 1 },
       value: 1,
       ...(violation.excepted === undefined ? {} : { excepted: violation.excepted.reason }),
+      ...(violation.excepted === undefined && !violation.new ? { baselined: true } : {}),
     });
   }
   for (const edge of units.unitEdges) {
@@ -420,13 +424,16 @@ function applyBaseline(
     const acceptedValue = accepted.get(draft.id);
     const state: DiagnosticBaselineState = reason !== undefined
       ? "excepted"
-      : acceptedValue === undefined
+      : draft.baselined
+        ? "accepted"
+        : acceptedValue === undefined
         ? "new"
         : draft.value > acceptedValue
           ? "worsened"
           : "accepted";
+    const { baselined: _baselined, ...finding } = draft;
     return {
-      ...draft,
+      ...finding,
       baseline: state,
       ...(reason === undefined ? {} : { evidence: [...draft.evidence, { label: "exception", value: reason }] }),
     };

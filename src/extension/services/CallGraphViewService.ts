@@ -104,6 +104,8 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   private readonly outputChannel: vscode.OutputChannel;
   /** Buffered graph result — replayed if callGraphMounted arrives after initial postMessage */
   private pendingGraph: ReturnType<typeof queryNeighbourhood> | null = null;
+  /** Latest in-progress indexing message — replayed on mount so the loading overlay is not missed. */
+  private pendingIndexing: CallGraphExtensionMessage | null = null;
   /** URI string of the file currently shown in the panel, for live-refresh */
   private currentFilePath: string | null = null;
   /** Set of node IDs in the currently displayed neighbourhood — used to scope saves */
@@ -114,6 +116,9 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   private layout: SkeinLayout | undefined;
   private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private saveListener: vscode.Disposable | null = null;
+  private deleteWatcher: vscode.Disposable | null = null;
+  /** Workspace root whose indexed files were last checked for deletions. */
+  private prunedRoot: string | null = null;
   /** Workspace root for which the DB has been fully indexed (null = not indexed yet). */
   private workspaceIndexedRoot: string | null = null;
   /** Workspace folder name, included in the detail panel's copyable reference. */
@@ -431,6 +436,8 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       this.projectName = path.basename(workspaceRoot);
       const indexer = await this.ensureIndexer(workspaceRoot);
       if (this.disposed) return;
+      await this.pruneMissingFiles(indexer, workspaceRoot);
+      if (this.disposed) return;
       const extractor = this.ensureExtractor(workspaceRoot);
 
       // Step 1: Extract + index the active file immediately (fast; needed for root resolution).
@@ -494,6 +501,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       this.currentFilePath = filePath;
       this.currentNeighbourhoodPaths = new Set(result.nodes.map((n) => n.path));
       this.registerSaveListener(workspaceRoot);
+      this.registerDeleteWatcher(workspaceRoot);
     } catch (err: unknown) {
       if (this.disposed) return;
       const message = errorMessage(err);
@@ -574,6 +582,8 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     this.clearSaveDebounce();
     this.saveListener?.dispose();
     this.saveListener = null;
+    this.deleteWatcher?.dispose();
+    this.deleteWatcher = null;
     this.sidebarWebview = null;
     await this.waitForActiveOperations();
     // Persist the final DB state before closing the connection. Skipped while
@@ -682,6 +692,9 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
 
   private postMessage(message: CallGraphExtensionMessage): void {
     if (this.disposed) return;
+    if (message.type === "callGraphIndexing") {
+      this.pendingIndexing = message.status === "started" || message.status === "progress" ? message : null;
+    }
     try {
       this.sidebarWebview?.webview.postMessage(message).then(undefined, (err: unknown) => {
         this.log(`[CallGraph] postMessage failed: ${errorMessage(err)}`);
@@ -997,6 +1010,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     } else if (msg.command === "callGraphMounted") {
       // Webview message listener is now active — replay any buffered graph data
       // that was posted before the listener was registered (race on first open).
+      if (this.pendingIndexing) this.postMessage(this.pendingIndexing);
       if (this.pendingGraph) {
         const g = this.pendingGraph;
         this.pendingGraph = null;
@@ -1117,6 +1131,88 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   // T024 — onDidSaveTextDocument live-refresh
   // ---------------------------------------------------------------------------
 
+  /**
+   * Files deleted while Skein was not watching (closed window, git checkout)
+   * stay in the persisted index; drop them once per workspace root.
+   */
+  private async pruneMissingFiles(indexer: CallGraphIndexer, workspaceRoot: string): Promise<void> {
+    if (this.prunedRoot === workspaceRoot) return;
+    const rows = indexer.getDb().exec("SELECT path FROM file_index")[0]?.values ?? [];
+    const missing: string[] = [];
+    await Promise.all(
+      rows.map(async ([indexedPath]) => {
+        try {
+          await vscode.workspace.fs.stat(vscode.Uri.file(String(indexedPath)));
+        } catch (err: unknown) {
+          if ((err as { code?: string }).code === "FileNotFound") missing.push(String(indexedPath));
+        }
+      }),
+    );
+    missing.forEach((missingPath) => indexer.invalidateFile(missingPath));
+    if (missing.length > 0) {
+      indexer.resolveExternalEdges();
+      this.log(`[CallGraph] Dropped ${missing.length} indexed file(s) that no longer exist`);
+    }
+    this.prunedRoot = workspaceRoot;
+  }
+
+  /** Keeps the index in step with files created or deleted while the graph is open. */
+  private registerDeleteWatcher(workspaceRoot: string): void {
+    this.deleteWatcher?.dispose();
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(workspaceRoot, "**/*"),
+      false,
+      true,
+      false,
+    );
+    const onError = (err: unknown): void => this.log(`[CallGraph] file event refresh error: ${errorMessage(err)}`);
+    const deleted = watcher.onDidDelete((uri) => {
+      if (this.disposed) return;
+      this.trackOperation(this.removeDeletedPath(normalizePath(uri.fsPath))).catch(onError);
+    });
+    const created = watcher.onDidCreate((uri) => {
+      if (this.disposed) return;
+      this.trackOperation(this.indexCreatedPath(normalizePath(uri.fsPath), workspaceRoot)).catch(onError);
+    });
+    this.deleteWatcher = { dispose: () => { deleted.dispose(); created.dispose(); watcher.dispose(); } };
+  }
+
+  /** A file created by a move holds the symbol the graph is showing: index it and follow the symbol. */
+  private async indexCreatedPath(createdPath: string, workspaceRoot: string): Promise<void> {
+    const indexer = this.indexer;
+    const lang = langFromPath(createdPath);
+    if (!indexer || !lang || createdPath.includes("/node_modules/")) return;
+    const mtime = Date.now();
+    const { nodes, edges } = await this.ensureExtractor(workspaceRoot).extractFile(createdPath, lang, mtime);
+    if (this.disposed) return;
+    indexer.indexFile(nodes, edges, createdPath, lang, mtime);
+    indexer.resolveExternalEdges();
+    this.redrawIfRootMoved(indexer, false);
+  }
+
+  /** Redraws when the root symbol moved to another id, or when the caller knows the shown graph changed. */
+  private redrawIfRootMoved(indexer: CallGraphIndexer, neighbourhoodChanged: boolean): void {
+    if (!this.currentRootSymbolId) return;
+    const rootId = this.resolveIndexedRootId(indexer, this.currentRootSymbolId);
+    if (rootId === this.currentRootSymbolId && !neighbourhoodChanged) return;
+    this.currentRootSymbolId = rootId;
+    const result = queryNeighbourhood(indexer.getDb(), rootId, this.currentDepth);
+    this.currentNeighbourhoodPaths = new Set(result.nodes.map((n) => n.path));
+    this.sendGraphToWebview(result);
+  }
+
+  /** A deleted folder is reported once, not per file inside it. */
+  private async removeDeletedPath(deletedPath: string): Promise<void> {
+    const indexer = this.indexer;
+    if (!indexer) return;
+    const indexed = (indexer.getDb().exec("SELECT path FROM file_index")[0]?.values ?? []).map(([p]) => String(p));
+    const removed = indexed.filter((p) => p === deletedPath || p.startsWith(`${deletedPath}/`));
+    if (removed.length === 0) return;
+    removed.forEach((removedPath) => indexer.invalidateFile(removedPath));
+    indexer.resolveExternalEdges();
+    this.redrawIfRootMoved(indexer, removed.some((p) => this.currentNeighbourhoodPaths.has(p)));
+  }
+
   private registerSaveListener(workspaceRoot: string): void {
     // Only one listener at a time — dispose() already handles cleanup of this.saveListener;
     // do NOT push to context.subscriptions here or it accumulates a dead entry per show() call.
@@ -1149,9 +1245,16 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
       [beforeLine.slice(0, nameColon), beforeLine.slice(nameColon + 1)],
     );
     const found = rows[0]?.values?.[0]?.[0];
-    if (typeof found !== "string") return rootId;
-    this.log(`[CallGraph] Root moved (${rootId} → ${found}); keeping the graph on the same symbol`);
-    return found;
+    if (typeof found === "string") {
+      this.log(`[CallGraph] Root moved (${rootId} → ${found}); keeping the graph on the same symbol`);
+      return found;
+    }
+    // The symbol left its file (a move): follow it when exactly one symbol has that name.
+    const sameName = db.exec("SELECT id FROM nodes WHERE name = ? LIMIT 2", [beforeLine.slice(nameColon + 1)]);
+    const candidates = sameName[0]?.values ?? [];
+    if (candidates.length !== 1 || typeof candidates[0][0] !== "string") return rootId;
+    this.log(`[CallGraph] Root moved to another file (${rootId} → ${candidates[0][0]})`);
+    return candidates[0][0];
   }
 
   private scheduleRefresh(filePath: string, languageId: string, workspaceRoot: string): void {

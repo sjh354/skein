@@ -80,7 +80,7 @@ The Live Call Graph shows cross-file symbol relationships in a Cytoscape.js pane
 
 ### Refactoring and change history
 
-Select a symbol in the call graph and run **Skein: Rename Selected Symbol**, **Skein: Move Selected Symbol to File** or **Skein: Inline Function**. In the editor, select code and run **Skein: Extract Selection as Function**. Skein shows a diff preview and applies the change only after you confirm.
+Select a symbol in the call graph and run **Skein: Rename Selected Symbol**, **Skein: Move Selected Symbol to File** or **Skein: Inline Function**. In the editor, select code and run **Skein: Extract Selection as Function**. Skein lists the changed files in a confirmation dialog, applies the change only after you confirm, then opens the changed files.
 
 - Rename asks the language service (the built-in TypeScript support or the installed Dart extension).
 - Move uses a rule engine: helpers used only by the moved code travel with it, public symbols and helpers used elsewhere stay, imports are rewritten, a destination file is created when needed, and entry points, private Dart helpers, unresolved imports, name collisions and circular imports block the plan with a reason.

@@ -1033,7 +1033,8 @@ export class GraphProvider implements vscode.WebviewViewProvider {
    */
   private async showGraphStartingPoint(uri?: vscode.Uri): Promise<void> {
     const filePath = uri?.scheme === 'file' ? uri.fsPath : undefined;
-    if (!filePath || !SUPPORTED_SOURCE_FILE_REGEX.test(filePath)) {
+    // The mode is shared with the panel: a call graph already on screen stays on screen.
+    if (!filePath || !SUPPORTED_SOURCE_FILE_REGEX.test(filePath) || this._stateManager.viewMode === 'callgraph') {
       await this.updateGraph();
       return;
     }
@@ -1098,6 +1099,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
           return;
         }
         if (message.command === "ready") await this.webviews.restore(webviewView.webview);
+        if (message.command === "callGraphMounted") await this.webviews.restoreCallGraph(webviewView.webview);
         if (message.command === "callGraphSelectionChanged" && message.userInitiated) {
           await this.webviews.mirror(webviewView.webview, { type: "callGraphSelectNode", nodeId: message.nodeId ?? "" });
         }

@@ -11,11 +11,14 @@ import { buildArchitectureGraph, type AnalyzeFile } from "@/analyzer/architectur
 import { architectureBeforeChange } from "@/analyzer/diagnostics/changeArchitecture";
 import { runWorkspaceDiagnostics } from "@/analyzer/diagnostics/structureDiagnostics";
 import type { ChangeArchitectureSnapshot } from "@/shared/change";
+import { normalizePath } from "@/shared/path";
 import type { ChangeArchitectureGuard } from "./ChangeService";
 
 export interface ArchitectureChangeGuardOptions {
   root: string;
   analyzeFile: AnalyzeFile;
+  /** Drops cached analysis of the changed files: the check runs before the file watcher has. */
+  invalidate?: (files: readonly string[]) => void;
   now?: () => number;
   logger: { warn(message: string, ...args: unknown[]): void };
 }
@@ -28,9 +31,12 @@ export function createArchitectureChangeGuard(options: ArchitectureChangeGuardOp
         return { status: "not-configured", checkedAt: now(), findings: [] };
       }
       try {
+        options.invalidate?.(files);
         const graph = await buildArchitectureGraph(options.root, options.analyzeFile);
         const result = await runWorkspaceDiagnostics(graph, options.root);
-        return architectureBeforeChange(result, files, now());
+        // Diagnostics locate files relative to the workspace; a change names them absolutely.
+        const relative = files.map((file) => normalizePath(path.relative(options.root, file)));
+        return architectureBeforeChange(result, relative, now());
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         options.logger.warn("[Change] Architecture check failed:", error);
