@@ -143,6 +143,29 @@ describe("move rule engine", () => {
     expect(created?.create).toBe(true);
   });
 
+  it("drops the destination's own import of the moved name", async () => {
+    const dbPath = `${REPO}/src/db.ts`;
+    const viewPath = `${REPO}/src/view.ts`;
+    const db = "export function query(sql: string) {\n  return sql;\n}\n";
+    const view = 'import { query } from "./db";\n\nexport function render() {\n  return query("x");\n}\n';
+    const result = await buildMoveRefactor({
+      sourcePath: dbPath,
+      destinationPath: viewPath,
+      symbol: symbol("query", 0, 2, { isExported: true }),
+      io: io(
+        { [dbPath]: db, [viewPath]: view },
+        { [dbPath]: [symbol("query", 0, 2, { isExported: true })], [viewPath]: [symbol("render", 2, 4, { isExported: true })] },
+        { [`${dbPath}:query`]: { references: [reference(dbPath, 0), reference(viewPath, 0, 9), reference(viewPath, 3, 9)] } },
+      ),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const destination = afterOf(result.build, viewPath, view);
+    expect(destination).not.toContain('from "./db"');
+    expect(destination).toContain("export function query");
+    expect(destination).toContain("export function render");
+  });
+
   it("keeps public helpers and imports them from the new file", async () => {
     const content = [
       "export function alpha() {",
@@ -407,7 +430,7 @@ describe("extract", () => {
     if (!result.ok) return;
     const after = afterOf(result.build, `${REPO}/src/a.ts`, content);
     expect(after).toContain("const sum = extracted(a, b);");
-    expect(after).toContain("function extracted(a, b) {");
+    expect(after).toContain("function extracted(a: number, b) {");
     expect(after).toContain("return a + b;");
   });
 
@@ -431,11 +454,123 @@ describe("extract", () => {
     if (!result.ok) return;
     const after = afterOf(result.build, `${REPO}/src/a.ts`, content);
     expect(after).toContain("logSum(a, b);");
-    expect(after).toContain("function logSum(a, b) {");
+    expect(after).toContain("function logSum(a: number, b) {");
+  });
+});
+
+describe("extract declarations", () => {
+  const content = [
+    "function outer(a: number) {",
+    "  const b = 2;",
+    "  const sum = a + b;",
+    "  return sum;",
+    "}",
+    "",
+  ].join("\n");
+
+  it("rejects a selection whose declaration is used after it", () => {
+    const result = buildExtractRefactor({
+      sourcePath: `${REPO}/src/a.ts`,
+      content,
+      symbols: [symbol("outer", 0, 4)],
+      selection: { startLine: 1, startCharacter: 2, endLine: 2, endCharacter: 20 },
+      name: "setup",
+    });
+    expect(result).toMatchObject({ ok: false, reason: "extract-declaration-used-after" });
+  });
+
+  it("keeps the enclosing parameter types on the extracted function", () => {
+    const typed = [
+      "function outer(a: number, label?: string, map: Map<string, number> = new Map()) {",
+      "  const b = 2;",
+      "  return a + b + label.length + map.size;",
+      "}",
+      "",
+    ].join("\n");
+    const result = buildExtractRefactor({
+      sourcePath: `${REPO}/src/a.ts`,
+      content: typed,
+      symbols: [symbol("outer", 0, 3)],
+      selection: { startLine: 2, startCharacter: 9, endLine: 2, endCharacter: 41 },
+      name: "measure",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const after = afterOf(result.build, `${REPO}/src/a.ts`, typed);
+    expect(after).toContain("function measure(a: number, b, label: string | undefined, map: Map<string, number>) {");
+  });
+
+  it("keeps relative indentation of a multi-line selection", () => {
+    const body = [
+      "function outer(a: number) {",
+      "  const b = 2;",
+      "  console.log(a + b);",
+      "  console.log(b);",
+      "  return 1;",
+      "}",
+      "",
+    ].join("\n");
+    const result = buildExtractRefactor({
+      sourcePath: `${REPO}/src/a.ts`,
+      content: body,
+      symbols: [symbol("outer", 0, 5)],
+      selection: { startLine: 2, startCharacter: 2, endLine: 3, endCharacter: 17 },
+      name: "logBoth",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const after = afterOf(result.build, `${REPO}/src/a.ts`, body);
+    expect(after).toContain("function logBoth(a: number, b) {\n  console.log(a + b);\n  console.log(b);\n}");
   });
 });
 
 describe("inline", () => {
+  it("leaves a single trailing newline when the removed declaration was last", () => {
+    const content = [
+      "const a = twice(1);",
+      "",
+      "function twice(x: number) {",
+      "  return x * 2;",
+      "}",
+      "",
+    ].join("\n");
+    const result = buildInlineRefactor({
+      sourcePath: `${REPO}/src/a.ts`,
+      content,
+      symbol: symbol("twice", 2, 4),
+      references: [reference(`${REPO}/src/a.ts`, 0, 10), reference(`${REPO}/src/a.ts`, 2, 9)],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(afterOf(result.build, `${REPO}/src/a.ts`, content)).toBe("const a = ((1) * 2);\n");
+  });
+
+  it("keeps the declaration when only one of several calls is inlined", () => {
+    const content = [
+      "function twice(x: number) {",
+      "  return x * 2;",
+      "}",
+      "",
+      "const a = twice(1);",
+      "const b = twice(a + 1);",
+      "",
+    ].join("\n");
+    const result = buildInlineRefactor({
+      sourcePath: `${REPO}/src/a.ts`,
+      content,
+      symbol: symbol("twice", 0, 2),
+      references: [reference(`${REPO}/src/a.ts`, 0, 9), reference(`${REPO}/src/a.ts`, 4, 10), reference(`${REPO}/src/a.ts`, 5, 10)],
+      callLine: 5,
+      callCharacter: 10,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const after = afterOf(result.build, `${REPO}/src/a.ts`, content);
+    expect(after).toContain("function twice");
+    expect(after).toContain("const a = twice(1);");
+    expect(after).toContain("const b = ((a + 1) * 2);");
+  });
+
   it("replaces every call of a single-expression function", () => {
     const content = [
       "function twice(x: number) {",
