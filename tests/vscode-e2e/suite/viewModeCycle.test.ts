@@ -180,7 +180,7 @@ suite('View Mode Cycle E2E Tests', () => {
     );
     assert.strictEqual(contextValue, 'file', 'Should start in file mode');
 
-    // Call toggleViewMode (should cycle to list)
+    // Switch to list mode
     await vscode.commands.executeCommand('skein.setViewModeList');
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
@@ -191,7 +191,7 @@ suite('View Mode Cycle E2E Tests', () => {
     assert.strictEqual(
       contextValue,
       'list',
-      'toggleViewMode should cycle to list mode'
+      'setViewModeList should switch to list mode'
     );
   });
 

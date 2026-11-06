@@ -73,4 +73,20 @@ describe("ArchitectureChangeGuard", () => {
 
     expect(invalidate).toHaveBeenCalledWith(changed);
   });
+
+  it("reports unavailable instead of passing when a changed file cannot be analyzed", async () => {
+    const failing = createArchitectureChangeGuard({
+      root,
+      logger: { warn: vi.fn() },
+      analyzeFile: async (filePath) => {
+        if (filePath.endsWith("infra/db.ts")) throw new Error("FILE_NOT_FOUND");
+        return [];
+      },
+    });
+
+    const snapshot = await failing.check([path.join(root, "infra/db.ts")]);
+
+    expect(snapshot.status).toBe("unavailable");
+    expect(snapshot.message).toContain("infra/db.ts");
+  });
 });

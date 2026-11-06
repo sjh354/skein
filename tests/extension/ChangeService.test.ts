@@ -534,7 +534,7 @@ describe("ChangeService", () => {
     expect(applied.ok).toBe(true);
     const after = await fs.readFile(appPath, "utf8");
     expect(after).toContain("const sum = extracted(a, b);");
-    expect(after).toContain("function extracted(a: number, b)");
+    expect(after).toContain("function extracted(a: number, b: any)");
   });
 
   it("inlines a function at every call site", async () => {
@@ -633,6 +633,32 @@ describe("ChangeService", () => {
     expect(result).toMatchObject({ ok: false, reason: "architecture-blocked" });
     expect(calls).toBe(1);
     expect(host.appliedCount).toBe(0);
+    expect(await fs.readFile(appPath, "utf8")).toContain("alpha");
+  });
+
+  it("does not block undo before apply even when its files carry a violation", async () => {
+    let calls = 0;
+    const violation = { id: "dependency:rule:x", title: "rule", paths: [appPath], value: 1, baseline: "new" as const };
+    service = new ChangeService({
+      root,
+      logger,
+      host,
+      sleep: async () => undefined,
+      architectureGuard: {
+        async check() {
+          calls += 1;
+          // 1-2: the original apply; 3: undo pre-check sees the violation; 4: undo removes it.
+          return calls === 3
+            ? { status: "blocked", checkedAt: calls, revision: "r", findings: [violation] }
+            : { status: "passed", checkedAt: calls, revision: "r", findings: [] };
+        },
+      },
+    });
+    const task = await plan();
+    expect((await service.apply(task.plan.id)).ok).toBe(true);
+    const undone = await service.undo();
+    expect(undone.ok).toBe(true);
+    expect(undone.task?.status).toBe("succeeded");
     expect(await fs.readFile(appPath, "utf8")).toContain("alpha");
   });
 

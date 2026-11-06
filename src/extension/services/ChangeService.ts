@@ -639,7 +639,9 @@ export class ChangeService {
     let architectureBefore: ChangeArchitectureSnapshot | undefined;
     if (this.options.architectureGuard !== undefined) {
       architectureBefore = await this.checkArchitecture(paths);
-      if (architectureBefore.status === "blocked") {
+      // Undo/redo only restore recorded states, so they are judged after apply, never blocked before.
+      const restores = task.plan.kind === "undo" || task.plan.kind === "redo";
+      if (architectureBefore.status === "blocked" && !restores) {
         task.reason = "architecture-blocked";
         await this.saveTask(task);
         return { ok: false, reason: "architecture-blocked", files: paths, task };

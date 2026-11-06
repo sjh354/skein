@@ -1189,10 +1189,14 @@ export function buildExtractRefactor(input: ExtractRefactorInput): RefactorResul
     return { ok: false, reason: "extract-await-in-sync" };
   }
   const call = `${input.name}(${parameterNames.join(", ")})`;
-  // Only parameters of the enclosing function carry a known type; locals stay untyped.
+  // Only parameters of the enclosing function carry a known type; TypeScript locals get an
+  // explicit `any` so the result still compiles under noImplicitAny.
   const types = isTsLanguage(language) ? parseParameterTypes(enclosingText) : new Map<string, string>();
   const declaredParameters = parameterNames
-    .map((name) => (types.has(name) ? `${name}: ${types.get(name)}` : name))
+    .map((name) => {
+      if (types.has(name)) return `${name}: ${types.get(name)}`;
+      return language === "typescript" ? `${name}: any` : name;
+    })
     .join(", ");
   const declaration = isTsLanguage(language)
     ? `${usesAwait ? "async " : ""}function ${input.name}(${declaredParameters}) {\n${indent(body, "  ")}\n}`

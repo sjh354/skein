@@ -33,9 +33,20 @@ export function createArchitectureChangeGuard(options: ArchitectureChangeGuardOp
       try {
         options.invalidate?.(files);
         const graph = await buildArchitectureGraph(options.root, options.analyzeFile);
-        const result = await runWorkspaceDiagnostics(graph, options.root);
         // Diagnostics locate files relative to the workspace; a change names them absolutely.
         const relative = files.map((file) => normalizePath(path.relative(options.root, file)));
+        // A changed file the analyzer could not read has no verdict; a deleted one has nothing to read.
+        const existing = new Set(files.filter((file) => fs.existsSync(file)).map((file) => normalizePath(path.relative(options.root, file))));
+        const unreadable = graph.failedFiles.filter((failed) => existing.has(failed.relativePath));
+        if (unreadable.length > 0) {
+          return {
+            status: "unavailable",
+            checkedAt: now(),
+            findings: [],
+            message: `Architecture check skipped: could not analyze ${unreadable.map((failed) => failed.relativePath).join(", ")}`,
+          };
+        }
+        const result = await runWorkspaceDiagnostics(graph, options.root);
         return architectureBeforeChange(result, relative, now());
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
