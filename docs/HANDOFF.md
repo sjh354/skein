@@ -169,7 +169,7 @@ npm run lint
 - 이동으로 원본이 비면 빈 파일이 남는다(DESIGN 13.2 "후속 후보"에 삭제 규칙 기록).
 - 아키텍처 뷰 최상위 라벨이 `[unknown?] src 10 files`로 보인다(요소·역할 미지정 묶음의 기본 표기).
 - E2E 주석·메시지에 제거된 `toggleViewMode` 이름이 남아 있다. → 2026-11-06 정리.
-- 이 환경에서 `npm run test:change`·`test:refactor`·`test:vscode`는 실행하지 못했다. 적용 방식(디스크 직접 쓰기)과 미리보기 제거는 이 스위트의 가정과 맞는지 실제 VS Code 호스트에서 확인해야 한다. (2026-11-06에도 libasound 등 시스템 라이브러리 부재로 실행 못 함)
+- 이 환경에서 `npm run test:change`·`test:refactor`·`test:vscode`는 실행하지 못했다. 적용 방식(디스크 직접 쓰기)과 미리보기 제거는 이 스위트의 가정과 맞는지 실제 VS Code 호스트에서 확인해야 한다. (2026-11-06 시스템 라이브러리 설치 후 모두 통과, 6.6)
 
 ### 6.6 2026-11-06 묶음 검증 결과와 수정
 
@@ -193,7 +193,7 @@ npm run lint
 - 이동으로 원본이 비면 빈 파일이 남는 것은 DESIGN 13.2 후속 후보로 유지한다.
 - 이동 후 원본에 빈 줄이 연달아 남는 미관 문제가 있다(미수정).
 
-환경 제한: 이 WSL에는 `libasound` 등이 없어 `test:change`·`test:refactor`·`test:vscode`가 VS Code 실행 직전에 실패한다(sudo 필요). 단위 테스트(4384개), 타입 검사, lint는 통과했다.
+자동 검사: 단위 테스트 4384개, 타입 검사, lint 통과. 시스템 라이브러리(`libasound2t64`, `xvfb` 등) 설치 후 `xvfb-run -a`로 `test:change`, `test:refactor`(추출 기대값을 `any` 명시에 맞춰 갱신), `test:vscode`(179개), `test:viewstate`(15개)를 이 WSL에서 모두 통과했다. 이 환경에서 VS Code E2E를 돌리려면 해당 라이브러리가 필요하다.
 
 ## 7. 5·6단계 수동 확인
 
