@@ -459,6 +459,16 @@ npm run build -- --production && npm run package && npm run package:verify
 code --install-extension skein-*.vsix  # check install in a clean VS Code instance
 ```
 
+### Extension Icon
+
+`resources/icon.png` (512x512, transparent corners) is rendered from `resources/icon.svg`; the Marketplace needs the PNG. After editing the SVG, regenerate it with headless Chromium (a snap Chromium can only write under the home directory):
+
+```bash
+chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
+  --default-background-color=00000000 --window-size=512,512 \
+  --screenshot="$PWD/resources/icon.png" resources/icon.svg
+```
+
 ### Cross-Platform Development
 
 All code and tests must work on Windows, Linux, and macOS. Build paths with `node:path`, normalize with `normalizePath()` before path keys enter Sets or Maps, prefer `path.isAbsolute()` over a leading `/` check, and normalize line endings when comparing file content. The binding rules are in [`.agents/rules/testing.md`](../.agents/rules/testing.md).

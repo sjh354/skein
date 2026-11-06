@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Source of icon.png (the Marketplace needs a PNG). Regenerate by rendering this file
+     at 512x512 with a transparent background, for example with headless Chromium
+     and its screenshot option (see docs/DEVELOPMENT.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#1E293B"/>
+  <g transform="translate(256 256) scale(1.1) translate(-257 -262)">
+  <g fill="none" stroke-width="16" stroke-linecap="round">
+    <!-- outer thread: a loop of curved edges -->
+    <path d="M256 128 Q165 140 118 244" stroke="#2DD4BF"/>
+    <path d="M256 128 Q352 136 396 236" stroke="#2DD4BF"/>
+    <path d="M118 244 Q112 342 186 394" stroke="#A78BFA"/>
+    <path d="M396 236 Q410 340 330 394" stroke="#60A5FA"/>
+    <path d="M186 394 Q258 428 330 394" stroke="#60A5FA"/>
+    <!-- spokes from the hub -->
+    <path d="M256 128 L262 270" stroke="#2DD4BF"/>
+    <path d="M118 244 L262 270" stroke="#A78BFA"/>
+    <path d="M396 236 L262 270" stroke="#60A5FA"/>
+    <path d="M186 394 L262 270" stroke="#A78BFA"/>
+  </g>
+  <g fill="#F8FAFC">
+    <circle cx="256" cy="128" r="28"/>
+    <circle cx="118" cy="244" r="28"/>
+    <circle cx="396" cy="236" r="28"/>
+    <circle cx="186" cy="394" r="28"/>
+    <circle cx="330" cy="394" r="28"/>
+    <circle cx="262" cy="270" r="38"/>
+  </g>
+  </g>
+</svg>

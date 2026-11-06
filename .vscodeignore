@@ -37,6 +37,9 @@ tests/**
 # Query files are copied to dist/queries/ at build time
 resources/queries/**
 
+# Icon source (the packaged icon is resources/icon.png)
+resources/icon.svg
+
 # WASM files (MUST be included for tree-sitter parsers)
 !dist/wasm/**
 
