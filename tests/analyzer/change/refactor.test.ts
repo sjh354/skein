@@ -143,6 +143,41 @@ describe("move rule engine", () => {
     expect(created?.create).toBe(true);
   });
 
+  it("imports the destination at the top of a source that had no imports", async () => {
+    const appPath = `${REPO}/src/app.ts`;
+    const helperPath = `${REPO}/src/helper.ts`;
+    const app = [
+      "export function alpha(value: number): number {",
+      "  return helper(value) + 1;",
+      "}",
+      "",
+      "export function helper(value: number): number {",
+      "  return value * 2;",
+      "}",
+      "",
+      "export function beta(value: number): number {",
+      "  return helper(value);",
+      "}",
+      "",
+    ].join("\n");
+    const result = await buildMoveRefactor({
+      sourcePath: appPath,
+      destinationPath: helperPath,
+      symbol: symbol("helper", 4, 6, { isExported: true }),
+      io: io(
+        { [appPath]: app },
+        { [appPath]: [symbol("alpha", 0, 2, { isExported: true }), symbol("helper", 4, 6, { isExported: true }), symbol("beta", 8, 10, { isExported: true })] },
+        { [`${appPath}:helper`]: { references: [reference(appPath, 1, 9), reference(appPath, 4, 16), reference(appPath, 9, 9)] } },
+      ),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const remaining = afterOf(result.build, appPath, app);
+    expect(remaining.startsWith('import { helper } from "./helper";\n')).toBe(true);
+    expect(remaining).toContain("export function beta(value: number): number {\n  return helper(value);");
+  });
+
   it("drops the destination's own import of the moved name", async () => {
     const dbPath = `${REPO}/src/db.ts`;
     const viewPath = `${REPO}/src/view.ts`;
