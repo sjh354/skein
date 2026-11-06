@@ -588,6 +588,7 @@ describe("ChangeService", () => {
 
   it("describes known failure reasons", () => {
     expect(describeReason("stale-plan")).toContain("changed");
+    expect(describeReason("rename-failed")).toContain("language extension");
     expect(describeReason("custom")).toBe("custom");
   });
 
