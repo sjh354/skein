@@ -131,3 +131,6 @@ wiki/**
 
 # Removed call-graph webview bundle (now part of webview.js)
 dist/callgraph.js
+
+# Type-check fixtures config (development only)
+tsconfig.type-fixtures.json

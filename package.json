@@ -2,7 +2,7 @@
   "name": "skein",
   "displayName": "Skein",
   "description": "AI-first dependency graph & code intelligence for VS Code. Visualize file imports, symbol call hierarchies, and cross-file call graphs. Detect circular dependencies, dead code, and breaking changes. Built-in MCP Server with 22 tools for GitHub Copilot, Cursor, Claude, Windsurf, and Antigravity. Generate AI-friendly codemaps. TypeScript, JavaScript, C#, Go, Java, Dart, Python, Rust, Vue, Svelte, GraphQL.",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "publisher": "sjh354",
   "author": {
     "name": "sjh354",
@@ -26,7 +26,7 @@
   "qna": "https://github.com/sjh354/skein/discussions",
   "icon": "resources/icon.png",
   "galleryBanner": {
-    "color": "#2D3748",
+    "color": "#1E293B",
     "theme": "dark"
   },
   "keywords": [
