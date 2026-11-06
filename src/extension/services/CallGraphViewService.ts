@@ -104,6 +104,8 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
   private readonly outputChannel: vscode.OutputChannel;
   /** Buffered graph result — replayed if callGraphMounted arrives after initial postMessage */
   private pendingGraph: ReturnType<typeof queryNeighbourhood> | null = null;
+  /** True once the shared hidden filters were re-sent to the attached renderer (see setHiddenFilters). */
+  private filtersReplayed = false;
   /** Latest in-progress indexing message — replayed on mount so the loading overlay is not missed. */
   private pendingIndexing: CallGraphExtensionMessage | null = null;
   /** URI string of the file currently shown in the panel, for live-refresh */
@@ -222,6 +224,8 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
    * channel as dependency-graph and symbol-graph messages.
    */
   setSidebarWebview(view: Pick<vscode.WebviewView, "webview"> | null): void {
+    // A renderer that has just been attached has not been told the shared filters yet.
+    if (view !== this.sidebarWebview) this.filtersReplayed = false;
     this.sidebarWebview = view;
   }
   /** E2E observability getters — read by the custom `getContext` command. */
@@ -259,9 +263,28 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     return [...this.hiddenFilters];
   }
 
-  /** Replaces the hidden-filter snapshot published by the active renderer. */
+  /**
+   * Replaces the hidden-filter snapshot published by the active renderer.
+   *
+   * A renderer reports no filters until it has been sent them, so a report that arrives before
+   * the replay on mount would erase the filters restored after a restart. Reports are ignored
+   * until the filters have been replayed to the attached renderer.
+   */
   public setHiddenFilters(filters: SkeinFilter[]): void {
+    if (!this.filtersReplayed) return;
     this.hiddenFilters = filters.map((filter) => ({ ...filter }));
+  }
+
+  /** Re-sends the shared hidden filters: a new graph resets the renderer's own. */
+  private replayHiddenFilters(): void {
+    for (const filter of this.hiddenFilters) {
+      this.postMessage({
+        type: "callGraphSetFilter",
+        filterType: filter.filterType,
+        value: filter.value,
+        visible: false,
+      });
+    }
   }
 
   /** Pins MCP commands to the graph the agent saw. */
@@ -747,14 +770,7 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
     });
     // A new graph resets the webview's filters, so restore the shared ones now
     // (they also survive a window reload via .skein/state.json).
-    for (const filter of this.hiddenFilters) {
-      this.postMessage({
-        type: "callGraphSetFilter",
-        filterType: filter.filterType,
-        value: filter.value,
-        visible: false,
-      });
-    }
+    this.replayHiddenFilters();
     if (this.lastSelection) {
       this.postMessage({ type: "callGraphSelectNode", nodeId: this.lastSelection.nodeId });
     }
@@ -1017,7 +1033,11 @@ export class CallGraphViewService implements vscode.Disposable, ICallGraphQueryS
         // Use postGraphData (not sendGraphToWebview) to avoid re-buffering and
         // triggering another callGraphMounted → sendGraphToWebview → callGraphMounted loop.
         this.postGraphData(g);
+      } else {
+        this.replayHiddenFilters();
       }
+      // From here on the renderer reports filters it actually holds.
+      this.filtersReplayed = true;
     } else if (msg.command === "callGraphReady") {
       // Graph rendered successfully — telemetry / E2E test instrumentation only.
       // Do NOT replay here; that caused an infinite postMessage loop.
