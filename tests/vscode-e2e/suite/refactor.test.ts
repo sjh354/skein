@@ -228,4 +228,33 @@ suite('Move / extract / inline (step 6)', () => {
     assert.ok(kinds.includes('undo'), JSON.stringify(kinds));
     assert.ok(kinds.includes('redo'), JSON.stringify(kinds));
   });
+  test('deletes a source file the move emptied and restores it on undo', async function () {
+    this.timeout(120_000);
+    const totalPath = path.join(root, 'src', 'total.ts');
+    const beforeContent = read(otherPath);
+    const totalLine = beforeContent.split('\n').findIndex((line) => line.includes('export const total'));
+    assert.ok(totalLine >= 0, beforeContent);
+
+    const planned = await changeTool('skein_plan_change', {
+      kind: 'move',
+      path: otherPath,
+      name: 'total',
+      line: totalLine,
+      newPath: totalPath,
+    });
+    assert.strictEqual(planned.applied, true, JSON.stringify(planned));
+    const applied = await changeTool('skein_apply_change', { planId: planned.plan.planId });
+    assert.strictEqual(applied.applied, true, JSON.stringify(applied));
+    assert.strictEqual(fs.existsSync(otherPath), false, 'the emptied source should be deleted');
+    assert.ok(read(totalPath).includes('export const total'), read(totalPath));
+    assert.strictEqual(
+      applied.history.files.find((file: any) => path.basename(file.path) === 'other.ts').change,
+      'deleted',
+    );
+
+    const undone = await changeTool('skein_undo_change', {});
+    assert.strictEqual(undone.applied, true, JSON.stringify(undone));
+    assert.strictEqual(read(otherPath), beforeContent, 'undo should restore the deleted file');
+    assert.strictEqual(fs.existsSync(totalPath), false, 'undo should remove the created file');
+  });
 });

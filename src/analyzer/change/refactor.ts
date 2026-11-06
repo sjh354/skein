@@ -52,6 +52,11 @@ export interface RefactorIo {
   listSymbols(filePath: string): Promise<RefactorSymbol[] | { error: string; message?: string }>;
   findReferences(symbol: RefactorSymbol, filePath: string): Promise<ReferenceLookup>;
   readFile(filePath: string): Promise<string | null>;
+  /**
+   * Workspace files (any type, saved content) whose text may mention the module at `filePath`
+   * (see `mentionsModule`). Absent or failing means unknown, so the source file is kept.
+   */
+  findPathMentions?(filePath: string): Promise<string[] | { error: string }>;
 }
 
 export interface RefactorBuild {
@@ -479,6 +484,34 @@ export interface MoveRefactorInput {
   io: RefactorIo;
 }
 
+/** Files that make a module the entry of a package: never deleted when emptied. */
+const ENTRY_FILE_STEMS = new Set(["index", "main"]);
+
+/**
+ * True when `text` mentions the module at `filePath` the way imports, dynamic imports, requires and
+ * config paths do: its name, with or without extension, between a quote or slash and a quote.
+ * Deliberately broad: a false positive only keeps a file, a miss would break a reference.
+ */
+export function mentionsModule(text: string, filePath: string): boolean {
+  const stem = path.basename(filePath, path.extname(filePath)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`["'\`/]${stem}(?:\\.[A-Za-z]+)?["'\`]`).test(text);
+}
+
+/** True when nothing but imports, blank lines and comments is left. */
+function hasNoCode(content: string, language: RefactorLanguage): boolean {
+  const dropped = new Set<number>();
+  for (const statement of parseImports(content, language)) {
+    if (statement.isExport) continue;
+    for (let line = statement.startLine; line <= statement.endLine; line += 1) dropped.add(line);
+  }
+  const rest = splitLines(content)
+    .filter((_, index) => !dropped.has(index))
+    .join("\n")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  return rest.trim().length === 0;
+}
+
 export async function buildMoveRefactor(input: MoveRefactorInput): Promise<RefactorResult> {
   const sourcePath = normalizePath(input.sourcePath);
   const destinationPath = normalizePath(input.destinationPath);
@@ -842,6 +875,26 @@ export async function buildMoveRefactor(input: MoveRefactorInput): Promise<Refac
   destinationLines.push(...movedText.split("\n"), "");
   const destinationAfter = joinLines(collapseBlankLines(destinationLines));
 
+  // An emptied source is deleted in the same change, but only when nothing can still reach it.
+  const notes = ["move bundle follows references; public symbols and helpers used elsewhere stay"];
+  let deleteSource = false;
+  if (sourceAfter !== sourceContent && hasNoCode(sourceAfter, language)) {
+    const keepReason = await sourceDeletionBlocker({
+      sourcePath,
+      destinationPath,
+      destinationAfter,
+      referenceAfter,
+      contents,
+      io: input.io,
+    });
+    if (keepReason === null) {
+      deleteSource = true;
+      notes.push(`${path.basename(sourcePath)} had nothing left and is deleted`);
+    } else {
+      notes.push(`${path.basename(sourcePath)} had nothing left but is kept: ${keepReason}`);
+    }
+  }
+
   const files: RawFileEdit[] = [];
   if (destinationAfter !== destinationContent) {
     files.push({
@@ -850,7 +903,9 @@ export async function buildMoveRefactor(input: MoveRefactorInput): Promise<Refac
       ...(destinationContent === null ? { create: true } : {}),
     });
   }
-  if (sourceAfter !== sourceContent) {
+  if (deleteSource) {
+    files.push({ path: sourcePath, edits: [], delete: true });
+  } else if (sourceAfter !== sourceContent) {
     files.push({ path: sourcePath, edits: [replaceWholeFileEdit(sourceContent, sourceAfter)] });
   }
   for (const [referencePath, before] of contents) {
@@ -864,9 +919,7 @@ export async function buildMoveRefactor(input: MoveRefactorInput): Promise<Refac
   const analysis: ChangeAnalysis = {
     language,
     bundle: [...decisions.values()],
-    notes: [
-      "move bundle follows references; public symbols and helpers used elsewhere stay",
-    ],
+    notes,
   };
   return {
     ok: true,
@@ -884,6 +937,34 @@ export async function buildMoveRefactor(input: MoveRefactorInput): Promise<Refac
       touchedFiles,
     },
   };
+}
+
+/** Why an emptied source file must stay, or null when nothing can still reach it. */
+async function sourceDeletionBlocker(input: {
+  sourcePath: string;
+  destinationPath: string;
+  destinationAfter: string;
+  referenceAfter: Map<string, string>;
+  contents: Map<string, string>;
+  io: RefactorIo;
+}): Promise<string | null> {
+  const stem = path.basename(input.sourcePath, path.extname(input.sourcePath));
+  if (ENTRY_FILE_STEMS.has(stem)) return "it is an entry file";
+  if (!input.io.findPathMentions) return "references outside the import graph were not searched";
+  const mentions = await input.io.findPathMentions(input.sourcePath);
+  if ("error" in mentions) return "references outside the import graph could not be searched";
+  for (const raw of mentions) {
+    const mentioning = normalizePath(raw);
+    if (mentioning === input.sourcePath) continue;
+    // A file this plan rewrites is judged by its text after the plan.
+    const planned = mentioning === input.destinationPath
+      ? input.destinationAfter
+      : input.referenceAfter.get(mentioning) ?? input.contents.get(mentioning);
+    if (planned === undefined || mentionsModule(planned, input.sourcePath)) {
+      return `${path.basename(mentioning)} still refers to it`;
+    }
+  }
+  return null;
 }
 
 function resolveImportTarget(importerPath: string, specifier: string): string | null {
