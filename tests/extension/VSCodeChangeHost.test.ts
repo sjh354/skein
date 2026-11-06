@@ -414,6 +414,12 @@ describe("VSCodeChangeHost", () => {
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
+  it("does not accept still-empty diagnostics before the minimum wait", async () => {
+    const started = Date.now();
+    await host().waitForDiagnostics([APP], 2_000, 600);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(550);
+  });
+
   it("opens up to five applied files in regular tabs", async () => {
     const paths = Array.from({ length: 6 }, (_, index) => `/workspace/src/file${index}.ts`);
     await host().openFiles(paths);

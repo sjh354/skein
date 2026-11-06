@@ -135,14 +135,16 @@ export function registerChangeCommands(options: ChangeCommandsOptions): vscode.D
     }
     const destination = await vscode.window.showInputBox({
       prompt: `Move "${selection.name}" to a file`,
-      value: vscode.workspace.asRelativePath(selection.path).replace(/[^/]+$/, "moved.ts"),
+      value: vscode.workspace.asRelativePath(selection.path, false).replace(/[^/]+$/, "moved.ts"),
       placeHolder: "Workspace-relative or absolute path",
       validateInput: (value) => (value.trim().length === 0 ? "A destination is required." : undefined),
     });
     if (!destination) return;
+    // Relative to the folder that holds the symbol: the service root is only one folder of a multi-root workspace.
+    const symbolFolder = vscode.workspace.getWorkspaceFolder?.(vscode.Uri.file(selection.path))?.uri.fsPath;
     const newPath = path.isAbsolute(destination)
       ? destination
-      : path.join(service.getRoot(), destination);
+      : path.join(symbolFolder ?? service.getRoot(), destination);
 
     const planned = await service.planMove({
       nodeId: selection.nodeId,

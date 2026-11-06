@@ -500,8 +500,20 @@ export class VSCodeChangeHost implements ChangeEditorHost {
     return { errors, warnings, messages };
   }
 
-  async waitForDiagnostics(paths: string[], timeoutMs = 3_000): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
+  /**
+   * Files are written to disk, so the language server learns of the new text only after it
+   * reloads them. An empty diagnostics list that merely stays empty is not a verdict, so wait
+   * at least `minWaitMs` and make sure every file is open for the server before accepting it.
+   */
+  async waitForDiagnostics(paths: string[], timeoutMs = 5_000, minWaitMs = 1_500): Promise<void> {
+    const started = Date.now();
+    const deadline = started + timeoutMs;
+    await Promise.all(
+      paths.map((path) => Promise.resolve(vscode.workspace.openTextDocument(vscode.Uri.file(path))).then(
+        () => undefined,
+        () => undefined, // a deleted file has nothing to open
+      )),
+    );
     let previous = "";
     let stable = 0;
     /* eslint-disable no-await-in-loop -- polling is the point */
@@ -509,7 +521,7 @@ export class VSCodeChangeHost implements ChangeEditorHost {
       const signature = paths.map((path) => JSON.stringify(this.diagnostics(path))).join("|");
       if (signature === previous) {
         stable += 1;
-        if (stable >= 2) return;
+        if (stable >= 2 && Date.now() - started >= minWaitMs) return;
       } else {
         previous = signature;
         stable = 0;

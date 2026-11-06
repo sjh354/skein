@@ -5,7 +5,7 @@ import { openGraphFor, sleep, waitForViewMode } from './_helpers';
 
 /**
  * E2E Tests for Toolbar Commands
- * Tests the toolbar functionality: setViewModeFile, toggleViewMode,
+ * Tests the toolbar functionality: setViewModeFile, setViewModeList,
  * showReverseDependencies, and context key management
  */
 

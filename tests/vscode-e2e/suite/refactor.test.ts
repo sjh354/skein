@@ -171,7 +171,7 @@ suite('Move / extract / inline (step 6)', () => {
     assert.strictEqual(result.applied, true, JSON.stringify(result));
     const after = read(extractPath);
     assert.ok(after.includes('const sum = extracted(a, b);'), after);
-    assert.ok(after.includes('function extracted(a: number, b)'), after);
+    assert.ok(after.includes('function extracted(a: number, b: any)'), after);
   });
 
   test('inlines a function at every call site', async function () {

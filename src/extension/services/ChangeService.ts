@@ -171,7 +171,7 @@ const REASON_MESSAGES: Record<string, string> = {
   "inline-arity-mismatch": "A call passes a different number of arguments.",
   "inline-overlapping-calls": "Two selected calls overlap.",
   "rename-provider-unavailable": "No rename provider is installed for this language.",
-  "rename-failed": "The language service refused the rename.",
+  "rename-failed": "The language service returned no rename edits. Make sure the language extension (for example TypeScript or Dart) is installed, enabled and the workspace is trusted.",
   "unsupported-uri": "The rename touches a file outside the workspace.",
   "unsaved-changes": "Save the changed files before applying a change.",
   "architecture-blocked": "The change would introduce or worsen a confirmed architecture violation. Fix it or record an exception first.",
@@ -639,7 +639,9 @@ export class ChangeService {
     let architectureBefore: ChangeArchitectureSnapshot | undefined;
     if (this.options.architectureGuard !== undefined) {
       architectureBefore = await this.checkArchitecture(paths);
-      if (architectureBefore.status === "blocked") {
+      // Undo/redo only restore recorded states, so they are judged after apply, never blocked before.
+      const restores = task.plan.kind === "undo" || task.plan.kind === "redo";
+      if (architectureBefore.status === "blocked" && !restores) {
         task.reason = "architecture-blocked";
         await this.saveTask(task);
         return { ok: false, reason: "architecture-blocked", files: paths, task };

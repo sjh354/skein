@@ -143,6 +143,41 @@ describe("move rule engine", () => {
     expect(created?.create).toBe(true);
   });
 
+  it("imports the destination at the top of a source that had no imports", async () => {
+    const appPath = `${REPO}/src/app.ts`;
+    const helperPath = `${REPO}/src/helper.ts`;
+    const app = [
+      "export function alpha(value: number): number {",
+      "  return helper(value) + 1;",
+      "}",
+      "",
+      "export function helper(value: number): number {",
+      "  return value * 2;",
+      "}",
+      "",
+      "export function beta(value: number): number {",
+      "  return helper(value);",
+      "}",
+      "",
+    ].join("\n");
+    const result = await buildMoveRefactor({
+      sourcePath: appPath,
+      destinationPath: helperPath,
+      symbol: symbol("helper", 4, 6, { isExported: true }),
+      io: io(
+        { [appPath]: app },
+        { [appPath]: [symbol("alpha", 0, 2, { isExported: true }), symbol("helper", 4, 6, { isExported: true }), symbol("beta", 8, 10, { isExported: true })] },
+        { [`${appPath}:helper`]: { references: [reference(appPath, 1, 9), reference(appPath, 4, 16), reference(appPath, 9, 9)] } },
+      ),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const remaining = afterOf(result.build, appPath, app);
+    expect(remaining.startsWith('import { helper } from "./helper";\n')).toBe(true);
+    expect(remaining).toContain("export function beta(value: number): number {\n  return helper(value);");
+  });
+
   it("drops the destination's own import of the moved name", async () => {
     const dbPath = `${REPO}/src/db.ts`;
     const viewPath = `${REPO}/src/view.ts`;
@@ -430,7 +465,7 @@ describe("extract", () => {
     if (!result.ok) return;
     const after = afterOf(result.build, `${REPO}/src/a.ts`, content);
     expect(after).toContain("const sum = extracted(a, b);");
-    expect(after).toContain("function extracted(a: number, b) {");
+    expect(after).toContain("function extracted(a: number, b: any) {");
     expect(after).toContain("return a + b;");
   });
 
@@ -454,7 +489,7 @@ describe("extract", () => {
     if (!result.ok) return;
     const after = afterOf(result.build, `${REPO}/src/a.ts`, content);
     expect(after).toContain("logSum(a, b);");
-    expect(after).toContain("function logSum(a: number, b) {");
+    expect(after).toContain("function logSum(a: number, b: any) {");
   });
 });
 
@@ -497,7 +532,7 @@ describe("extract declarations", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const after = afterOf(result.build, `${REPO}/src/a.ts`, typed);
-    expect(after).toContain("function measure(a: number, b, label: string | undefined, map: Map<string, number>) {");
+    expect(after).toContain("function measure(a: number, b: any, label: string | undefined, map: Map<string, number>) {");
   });
 
   it("keeps relative indentation of a multi-line selection", () => {
@@ -520,7 +555,7 @@ describe("extract declarations", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const after = afterOf(result.build, `${REPO}/src/a.ts`, body);
-    expect(after).toContain("function logBoth(a: number, b) {\n  console.log(a + b);\n  console.log(b);\n}");
+    expect(after).toContain("function logBoth(a: number, b: any) {\n  console.log(a + b);\n  console.log(b);\n}");
   });
 });
 

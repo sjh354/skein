@@ -375,14 +375,11 @@ function renderDartImport(specifier: string, isExport = false): string {
   return `${isExport ? "export" : "import"} '${specifier}';`;
 }
 
-/** Inserts import lines after the last existing import. */
-function insertImports(lines: string[], imports: string[]): string[] {
+/** Inserts import lines after the last existing import statement (whole statement, so multi-line imports stay intact). */
+function insertImports(lines: string[], imports: string[], language: RefactorLanguage): string[] {
   if (imports.length === 0) return lines;
-  let last = -1;
-  for (let index = 0; index < lines.length; index += 1) {
-    const trimmed = lines[index].trim();
-    if (trimmed.startsWith("import ") || trimmed.startsWith("export ")) last = index;
-  }
+  const statements = parseImports(lines.join("\n"), language);
+  const last = statements.reduce((end, statement) => Math.max(end, statement.endLine), -1);
   const result = [...lines];
   result.splice(last + 1, 0, ...imports);
   return result;
@@ -805,10 +802,10 @@ export async function buildMoveRefactor(input: MoveRefactorInput): Promise<Refac
             .filter((symbol) => remainingUsed.has(symbol.name))
             .map((symbol) => ({ imported: symbol.name, local: symbol.name })),
         ),
-      ]);
+      ], language);
     }
   } else if (sourceWillImportDest) {
-    sourceLinesAfter = insertImports(sourceLinesAfter, [renderDartImport(relativeDartUri(sourcePath, destinationPath))]);
+    sourceLinesAfter = insertImports(sourceLinesAfter, [renderDartImport(relativeDartUri(sourcePath, destinationPath))], language);
   }
   const sourceAfter = joinLines(collapseBlankLines(sourceLinesAfter));
 
@@ -837,7 +834,7 @@ export async function buildMoveRefactor(input: MoveRefactorInput): Promise<Refac
     const missing = destinationImportLines.filter(
       (line) => !destinationLines.some((existing) => existing.trim() === line.trim()),
     );
-    destinationLines = insertImports(destinationLines, missing);
+    destinationLines = insertImports(destinationLines, missing, language);
   }
   if (destinationLines.length > 0 && destinationLines[destinationLines.length - 1].trim() !== "") {
     destinationLines.push("");
@@ -941,7 +938,7 @@ function mergeTsImports(
     }
     result.push(lines[index]);
   }
-  return insertImports(result, toAdd);
+  return insertImports(result, toAdd, language);
 }
 
 // ---------------------------------------------------------------------------
@@ -1189,10 +1186,14 @@ export function buildExtractRefactor(input: ExtractRefactorInput): RefactorResul
     return { ok: false, reason: "extract-await-in-sync" };
   }
   const call = `${input.name}(${parameterNames.join(", ")})`;
-  // Only parameters of the enclosing function carry a known type; locals stay untyped.
+  // Only parameters of the enclosing function carry a known type; TypeScript locals get an
+  // explicit `any` so the result still compiles under noImplicitAny.
   const types = isTsLanguage(language) ? parseParameterTypes(enclosingText) : new Map<string, string>();
   const declaredParameters = parameterNames
-    .map((name) => (types.has(name) ? `${name}: ${types.get(name)}` : name))
+    .map((name) => {
+      if (types.has(name)) return `${name}: ${types.get(name)}`;
+      return language === "typescript" ? `${name}: any` : name;
+    })
     .join(", ");
   const declaration = isTsLanguage(language)
     ? `${usesAwait ? "async " : ""}function ${input.name}(${declaredParameters}) {\n${indent(body, "  ")}\n}`
