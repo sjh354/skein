@@ -60,6 +60,15 @@ describe("SourceFileWatcher", () => {
     ]);
   });
 
+  it("ignores Skein's own state files so publishing state does not bump the graph", () => {
+    const { create, change, delete: remove } = watchers[2].listeners;
+    change({ fsPath: "/workspace/.skein/state.json" });
+    create({ fsPath: "/workspace/.skein/history/tasks/plan.json" });
+    remove({ fsPath: String.raw`C:\workspace\.skein\cache\index.json` });
+
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
   it("ignores events inside excluded directories, on both separators", () => {
     const { create, change, delete: remove } = watchers[2].listeners;
     create({ fsPath: "/workspace/node_modules/lib/package.json" });

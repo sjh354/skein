@@ -26,7 +26,7 @@ export class SourceFileWatcher {
     // Architecture rule and resolver config files are JSON, outside the source glob, yet edits to them make the index or view stale.
     this.watchers = [WATCH_GLOB, ARCHITECTURE_RULES_GLOB, RESOLVER_CONFIG_GLOB].map((glob) => vscode.workspace.createFileSystemWatcher(glob));
 
-    const ignoredDirectories = new Set(['.git', 'node_modules', 'dist', 'build', 'out', 'coverage', '.vscode-test']);
+    const ignoredDirectories = new Set(['.git', '.skein', 'node_modules', 'dist', 'build', 'out', 'coverage', '.vscode-test']);
     const isIgnored = (uri: vscode.Uri) => uri.fsPath.split(/[\\/]/).some(segment => ignoredDirectories.has(segment));
 
     for (const watcher of this.watchers) {
