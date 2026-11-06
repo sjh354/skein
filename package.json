@@ -1399,6 +1399,7 @@
     "test:vscode:vsix": "npm run package && npm run compile:tests && node ./tests/vscode-e2e/runTests.js --vsix",
     "test:all": "npm run test:unit",
     "test:bench": "node scripts/run-benchmarks.mjs",
+    "bench:graph-context": "node scripts/bench-graph-context.mjs",
     "test:bench:memory": "node scripts/run-memory-bench.mjs",
     "sync:tool-descriptions": "node scripts/sync-tool-descriptions.mjs",
     "lint": "eslint src",
