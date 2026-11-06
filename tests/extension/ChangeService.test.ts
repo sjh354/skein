@@ -40,6 +40,8 @@ class FakeHost implements ChangeEditorHost {
   openCount = 0;
   appliedCount = 0;
   waitCount = 0;
+  /** Set a test to give the host a workspace-wide mention search; absent means unavailable. */
+  findPathMentions?: (path: string) => Promise<string[] | { error: string }>;
 
   async resolveRename(): Promise<RenameResolution | RenameFailure> {
     return this.resolveFailure ?? this.resolution;
@@ -505,6 +507,40 @@ describe("ChangeService", () => {
 
     const redone = await service.redo();
     expect(redone.ok).toBe(true);
+    expect(await fs.readFile(movedPath, "utf8")).toContain("function alpha");
+  });
+
+  it("deletes a source emptied by a move, restores it on undo and deletes it again on redo", async () => {
+    const movedPath = joinPath(root, "src", "moved.ts");
+    const app = "export function alpha(x: number) {\n  return x + 1;\n}\n";
+    const other = 'import { alpha } from "./app";\n\nexport const value = alpha(1);\n';
+    await fs.writeFile(appPath, app, "utf8");
+    await fs.writeFile(otherPath, other, "utf8");
+    host.symbols.set(appPath, [
+      { name: "alpha", kind: "function", startLine: 0, startCharacter: 0, endLine: 2, endCharacter: 1, selectionLine: 0, selectionCharacter: 16, isExported: true },
+    ]);
+    host.symbols.set(otherPath, []);
+    host.references.set("alpha", [
+      { path: appPath, line: 0, character: 16 },
+      { path: otherPath, line: 0, character: 9 },
+      { path: otherPath, line: 2, character: 21 },
+    ]);
+    host.findPathMentions = async () => [otherPath];
+
+    const planned = await service.planMove({ nodeId: `${appPath}:alpha:0`, newPath: movedPath, source: "mcp", graphVersion: 1 });
+    expect(planned.ok).toBe(true);
+    const applied = await service.apply(planned.task!.plan.id);
+    expect(applied.ok).toBe(true);
+    expect(applied.history?.files.find((file) => file.path === appPath)?.change).toBe("deleted");
+    await expect(fs.stat(appPath)).rejects.toThrow();
+    expect(await fs.readFile(otherPath, "utf8")).toContain('from "./moved"');
+
+    expect((await service.undo()).ok).toBe(true);
+    expect(await fs.readFile(appPath, "utf8")).toBe(app);
+    await expect(fs.stat(movedPath)).rejects.toThrow();
+
+    expect((await service.redo()).ok).toBe(true);
+    await expect(fs.stat(appPath)).rejects.toThrow();
     expect(await fs.readFile(movedPath, "utf8")).toContain("function alpha");
   });
 

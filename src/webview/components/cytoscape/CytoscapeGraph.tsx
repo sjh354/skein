@@ -3,7 +3,8 @@
  *
  * Responsibilities:
  * - Initialize a Cytoscape.js instance inside a div ref on mount
- * - Register cytoscape-fcose layout extension (once, at module load)
+ * - Lay the graph out with a physics simulation (physicsLayout.ts) that keeps the file/folder
+ *   compound groups together, and let neighbours follow a dragged symbol
  * - Listen to `window.message` for `showCallGraph` (render graph) and
  *   `callGraphIndexing` (show loading state) messages from the extension
  * - Post `callGraphReady` back to extension after layout completes
@@ -36,16 +37,8 @@ import { CallGraphDetail } from "./CallGraphDetail";
 import { aliasKey, type Point, planPositions } from "./CytoscapeLayout";
 import { buildCallGraphStylesheet } from "./CytoscapeTheme";
 import { GraphLegend } from "./GraphLegend";
+import { PhysicsSimulation, seedPositions } from "./physicsLayout";
 import { registerViewportReporting, focusZoomFor } from "./viewportReporting";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const fcose = require("cytoscape-fcose") as cytoscape.Ext;
-
-// ---------------------------------------------------------------------------
-// Register fcose layout ONCE at module level (idempotent in Cytoscape)
-// ---------------------------------------------------------------------------
-
-cytoscape.use(fcose);
-
 // ---------------------------------------------------------------------------
 // VS Code webview API (available as window.acquireVsCodeApi in webviews)
 // ---------------------------------------------------------------------------
@@ -194,6 +187,36 @@ function buildElements(
   }
 
   return { nodeElements, edgeElements };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers: physics layout
+// ---------------------------------------------------------------------------
+
+/** Simulation over the visible symbol nodes, their calls and the compound groups around them. */
+function buildSimulation(cy: cytoscape.Core): PhysicsSimulation {
+  const parentId = (node: cytoscape.NodeSingular): string | undefined => {
+    const parent = node.parent();
+    return parent.nonempty() ? parent.first().id() : undefined;
+  };
+  const symbols = cy.nodes().filter((node) => node.data("type") !== "compound" && node.visible());
+  const compounds = cy.nodes().filter((node) => node.data("type") === "compound");
+  return new PhysicsSimulation(
+    symbols.map((node) => ({ id: node.id(), group: parentId(node), x: node.position().x, y: node.position().y })),
+    cy.edges().filter((edge) => edge.visible()).map((edge) => ({ source: edge.source().id(), target: edge.target().id() })),
+    compounds.map((node) => ({ id: node.id(), parent: parentId(node) })),
+  );
+}
+
+/** Writes simulated positions to the graph; compound boxes follow their children. */
+function applySimulation(cy: cytoscape.Core, simulation: PhysicsSimulation, skip: ReadonlySet<string> = new Set()): void {
+  cy.batch(() => {
+    for (const [id, point] of simulation.positions()) {
+      if (skip.has(id)) continue;
+      const element = cy.getElementById(id);
+      if (element.nonempty()) element.position(point);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -418,6 +441,13 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
   const layoutReportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressLayoutReportRef = useRef(false);
 
+  // Live physics while a symbol is dragged; `pinned` are the nodes under the pointer.
+  const liveSimulationRef = useRef<{
+    simulation: PhysicsSimulation;
+    frame: number | null;
+    pinned: Set<string>;
+  } | null>(null);
+
   /** Tell the extension what is selected so agents see the same view. */
   const reportSelection = useCallback((nodeId: string | undefined, userInitiated: boolean): void => {
     const node = nodeId ? nodesRef.current.find((candidate) => candidate.id === nodeId) : undefined;
@@ -490,6 +520,32 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       const now = node.position();
       return Math.abs(now.x - start.x) > 1 || Math.abs(now.y - start.y) > 1;
     };
+
+    // Dragging a symbol lets the rest of the graph react: its neighbours follow through the
+    // call edges and the file/folder groups keep their shape (physics layout).
+    cy.on("grab", "node[type != 'compound']", (event) => {
+      pinForDrag(cy, event.target as cytoscape.NodeSingular);
+    });
+    cy.on("drag", "node[type != 'compound']", (event) => {
+      const live = liveSimulationRef.current;
+      if (!live) return;
+      const node = event.target as cytoscape.NodeSingular;
+      live.simulation.pin(node.id(), node.position().x, node.position().y);
+      live.simulation.reheat(0.3);
+      wakeLiveSimulation();
+    });
+    cy.on("free", "node[type != 'compound']", (event) => {
+      const live = liveSimulationRef.current;
+      if (!live) return;
+      const id = (event.target as cytoscape.NodeSingular).id();
+      live.simulation.release(id);
+      live.pinned.delete(id);
+      if (live.pinned.size > 0) return;
+      if (live.simulation.settled) liveSimulationRef.current = null;
+      else wakeLiveSimulation();
+    });
+    // Moving a whole file or folder group is a plain Cytoscape drag: the simulation steps aside.
+    cy.on("grab", "node[type = 'compound']", () => stopLiveSimulation());
 
     cy.on("tap", "node[type != 'compound']", (event) => {
       const node = event.target as cytoscape.NodeSingular;
@@ -651,6 +707,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
     return () => {
       if (resizeTimer !== null) clearTimeout(resizeTimer);
       stopViewportReporting();
+      stopLiveSimulation();
       if (layoutTimerRef.current !== null) {
         clearTimeout(layoutTimerRef.current);
         layoutTimerRef.current = null;
@@ -846,8 +903,9 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
     }, 400);
   }
 
-  /** fcose rebuild: a new root, an explicit re-layout or the first render. */
+  /** Physics rebuild: a new root, an explicit re-layout or the first render. */
   function runFullLayout(cy: cytoscape.Core, userInitiated = false): void {
+    stopLiveSimulation();
     if (layoutTimerRef.current !== null) {
       clearTimeout(layoutTimerRef.current);
       layoutTimerRef.current = null;
@@ -857,70 +915,122 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       safetyTimerRef.current = null;
     }
 
-    // fcose is synchronous and blocks the whole thread on large graphs, so the
-    // overlay is painted first and layout.run() is deferred one frame.
+    // The simulation is synchronous and blocks the thread on large graphs, so the
+    // overlay is painted first and the run is deferred one frame.
     suppressLayoutReportRef.current = true;
     setIsLoading(true);
     setLoadingMessage("Calculating layout…");
-
-    const layout = cy.layout({
-      name: "fcose",
-      animate: false,
-      randomize: true,
-      quality: "default",
-      nodeSeparation: 220,
-      idealEdgeLength: 220,
-      edgeElasticity: () => 0.45,
-      gravity: 0.15,
-      gravityCompound: 1.5,
-      gravityRange: 3.8,
-      numIter: 2500,
-      packComponents: true,
-      tilingPaddingVertical: 60,
-      tilingPaddingHorizontal: 60,
-    } as cytoscape.LayoutOptions);
 
     safetyTimerRef.current = setTimeout(() => {
       safetyTimerRef.current = null;
       setIsLoading(false);
     }, 15000);
 
-    layout.on("layoutstop", () => {
-      if (safetyTimerRef.current !== null) {
-        clearTimeout(safetyTimerRef.current);
-        safetyTimerRef.current = null;
-      }
-
-      moveViewportProgrammatically(() => cy.fit(undefined, 60));
-      cy.style().update();
-      triggerCanvasRepaint(cy);
-      setIsLoading(false);
-      rememberLayout(cy);
-      suppressLayoutReportRef.current = false;
-      scheduleLayoutReport(userInitiated);
-
-      // Safety retry: the container may still have been sizing during the run.
-      if (postLayoutResizeTimerRef.current !== null) {
-        clearTimeout(postLayoutResizeTimerRef.current);
-      }
-      postLayoutResizeTimerRef.current = setTimeout(() => {
-        postLayoutResizeTimerRef.current = null;
-        if (!cyRef.current) return;
-        suppressLayoutReportRef.current = true;
-        cyRef.current.resize();
-        const retryCy = cyRef.current;
-        moveViewportProgrammatically(() => retryCy.fit(undefined, 60));
-        triggerCanvasRepaint(cyRef.current);
-        suppressLayoutReportRef.current = false;
-      }, 500);
-
-      reportRendered(cy);
-    });
-
     layoutTimerRef.current = setTimeout(() => {
       layoutTimerRef.current = null;
-      layout.run();
+      try {
+        layoutWithPhysics(cy);
+      } finally {
+        finishFullLayout(cy, userInitiated);
+      }
     }, 20);
+  }
+
+  /** Seeds every symbol next to its group, then lets the simulation settle. */
+  function layoutWithPhysics(cy: cytoscape.Core): void {
+    const symbols = cy.nodes().filter((node) => node.data("type") !== "compound");
+    const seeds = seedPositions(
+      symbols.map((node) => {
+        const parent = node.parent();
+        return { id: node.id(), group: parent.nonempty() ? parent.first().id() : undefined };
+      }),
+    );
+    cy.batch(() => {
+      symbols.forEach((node) => {
+        const point = seeds.get(node.id());
+        if (point) node.position(point);
+      });
+    });
+    const simulation = buildSimulation(cy);
+    simulation.settle();
+    applySimulation(cy, simulation);
+  }
+
+  function finishFullLayout(cy: cytoscape.Core, userInitiated: boolean): void {
+    if (safetyTimerRef.current !== null) {
+      clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = null;
+    }
+
+    moveViewportProgrammatically(() => cy.fit(undefined, 60));
+    cy.style().update();
+    triggerCanvasRepaint(cy);
+    setIsLoading(false);
+    rememberLayout(cy);
+    suppressLayoutReportRef.current = false;
+    scheduleLayoutReport(userInitiated);
+
+    // Safety retry: the container may still have been sizing during the run.
+    if (postLayoutResizeTimerRef.current !== null) {
+      clearTimeout(postLayoutResizeTimerRef.current);
+    }
+    postLayoutResizeTimerRef.current = setTimeout(() => {
+      postLayoutResizeTimerRef.current = null;
+      if (!cyRef.current) return;
+      suppressLayoutReportRef.current = true;
+      cyRef.current.resize();
+      const retryCy = cyRef.current;
+      moveViewportProgrammatically(() => retryCy.fit(undefined, 60));
+      triggerCanvasRepaint(cyRef.current);
+      suppressLayoutReportRef.current = false;
+    }, 500);
+
+    reportRendered(cy);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Live physics: dragging a symbol lets its neighbours follow and settle again
+  // ---------------------------------------------------------------------------
+
+  function stopLiveSimulation(): void {
+    const live = liveSimulationRef.current;
+    if (live?.frame != null) cancelAnimationFrame(live.frame);
+    liveSimulationRef.current = null;
+  }
+
+  function wakeLiveSimulation(): void {
+    const live = liveSimulationRef.current;
+    if (live && live.frame === null) live.frame = requestAnimationFrame(runLiveFrame);
+  }
+
+  function runLiveFrame(): void {
+    const live = liveSimulationRef.current;
+    const cy = cyRef.current;
+    if (!live || !cy) return;
+    live.frame = null;
+    live.simulation.step();
+    applySimulation(cy, live.simulation, live.pinned);
+    if (!live.simulation.settled) {
+      live.frame = requestAnimationFrame(runLiveFrame);
+      return;
+    }
+    // Cooled. A node still under the pointer keeps the simulation asleep until the next drag.
+    if (live.pinned.size > 0) return;
+    liveSimulationRef.current = null;
+    rememberLayout(cy);
+    scheduleLayoutReport(true);
+  }
+
+  function pinForDrag(cy: cytoscape.Core, node: cytoscape.NodeSingular): void {
+    if (!liveSimulationRef.current) {
+      // Cold start: a click that never moves the node must not reshuffle the graph.
+      const simulation = buildSimulation(cy);
+      simulation.alpha = 0;
+      liveSimulationRef.current = { simulation, frame: null, pinned: new Set<string>() };
+    }
+    const live = liveSimulationRef.current;
+    live.simulation.pin(node.id(), node.position().x, node.position().y);
+    live.pinned.add(node.id());
   }
 
   function handleShowCallGraph(msg: ShowCallGraphMessage): void {
@@ -977,7 +1087,8 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
       viewportRef.current = null;
     }
 
-    // A pending layout from the previous message must not run on this data.
+    // A pending layout, or a simulation still settling, must not run on this data.
+    stopLiveSimulation();
     if (layoutTimerRef.current !== null) {
       clearTimeout(layoutTimerRef.current);
       layoutTimerRef.current = null;
@@ -1096,6 +1207,7 @@ export function CytoscapeGraph({ onReady, postMessage }: Readonly<CytoscapeGraph
 
   const applyFilterSet = useCallback((next: Set<string>): void => {
     hiddenFiltersRef.current = next;
+    stopLiveSimulation(); // it holds the nodes this filter is about to hide
     setHiddenFilters(new Set(next)); // trigger re-render
 
     // Apply visibility to Cytoscape elements (no layout recalculation — FR-014)

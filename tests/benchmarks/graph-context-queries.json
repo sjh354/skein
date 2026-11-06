@@ -1,0 +1,297 @@
+{
+  "repo": "skein (this repository)",
+  "note": "Gold files were fixed before any ranking measurement; a hit is any gold file.",
+  "queries": [
+    {
+      "question": "where is the architecture rules file parsed and validated",
+      "gold": [
+        "src/analyzer/architecture/architectureRules.ts"
+      ]
+    },
+    {
+      "question": "how are circular dependencies detected between modules",
+      "gold": [
+        "src/analyzer/architecture/stronglyConnectedComponents.ts",
+        "src/shared/cycleUtils.ts"
+      ]
+    },
+    {
+      "question": "where is the dead code scan implemented",
+      "gold": [
+        "src/analyzer/deadcode/DeadCodeScanner.ts"
+      ]
+    },
+    {
+      "question": "how does the extension poll for commands queued by the mcp server",
+      "gold": [
+        "src/extension/services/CommandBridgeService.ts"
+      ]
+    },
+    {
+      "question": "where is the view state json written and merged between windows",
+      "gold": [
+        "src/shared/viewState.ts",
+        "src/extension/services/ViewStateService.ts"
+      ]
+    },
+    {
+      "question": "which code creates the internal git repository that records change history",
+      "gold": [
+        "src/analyzer/change/historyRepo.ts"
+      ]
+    },
+    {
+      "question": "three way merge used when undoing a change after later edits",
+      "gold": [
+        "src/analyzer/change/threeWayMerge.ts"
+      ]
+    },
+    {
+      "question": "how are calls extracted from typescript source for the call graph",
+      "gold": [
+        "src/analyzer/callgraph/GraphExtractor.ts"
+      ]
+    },
+    {
+      "question": "where do file system events turn into reindexing work",
+      "gold": [
+        "src/extension/services/SourceFileWatcher.ts",
+        "src/extension/services/FileChangeScheduler.ts"
+      ]
+    },
+    {
+      "question": "dart syntax scanning and package imports",
+      "gold": [
+        "src/analyzer/languages/DartParser.ts",
+        "src/analyzer/languages/dartSyntax.ts",
+        "src/analyzer/callgraph/dartCallGraphExtractor.ts"
+      ]
+    },
+    {
+      "question": "which wasm tree sitter parser is loaded for a language",
+      "gold": [
+        "src/analyzer/languages/WasmParserFactory.ts"
+      ]
+    },
+    {
+      "question": "community detection that groups related files",
+      "gold": [
+        "src/analyzer/community/LouvainCommunityDetector.ts",
+        "src/analyzer/community/PathCommunityDetector.ts"
+      ]
+    },
+    {
+      "question": "how is the token budget applied to a graph context response",
+      "gold": [
+        "src/analyzer/graph-context/GraphContextBudget.ts"
+      ]
+    },
+    {
+      "question": "pagination cursor for graph context results",
+      "gold": [
+        "src/analyzer/graph-context/GraphContextCursor.ts"
+      ]
+    },
+    {
+      "question": "shortest path between two graph nodes",
+      "gold": [
+        "src/analyzer/graph-context/GraphContextPathFinder.ts"
+      ]
+    },
+    {
+      "question": "where are the descriptions of the mcp tools written",
+      "gold": [
+        "src/mcp/toolDescriptions.ts"
+      ]
+    },
+    {
+      "question": "how does the mcp server run analysis in a worker thread",
+      "gold": [
+        "src/mcp/McpWorker.ts",
+        "src/mcp/McpWorkerHost.ts",
+        "src/mcp/worker/invokeTool.ts"
+      ]
+    },
+    {
+      "question": "reverse index of which files import a given file",
+      "gold": [
+        "src/analyzer/ReverseIndex.ts",
+        "src/analyzer/ReverseIndexManager.ts"
+      ]
+    },
+    {
+      "question": "persisted index cache invalidated when configuration changes",
+      "gold": [
+        "src/analyzer/cache/IndexCache.ts",
+        "src/analyzer/cache/configFingerprint.ts"
+      ]
+    },
+    {
+      "question": "resolving import path aliases from tsconfig",
+      "gold": [
+        "src/analyzer/utils/tsconfig.ts",
+        "src/analyzer/utils/PathResolver.ts",
+        "src/analyzer/utils/resolveFileImports.ts"
+      ]
+    },
+    {
+      "question": "extension activation and wiring of services",
+      "gold": [
+        "src/extension/extension.ts",
+        "src/extension/GraphProvider.ts"
+      ]
+    },
+    {
+      "question": "compact toon output format for tool responses",
+      "gold": [
+        "src/shared/toon.ts",
+        "src/shared/toonSections.ts",
+        "src/shared/compactOutput.ts",
+        "src/mcp/responseFormatter.ts"
+      ]
+    },
+    {
+      "question": "dependency matrix between architecture units",
+      "gold": [
+        "src/analyzer/architecture/architectureMatrix.ts",
+        "src/webview/components/architecture/ArchitectureMatrix.tsx"
+      ]
+    },
+    {
+      "question": "how unit roles are inferred from manifests and files",
+      "gold": [
+        "src/analyzer/architecture/unitRoles.ts",
+        "src/analyzer/architecture/architectureUnits.ts"
+      ]
+    },
+    {
+      "question": "duplicate code detection in structure diagnostics",
+      "gold": [
+        "src/analyzer/diagnostics/structureDiagnostics.ts"
+      ]
+    },
+    {
+      "question": "detecting that a change plan is stale because the file changed",
+      "gold": [
+        "src/analyzer/change/fingerprint.ts",
+        "src/analyzer/change/changePlan.ts"
+      ]
+    },
+    {
+      "question": "recovering tasks that were interrupted by a crash",
+      "gold": [
+        "src/analyzer/change/taskStore.ts"
+      ]
+    },
+    {
+      "question": "line diff between two versions of a file",
+      "gold": [
+        "src/analyzer/change/lineDiff.ts"
+      ]
+    },
+    {
+      "question": "layout algorithm that positions call graph nodes",
+      "gold": [
+        "src/webview/components/cytoscape/CytoscapeLayout.ts"
+      ]
+    },
+    {
+      "question": "reporting zoom and pan of the graph viewport",
+      "gold": [
+        "src/webview/components/cytoscape/viewportReporting.ts"
+      ]
+    },
+    {
+      "question": "legend used to hide node types",
+      "gold": [
+        "src/webview/components/cytoscape/GraphLegend.tsx"
+      ]
+    },
+    {
+      "question": "colors and theme of the call graph",
+      "gold": [
+        "src/webview/components/cytoscape/CytoscapeTheme.ts"
+      ]
+    },
+    {
+      "question": "registration of vscode commands",
+      "gold": [
+        "src/extension/services/CommandRegistrationService.ts"
+      ]
+    },
+    {
+      "question": "language model tools exposed to copilot",
+      "gold": [
+        "src/extension/services/LmToolsService.ts"
+      ]
+    },
+    {
+      "question": "session statistics saved to disk",
+      "gold": [
+        "src/analyzer/stats/statsPersistence.ts",
+        "src/shared/sessionStats.ts",
+        "src/mcp/tools/stats.ts"
+      ]
+    },
+    {
+      "question": "security checks that keep paths inside the workspace",
+      "gold": [
+        "src/shared/pathSecurity.ts",
+        "src/analyzer/utils/workspaceBoundary.ts"
+      ]
+    },
+    {
+      "question": "parsing python imports",
+      "gold": [
+        "src/analyzer/languages/PythonParser.ts",
+        "src/analyzer/utils/pyRsImports.ts"
+      ]
+    },
+    {
+      "question": "resolving rust module and crate imports",
+      "gold": [
+        "src/analyzer/languages/RustParser.ts",
+        "src/analyzer/utils/pyRsImports.ts"
+      ]
+    },
+    {
+      "question": "symbol dependency graph inside one file",
+      "gold": [
+        "src/analyzer/SymbolAnalyzer.ts",
+        "src/analyzer/SymbolDependencyHelper.ts",
+        "src/extension/services/SymbolViewService.ts"
+      ]
+    },
+    {
+      "question": "cache for unused analysis with periodic cleanup",
+      "gold": [
+        "src/extension/services/UnusedAnalysisCache.ts"
+      ]
+    },
+    {
+      "question": "background indexing of the workspace",
+      "gold": [
+        "src/extension/services/BackgroundIndexingManager.ts",
+        "src/analyzer/spider/SpiderIndexingService.ts"
+      ]
+    },
+    {
+      "question": "handling of re-exports and barrel files",
+      "gold": [
+        "src/analyzer/utils/reExports.ts"
+      ]
+    },
+    {
+      "question": "indexing references from markdown documents",
+      "gold": [
+        "src/analyzer/graph-context/DocumentReferenceIndexer.ts"
+      ]
+    },
+    {
+      "question": "glob matching of file scopes",
+      "gold": [
+        "src/analyzer/graph-context/FileScopeMatcher.ts"
+      ]
+    }
+  ]
+}

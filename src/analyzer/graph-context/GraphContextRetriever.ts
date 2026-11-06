@@ -20,6 +20,7 @@ import { toEvidence } from './GraphContextEvidence';
 import { findShortestPath } from './GraphContextPathFinder';
 import { resolveSeeds } from './GraphContextResolver';
 import { GraphContextScorer } from './GraphContextScorer';
+import { rerankByStructure } from './GraphContextStructuralRank';
 
 const DEFAULT_DEPTH = 2;
 const DEFAULT_MAX_NODES = 200;
@@ -48,6 +49,8 @@ export interface GraphContextRetrieverOptions {
   workspaceRoot: string;
   /** Build the complete ranked candidate pool when an outer adapter owns pagination. */
   collectAllCandidates?: boolean;
+  /** Blend a Personalized PageRank rank into search candidates (off until measured to help). */
+  structuralRanking?: boolean;
 }
 
 interface TraversalEntry {
@@ -138,9 +141,12 @@ export class GraphContextRetriever {
     mode: Exclude<GraphContextMode, 'path' | 'overview'>,
   ): Promise<RetrievalSelection> {
     const { seeds: resolvedSeeds, ambiguous } = resolveRequestedSeeds(request.seeds, snapshot);
-    const scoredSearchSeeds = request.question
+    const lexicalSearchSeeds = request.question
       ? this.scorer.scoreSearchNodes(request.question, snapshot.nodes, request.scope)
       : [];
+    const scoredSearchSeeds = this.options.structuralRanking
+      ? rerankByStructure(lexicalSearchSeeds, snapshot.nodes, snapshot.edges)
+      : lexicalSearchSeeds;
     const hasRequestedSeeds = (request.seeds?.length ?? 0) > 0;
     const requestedMaxNodes = request.maxNodes ?? DEFAULT_MAX_NODES;
     const generatedSeedLimit = Math.min(

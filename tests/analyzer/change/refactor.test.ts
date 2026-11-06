@@ -5,6 +5,7 @@ import {
   buildExtractRefactor,
   buildInlineRefactor,
   buildMoveRefactor,
+  mentionsModule,
   type ReferenceLookup,
   type RefactorIo,
   type RefactorReference,
@@ -61,6 +62,81 @@ function afterOf(build: { files: ChangeFileEdit[] }, filePath: string, before: s
   if (!file) return before;
   return applyTextEdits(before, file.edits) ?? "";
 }
+
+describe("mentionsModule", () => {
+  it("matches imports, requires and config paths of the module, not look-alikes", () => {
+    const file = "/repo/src/db.ts";
+    expect(mentionsModule('import { q } from "./db";', file)).toBe(true);
+    expect(mentionsModule("const m = require('../db.ts');", file)).toBe(true);
+    expect(mentionsModule('await import(`@/db`)', file)).toBe(true);
+    expect(mentionsModule('{ "main": "src/db.js" }', file)).toBe(true);
+    expect(mentionsModule('import { q } from "./mydb";', file)).toBe(false);
+    expect(mentionsModule('import { q } from "./dbx";', file)).toBe(false);
+    expect(mentionsModule("const db = 1;", file)).toBe(false);
+  });
+});
+
+describe("move deletes an emptied source", () => {
+  const dbPath = `${REPO}/src/db.ts`;
+  const viewPath = `${REPO}/src/view.ts`;
+  const db = "export function query(sql: string) {\n  return sql;\n}\n";
+  const view = 'import { query } from "./db";\n\nexport function render() {\n  return query("x");\n}\n';
+
+  function moveQuery(
+    mentions: RefactorIo["findPathMentions"] | undefined,
+    source = dbPath,
+    sourceContent = db,
+  ) {
+    const stem = source.replace(/^.*\//, "").replace(/\.ts$/, "");
+    const base = io(
+      { [source]: sourceContent, [viewPath]: view.replace("./db", `./${stem}`) },
+      { [source]: [symbol("query", 0, 2, { isExported: true })], [viewPath]: [symbol("render", 2, 4, { isExported: true })] },
+      { [`${source}:query`]: { references: [reference(source, 0), reference(viewPath, 0, 9), reference(viewPath, 3, 9)] } },
+    );
+    return buildMoveRefactor({
+      sourcePath: source,
+      destinationPath: viewPath,
+      symbol: symbol("query", 0, 2, { isExported: true }),
+      io: { ...base, ...(mentions ? { findPathMentions: mentions } : {}) },
+    });
+  }
+
+  it("deletes the source when only files this move rewrites mentioned it", async () => {
+    const result = await moveQuery(async () => [viewPath]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const source = result.build.files.find((file) => file.path === dbPath);
+    expect(source).toMatchObject({ delete: true, edits: [] });
+    expect(result.build.analysis?.notes?.join(" ")).toContain("deleted");
+  });
+
+  it("keeps the source when a file outside the plan still names it", async () => {
+    const result = await moveQuery(async () => [viewPath, `${REPO}/package.json`]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const source = result.build.files.find((file) => file.path === dbPath);
+    expect(source?.delete).toBeUndefined();
+    expect(result.build.analysis?.notes?.join(" ")).toContain("package.json still refers to it");
+  });
+
+  it("keeps the source when mentions cannot be searched", async () => {
+    for (const mentions of [undefined, async () => ({ error: "search-failed" })] as const) {
+      const result = await moveQuery(mentions);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.build.files.find((file) => file.path === dbPath)?.delete).toBeUndefined();
+    }
+  });
+
+  it("keeps an emptied entry file", async () => {
+    const indexPath = `${REPO}/src/index.ts`;
+    const result = await moveQuery(async () => [viewPath], indexPath);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.build.files.find((file) => file.path === indexPath)?.delete).toBeUndefined();
+    expect(result.build.analysis?.notes?.join(" ")).toContain("entry file");
+  });
+});
 
 describe("move rule engine", () => {
   const sourcePath = `${REPO}/src/a.ts`;

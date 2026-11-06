@@ -69,6 +69,9 @@ export async function executeGraphContextWithIndexes(
     dependentsProvider: indexes.spider,
     workspaceRoot: normalizePath(indexes.rootDir),
     collectAllCandidates: true,
+    // On by default (it lifted hit@1/hit@5/MRR on the labelled query set, scripts/bench-graph-context.mjs);
+    // SKEIN_GRAPH_CONTEXT_RANKING=lexical switches it off.
+    structuralRanking: process.env.SKEIN_GRAPH_CONTEXT_RANKING !== 'lexical',
   });
   const unbudgetedResponse = await retriever.retrieve(request);
   signal?.throwIfAborted();

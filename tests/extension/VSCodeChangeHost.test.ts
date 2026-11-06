@@ -118,6 +118,9 @@ vi.mock("vscode", () => {
     DocumentSymbol,
     DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
     workspace: {
+      async findFiles() {
+        return [...state.docs.keys()].map((path) => fileUri(path));
+      },
       async openTextDocument(uri: { fsPath: string }) {
         if (state.openFailure === uri.fsPath) throw new Error("cannot open");
         if (!state.docs.has(uri.fsPath)) throw new Error("missing");
@@ -418,6 +421,16 @@ describe("VSCodeChangeHost", () => {
     const started = Date.now();
     await host().waitForDiagnostics([APP], 2_000, 600);
     expect(Date.now() - started).toBeGreaterThanOrEqual(550);
+  });
+
+  it("finds workspace files of any type that still name a module", async () => {
+    state.docs.set("/workspace/src/user.ts", 'import { q } from "./db";');
+    state.docs.set("/workspace/package.json", '{ "main": "src/db.js" }');
+    state.docs.set("/workspace/src/other.ts", "export const x = 1;");
+
+    const mentions = await host().findPathMentions("/workspace/src/db.ts");
+
+    expect(mentions).toEqual(["/workspace/src/user.ts", "/workspace/package.json"]);
   });
 
   it("opens up to five applied files in regular tabs", async () => {

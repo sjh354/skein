@@ -15,6 +15,7 @@ import type {
   ChangeFileEdit,
   ChangeTextEdit,
 } from "@/shared/change";
+import { mentionsModule } from "@/analyzer/change/refactor";
 import { normalizePath } from "@/shared/path";
 import type {
   ChangeEditorHost,
@@ -27,6 +28,10 @@ import type {
 } from "./changeHost";
 
 const MAX_OPEN_FILES = 5;
+const MENTION_SEARCH_EXCLUDE = "{**/node_modules/**,**/.git/**,**/.skein/**,**/dist/**,**/build/**,**/out/**,**/coverage/**,**/.dart_tool/**}";
+const MENTION_SEARCH_MAX_FILES = 5_000;
+const MENTION_SEARCH_MAX_BYTES = 5_000_000;
+const BINARY_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".zip", ".gz", ".vsix", ".woff", ".woff2", ".ttf", ".wasm", ".db", ".mp4", ".mov"]);
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -390,6 +395,33 @@ export class VSCodeChangeHost implements ChangeEditorHost {
       seen.add(key);
       return true;
     });
+  }
+
+  async findPathMentions(filePath: string): Promise<string[] | { error: string }> {
+    let uris: vscode.Uri[];
+    try {
+      uris = await vscode.workspace.findFiles("**/*", MENTION_SEARCH_EXCLUDE, MENTION_SEARCH_MAX_FILES + 1);
+    } catch (err) {
+      this.logger.warn("[Change] workspace file search failed:", err);
+      return { error: "search-failed" };
+    }
+    if (uris.length > MENTION_SEARCH_MAX_FILES) return { error: "too-many-files" };
+    const mentions: string[] = [];
+    /* eslint-disable no-await-in-loop -- one bounded read per file */
+    for (const uri of uris) {
+      if (BINARY_EXTENSIONS.has(path.extname(uri.fsPath).toLowerCase())) continue;
+      try {
+        const stat = await vscode.workspace.fs.stat(uri);
+        // A file too large to read cannot be ruled out.
+        if (stat.size > MENTION_SEARCH_MAX_BYTES) return { error: "file-too-large" };
+        const content = await this.readSavedContent(uri.fsPath);
+        if (content !== null && mentionsModule(content, filePath)) mentions.push(normalizePath(uri.fsPath));
+      } catch {
+        return { error: "read-failed" };
+      }
+    }
+    /* eslint-enable no-await-in-loop */
+    return mentions;
   }
 
   async readSavedContent(path: string): Promise<string | null> {

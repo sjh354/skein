@@ -74,3 +74,48 @@ describe("CallGraphViewService.setFilter", () => {
     expect(service.getHiddenFilters()).toEqual([]);
   });
 });
+
+describe("CallGraphViewService hidden filters after a restart", () => {
+  const restored = { filterType: "nodeType" as const, value: "function" };
+  const snapshot = { hiddenFilters: [restored], mode: "callgraph", expandAll: false, views: {} } as never;
+
+  it("keeps the restored filters when a new renderer reports none before it has been sent them", () => {
+    const { service } = createService();
+    service.restoreView(snapshot);
+
+    service.setHiddenFilters([]);
+
+    expect(service.getHiddenFilters()).toEqual([restored]);
+  });
+
+  it("replays the filters on mount even without a buffered graph, then follows the renderer", () => {
+    const { service, posted } = createService();
+    service.restoreView(snapshot);
+    service.setHiddenFilters([]);
+
+    service.handleWebviewMessage({ command: "callGraphMounted" });
+
+    expect(posted).toContainEqual({
+      type: "callGraphSetFilter",
+      filterType: "nodeType",
+      value: "function",
+      visible: false,
+    });
+    service.setHiddenFilters([{ filterType: "folder", value: "src" }]);
+    expect(service.getHiddenFilters()).toEqual([{ filterType: "folder", value: "src" }]);
+  });
+
+  it("holds the filters again when another renderer is attached", () => {
+    const { service } = createService();
+    service.restoreView(snapshot);
+    service.handleWebviewMessage({ command: "callGraphMounted" });
+    service.setHiddenFilters([]);
+    expect(service.getHiddenFilters()).toEqual([]);
+
+    service.restoreView(snapshot);
+    service.setSidebarWebview({ webview: { postMessage: () => Promise.resolve(true) } } as never);
+    service.setHiddenFilters([]);
+
+    expect(service.getHiddenFilters()).toEqual([restored]);
+  });
+});
