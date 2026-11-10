@@ -38,12 +38,10 @@ export class HistoryRepo {
   private ready: Promise<void> | null = null;
   private readonly gitDir: string;
   private readonly hooksDir: string;
-  private readonly excludesFile: string;
 
   constructor(private readonly root: string) {
     this.gitDir = historyRepoPath(root);
     this.hooksDir = path.join(historyDirPath(root), "no-hooks");
-    this.excludesFile = path.join(historyDirPath(root), "ignore");
   }
 
   async ensure(): Promise<void> {
@@ -55,7 +53,6 @@ export class HistoryRepo {
   private async initialize(): Promise<void> {
     try {
       await fs.mkdir(this.hooksDir, { recursive: true });
-      await fs.writeFile(this.excludesFile, ".skein/\n", "utf8");
       try {
         await fs.access(path.join(this.gitDir, "HEAD"));
       } catch {
@@ -68,7 +65,6 @@ export class HistoryRepo {
       await this.run(["config", "core.worktree", this.root]);
       await this.run(["config", "core.autocrlf", "false"]);
       await this.run(["config", "core.hooksPath", this.hooksDir]);
-      await this.run(["config", "core.excludesFile", this.excludesFile]);
     } catch (err) {
       this.ready = null;
       if (err instanceof HistoryError) throw err;
