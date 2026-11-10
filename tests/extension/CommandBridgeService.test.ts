@@ -137,6 +137,42 @@ describe("CommandBridgeService", () => {
     ).rejects.toThrow();
   });
 
+  it("skips a request withdrawn after it was listed", async () => {
+    bridge.dispose();
+    const first = {
+      id: "a-" + createChangeId(),
+      kind: "change" as const,
+      createdAt: 1,
+      command: { action: "change_apply" as const, planId: "plan-1" },
+    };
+    const second = {
+      id: "b-" + createChangeId(),
+      kind: "change" as const,
+      createdAt: 2,
+      command: { action: "change_undo" as const },
+    };
+    await writeChangeRequest(root, first);
+    await writeChangeRequest(root, second);
+    // The MCP side stops waiting for the second request while the first one runs.
+    change.handleRequest.mockImplementation(async (request) => {
+      await rm(path.join(root, ".skein", "commands", `${second.id}.request.json`), { force: true });
+      return { id: request.id, status: "applied", completedAt: Date.now() };
+    });
+    bridge = new CommandBridgeService({
+      root,
+      logger,
+      windowId: () => "window-1",
+      view: view as never,
+      change: change as never,
+      pollIntervalMs: 10,
+    });
+    await bridge.start();
+    await waitFor(() => readChangeResult(root, first.id), "first result");
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(change.handleRequest).toHaveBeenCalledTimes(1);
+    expect(await readChangeResult(root, second.id)).toBeNull();
+  });
+
   it("ignores malformed and unknown request files", async () => {
     const directory = path.join(root, ".skein", "commands");
     await mkdir(directory, { recursive: true });

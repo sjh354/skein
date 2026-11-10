@@ -230,7 +230,8 @@ stateDiagram-v2
 
 적용 순서는 지문 재확인 → 저장되지 않은 편집 확인 → 구조 규칙 사전 검사 → before 스냅샷 → 적용 → after 스냅샷 → 진단 비교다. before 기록이나 적용이 실패하면 코드를 진행하지 않는다.
 
-- **디스크 직접 쓰기**: 편집기 저장은 사용자의 저장 시 포매터가 계획한 내용을 바꿔 적용 후 비교가 어긋나므로, 적용은 파일에 직접 쓴다. 열린 탭은 다시 읽고 편집기 자체의 Ctrl+Z 스택에는 남지 않아 Skein의 되돌리기를 쓴다.
+- **디스크 직접 쓰기**: 편집기 저장은 사용자의 저장 시 포매터가 계획한 내용을 바꿔 적용 후 비교가 어긋나므로, 적용은 파일에 직접 쓴다. 열린 탭은 다시 읽고 편집기 자체의 Ctrl+Z 스택에는 남지 않아 Skein의 되돌리기를 쓴다. 계획은 LF로 계산하고, 디스크 파일이 CRLF면 CRLF로 되돌려 써서 줄바꿈만 바뀐 diff를 만들지 않는다.
+- **변경 잠금**: `.skein/history/lock`은 한 번에 한 변경을 보장한다. 보유자는 잠금 파일의 시각을 주기적으로 갱신하므로, 진단 대기까지 포함해 5초를 넘기는 정상 적용이 죽은 프로세스의 잠금으로 오인되지 않는다.
 - **진단 비교**: 적용 후 파일을 열어 언어 서버에 알리고 최소 1.5초 기다린 뒤 진단이 안정될 때 판정한다. 디스크에 쓴 직후의 빈 진단은 판정이 아니다. 새 오류는 `verification-failed`로 기록하고 diff와 이력을 남기며 자동 롤백하지 않는다.
 - **구조 가드**: 변경 파일에 이미 새 확정 위반이 있으면 적용을 `architecture-blocked`로 거부한다(예외가 있으면 허용). 가드가 변경 파일을 분석하지 못하면 통과가 아니라 `unavailable`이다. 적용 후 새로 생기거나 커진 위반은 `verification-failed`다. 규칙 파일이 없는 프로젝트는 가드를 건너뛴다.
 - **Undo·다시 적용**: 기록된 상태를 복원할 뿐이므로 사전 차단 없이 사후 검증으로만 판정한다. 위반을 고치는 변경도 되돌릴 수 있어야 하기 때문이다.
@@ -257,7 +258,7 @@ Codex 전용 화면·채팅을 두지 않고 공통 MCP에 상태·조회·조�
 ### 10.1 기능 계약
 
 - **화면**: `skein_get_view_state`(조회), `skein_control_view`(`select`·`focus`·`set_depth`·`open_file`·`set_filter`·`set_expand_all`·`search`·`set_expanded`·`set_architecture`·`set_view_mode`). `search`는 현재 화면에 로드된 노드가 대상이고 전체 검색은 `skein_graph_context`가 한다. 응답은 노드 좌표와 창 스냅샷을 빼고 `layout.positionCount`·창 요약만 담아 토큰 한도 안에 둔다. 명령은 렌더러가 상태를 반영하고 게시한 뒤에 응답하며, 없는 노드·숨겨진 노드·지원하지 않는 조작·무응답은 명시적으로 거부한다. `windowId`가 없으면 사용자가 마지막으로 조작한 창이 대상이다.
-- **변경**: `skein_plan_change`(`kind`: `rename`·`move`·`extract`·`inline`)·`skein_apply_change`·`skein_get_change_plan`·`skein_list_change_history`·`skein_undo_change`·`skein_redo_change`.
+- **변경**: `skein_plan_change`(`kind`: `rename`·`move`·`extract`·`inline`)·`skein_apply_change`·`skein_get_change_plan`·`skein_list_change_history`·`skein_undo_change`·`skein_redo_change`. `undo`·`redo`는 MCP 쪽에서 항상 이력 id를 채워 보내므로, 응답 시간 초과 뒤의 재시도가 그 앞 항목까지 되돌리지 않는다. MCP가 기다림을 멈추고 요청 파일을 지우면 확장은 실행 직전에 요청 파일이 남아 있는지 확인하고 사라진 요청은 실행하지 않는다.
 - **진단**: `skein_diagnose_structure`(`kind`·`status`·`area`·`offset`/`limit`로 페이징, revision이 바뀌면 이전 offset은 거부).
 - **그래프 조회**: `skein_graph_context`(검색·이웃·경로·영향·리팩토링·개요 모드, 토큰 예산과 커서).
 

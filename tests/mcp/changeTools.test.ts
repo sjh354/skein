@@ -237,8 +237,34 @@ describe("MCP change tools", () => {
 
     const undone = await executeUndoChange(root, { historyId: "history-1" });
     expect(undone.status).toBe("applied");
+    const undoEntry = { ...entry, id: "history-2", kind: "undo" as const, undoTargetId: "history-1" };
+    await writeChangeHistory(root, {
+      schemaVersion: SKEIN_CHANGE_SCHEMA_VERSION,
+      entries: [entry, undoEntry],
+    });
     const redone = await executeRedoChange(root, {});
     expect(redone.status).toBe("applied");
+  });
+
+  it("names the newest entry when undo is called without historyId", async () => {
+    const seen: string[] = [];
+    respondWith((request) => {
+      if (request!.command.action === "change_undo") seen.push(request!.command.historyId ?? "(none)");
+      return { id: request!.id, status: "applied", completedAt: Date.now() };
+    });
+    await writeChangeHistory(root, {
+      schemaVersion: SKEIN_CHANGE_SCHEMA_VERSION,
+      entries: [{ ...historyEntry(), id: "history-1" }, { ...historyEntry(), id: "history-2" }],
+    });
+    const result = await executeUndoChange(root, {});
+    expect(result.status).toBe("applied");
+    // A retry after a timed-out call sees the id and cannot undo history-1 as well.
+    expect(seen).toEqual(["history-2"]);
+  });
+
+  it("rejects a bare undo and redo when the history has nothing to reverse", async () => {
+    expect(await executeUndoChange(root, {})).toMatchObject({ applied: false, status: "rejected", reason: "nothing-to-undo" });
+    expect(await executeRedoChange(root, {})).toMatchObject({ applied: false, status: "rejected", reason: "nothing-to-redo" });
   });
 
   it("rejects undo for an entry that is not undoable", async () => {

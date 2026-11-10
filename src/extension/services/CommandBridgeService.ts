@@ -41,8 +41,8 @@ export interface CommandBridgeOptions {
 }
 
 type QueuedCommand =
-  | { id: string; createdAt: number; targetWindowId?: string; kind: "view"; view: SkeinCommandRequest }
-  | { id: string; createdAt: number; targetWindowId?: string; kind: "change"; change: SkeinChangeRequest };
+  | { id: string; createdAt: number; targetWindowId?: string; file: string; kind: "view"; view: SkeinCommandRequest }
+  | { id: string; createdAt: number; targetWindowId?: string; file: string; kind: "change"; change: SkeinChangeRequest };
 
 export class CommandBridgeService implements vscode.Disposable {
   private root: string;
@@ -108,6 +108,13 @@ export class CommandBridgeService implements vscode.Disposable {
   }
 
   private async execute(command: QueuedCommand): Promise<void> {
+    // The MCP side deletes its request when it stops waiting. A request listed
+    // before that must not run after it: the caller already saw a failure.
+    try {
+      await fs.access(command.file);
+    } catch {
+      return;
+    }
     // A result file means an earlier attempt already ran the command and only
     // the request cleanup failed; re-running undo/redo would apply it twice.
     if (command.kind === "change") {
@@ -138,9 +145,10 @@ export class CommandBridgeService implements vscode.Disposable {
     /* eslint-disable no-await-in-loop -- one small file per queued command */
     for (const name of names) {
       if (!name.endsWith(".request.json")) continue;
+      const file = path.join(directory, name);
       let raw: string;
       try {
-        raw = await fs.readFile(path.join(directory, name), "utf8");
+        raw = await fs.readFile(file, "utf8");
       } catch {
         continue;
       }
@@ -150,6 +158,7 @@ export class CommandBridgeService implements vscode.Disposable {
           id: change.id,
           createdAt: change.createdAt,
           ...(change.targetWindowId ? { targetWindowId: change.targetWindowId } : {}),
+          file,
           kind: "change",
           change,
         });
@@ -161,6 +170,7 @@ export class CommandBridgeService implements vscode.Disposable {
           id: view.id,
           createdAt: view.createdAt,
           ...(view.targetWindowId ? { targetWindowId: view.targetWindowId } : {}),
+          file,
           kind: "view",
           view,
         });
