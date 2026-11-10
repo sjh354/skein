@@ -140,47 +140,38 @@ import {
 } from "./tools/change";
 import {
   AnalyzeBreakingChangesParamsSchema,
-  type AnalyzeBreakingChangesResult,
   AnalyzeDependenciesParamsSchema,
-  type AnalyzeDependenciesResult,
   CrawlDependencyGraphParamsSchema,
   type CrawlDependencyGraphResult,
   createErrorResponse,
   createSuccessResponse,
   FindReferencingFilesParamsSchema,
-  type FindReferencingFilesResult,
   FindUnusedSymbolsParamsSchema,
-  type FindUnusedSymbolsResult,
+  GenerateCodemapParamsSchema,
   GetImpactAnalysisParamsSchema,
-  type GetImpactAnalysisResult,
   CheckArchitectureParamsSchema,
   DiagnoseStructureParamsSchema,
   ExploreArchitectureParamsSchema,
   GraphContextParamsSchema,
   type GetIndexStatusResult,
   GetSymbolGraphParamsSchema,
-  type GetSymbolGraphResult,
   InvalidateFilesParamsSchema,
-  type InvalidateFilesResult,
   MCP_SERVER_VERSION,
   MCP_TOOL_VERSION,
+  type McpToolName,
   type McpToolResponse,
   type PaginationInfo,
   QueryCallGraphParamsSchema,
-  type RebuildIndexResult,
   ResolveModulePathParamsSchema,
-  type ResolveModulePathResult,
   ScanDeadCodeParamsSchema,
   QueryNaturalLanguageParamsSchema,
   // Import all parameter schemas with payload limits
   SetWorkspaceParamsSchema,
   type SetWorkspaceResult,
   TraceFunctionExecutionParamsSchema,
-  type TraceFunctionExecutionResult,
   validateFilePath,
   VerifyDependencyUsageParamsSchema,
 } from "./types";
-import type { GraphContextResponse } from "../shared/graph-context-types";
 import { executeGetSessionStats, GetSessionStatsSchema, type GetSessionStatsResult } from "./tools/stats.js";
 import { flushSession } from "../analyzer/stats/statsPersistence";
 import { findWorkspaceRoot } from "../analyzer/utils/workspaceBoundary";
@@ -781,769 +772,201 @@ server.registerTool(
   },
 );
 
-// Tool: skein_analyze_dependencies
-server.registerTool(
-  "skein_analyze_dependencies",
-  {
-    title: "Analyze File Dependencies",
-    description: mcpToolDescription("analyze_dependencies"),
-    inputSchema: AnalyzeDependenciesParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ filePath, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    if (workerCheck.error)
-      return formatToolResponse(
-        workerCheck.response,
-        response_format,
-      "skein_analyze_dependencies",
-      );
+// ============================================================================
+// Worker-backed tools
+// ============================================================================
 
-    const response = await invokeToolWithResponse<AnalyzeDependenciesResult>(
-      "analyze_dependencies",
-      { filePath },
-    );
+const RESPONSE_FORMAT_DESCRIPTION =
+  "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)";
 
-    return formatToolResponse(response, response_format, "skein_analyze_dependencies");
-  },
-);
+type ResponseFormat = z.infer<typeof ResponseFormatSchema>;
+type ToolParams = Record<string, unknown>;
 
-// Tool: skein_crawl_dependency_graph
-server.registerTool(
-  "skein_crawl_dependency_graph",
-  {
-    title: "Crawl Full Dependency Graph",
-    description: mcpToolDescription("crawl_dependency_graph"),
-    inputSchema: CrawlDependencyGraphParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ entryFile, maxDepth, limit, offset, onlyUsed, tokenBudget, communityMode, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_crawl_dependency_graph");
+interface WorkerToolOptions {
+  title: string;
+  /** Tool parameters; `response_format` is added to a plain object schema that lacks it. */
+  inputSchema: z.ZodType;
+  /** The tool rewrites the index: advertised as destructive and rate-limited. */
+  mutates?: boolean;
+  /** Page information for a paged result. */
+  paginate?: (params: ToolParams, result: unknown) => PaginationInfo | undefined;
+  /** Formatter hint read from the parameters. */
+  detail?: (params: ToolParams) => Parameters<typeof formatToolResponse>[3];
+}
 
-    const params = { entryFile, maxDepth, limit, offset, onlyUsed, tokenBudget, communityMode };
-    const result = await workerHost?.invoke<CrawlDependencyGraphResult>(
-      "crawl_dependency_graph",
-      params,
-    );
-    if (!result) {
-      return formatToolResponse(
-        createErrorResponse<CrawlDependencyGraphResult>("Worker not available", 0, getWorkspaceRoot()),
-        responseFormat,
-      "skein_crawl_dependency_graph",
-      );
-    }
-
-    // Build pagination info if limit/offset were used
-    let pagination: PaginationInfo | undefined;
-    if (limit !== undefined || offset !== undefined) {
-      const actualOffset = offset ?? 0;
-      const actualLimit = limit ?? result.nodeCount;
-      pagination = {
-        total: result.nodeCount,
-        limit: actualLimit,
-        offset: actualOffset,
-        hasMore: actualOffset + result.nodes.length < result.nodeCount,
-      };
-    }
-
-    const response = createSuccessResponse(
-      result,
-      0, // We don't track time here, worker already includes it
-      getWorkspaceRoot(),
-      pagination,
-    );
-
-    return formatToolResponse(response, responseFormat, "skein_crawl_dependency_graph");
-  },
-);
-
-// Tool: skein_find_referencing_files
-server.registerTool(
-  "skein_find_referencing_files",
-  {
-    title: "Find Files That Import This File",
-    description: mcpToolDescription("find_referencing_files"),
-    inputSchema: FindReferencingFilesParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ targetPath, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_find_referencing_files");
-
-    const response = await invokeToolWithResponse<FindReferencingFilesResult>(
-      "find_referencing_files",
-      { targetPath },
-    );
-
-    return formatToolResponse(response, responseFormat, "skein_find_referencing_files");
-  },
-);
-
-// Tool: skein_verify_dependency_usage
-server.registerTool(
-  "skein_verify_dependency_usage",
-  {
-    title: "Verify Dependency Usage",
-    description: mcpToolDescription("verify_dependency_usage"),
-    inputSchema: VerifyDependencyUsageParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ sourceFile, targetFile, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_verify_dependency_usage");
-
-    const response = await invokeToolWithResponse<unknown>(
-      "verify_dependency_usage",
-      {
-        sourceFile,
-        targetFile,
+/**
+ * Registers a tool whose work runs in the worker. Worker readiness, the
+ * response envelope and output formatting are the same for every one of them;
+ * only the name, the schema and the hints differ.
+ */
+function registerWorkerTool(tool: McpToolName, options: WorkerToolOptions): void {
+  const name = `skein_${tool}`;
+  const inputSchema =
+    options.inputSchema instanceof z.ZodObject && !("response_format" in options.inputSchema.shape)
+      ? options.inputSchema.extend({
+          response_format: ResponseFormatSchema.describe(RESPONSE_FORMAT_DESCRIPTION),
+        })
+      : options.inputSchema;
+  server.registerTool(
+    name,
+    {
+      title: options.title,
+      description: mcpToolDescription(tool),
+      inputSchema,
+      outputSchema: McpToolResponseSchema,
+      annotations: {
+        readOnlyHint: !options.mutates,
+        destructiveHint: options.mutates === true,
+        idempotentHint: true,
+        openWorldHint: false,
       },
-    );
-
-    return formatToolResponse(response, responseFormat, "skein_verify_dependency_usage");
-  },
-);
-
-// Tool: skein_resolve_module_path
-server.registerTool(
-  "skein_resolve_module_path",
-  {
-    title: "Resolve Module Specifier to File Path",
-    description: mcpToolDescription("resolve_module_path"),
-    inputSchema: ResolveModulePathParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
     },
-  },
-  async ({ fromFile, moduleSpecifier, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_resolve_module_path");
+    async (input: unknown) => {
+      const { response_format, ...params } = input as ToolParams;
+      const responseFormat = (response_format as ResponseFormat | undefined) ?? "toon";
+      if (options.mutates) {
+        const rateLimitError = checkRateLimit(tool);
+        if (rateLimitError) {
+          return formatToolResponse(
+            createErrorResponse<unknown>(rateLimitError, 0, getWorkspaceRoot()),
+            responseFormat,
+            name,
+          );
+        }
+      }
+      const workerCheck = await ensureWorkerReady();
+      if (workerCheck.error) return formatToolResponse(workerCheck.response, responseFormat, name);
 
-    const response = await invokeToolWithResponse<ResolveModulePathResult>(
-      "resolve_module_path",
-      { fromFile, moduleSpecifier },
-    );
-
-    return formatToolResponse(response, responseFormat, "skein_resolve_module_path");
-  },
-);
-
-// Tool: skein_get_index_status
-server.registerTool(
-  "skein_get_index_status",
-  {
-    title: "Get Dependency Index Status",
-    description: mcpToolDescription("get_index_status"),
-    inputSchema: z.object({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
+      const response = await invokeToolWithResponse<unknown>(tool, params);
+      if (options.paginate && response.success) {
+        const pagination = options.paginate(params, response.data);
+        if (pagination) response.pagination = pagination;
+      }
+      return formatToolResponse(response, responseFormat, name, options.detail?.(params));
     },
+  );
+}
+
+registerWorkerTool("analyze_dependencies", {
+  title: "Analyze File Dependencies",
+  inputSchema: AnalyzeDependenciesParamsSchema,
+});
+
+registerWorkerTool("crawl_dependency_graph", {
+  title: "Crawl Full Dependency Graph",
+  inputSchema: CrawlDependencyGraphParamsSchema,
+  // Nodes keep crawl order; the page is [offset, offset + limit).
+  paginate: (params, data) => {
+    if (params.limit === undefined && params.offset === undefined) return undefined;
+    const result = data as CrawlDependencyGraphResult;
+    const offset = (params.offset as number | undefined) ?? 0;
+    const limit = (params.limit as number | undefined) ?? result.nodeCount;
+    return {
+      total: result.nodeCount,
+      limit,
+      offset,
+      hasMore: offset + result.nodes.length < result.nodeCount,
+    };
   },
-  async ({ response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_get_index_status");
+});
 
-    const response = await invokeToolWithResponse<GetIndexStatusResult>(
-      "get_index_status",
-      {},
-    );
+registerWorkerTool("find_referencing_files", {
+  title: "Find Files That Import This File",
+  inputSchema: FindReferencingFilesParamsSchema,
+});
 
-    return formatToolResponse(response, responseFormat, "skein_get_index_status");
-  },
-);
+registerWorkerTool("verify_dependency_usage", {
+  title: "Verify Dependency Usage",
+  inputSchema: VerifyDependencyUsageParamsSchema,
+});
 
-// Tool: skein_invalidate_files
-server.registerTool(
-  "skein_invalidate_files",
-  {
-    title: "Invalidate File Cache",
-    description: mcpToolDescription("invalidate_files"),
-    inputSchema: InvalidateFilesParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ filePaths, response_format }) => {
-    const responseFormat = response_format;
-    const rateLimitError = checkRateLimit("invalidate_files");
-    if (rateLimitError) {
-      return formatToolResponse(
-        createErrorResponse<InvalidateFilesResult>(rateLimitError, 0, getWorkspaceRoot()),
-        responseFormat,
-        "skein_invalidate_files",
-      );
-    }
+registerWorkerTool("resolve_module_path", {
+  title: "Resolve Module Specifier to File Path",
+  inputSchema: ResolveModulePathParamsSchema,
+});
 
-    const workerCheck = await ensureWorkerReady();
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_invalidate_files");
+registerWorkerTool("get_index_status", {
+  title: "Get Dependency Index Status",
+  inputSchema: z.object({}),
+});
 
-    const response = await invokeToolWithResponse<InvalidateFilesResult>(
-      "invalidate_files",
-      {
-        filePaths,
-      },
-    );
+registerWorkerTool("invalidate_files", {
+  title: "Invalidate File Cache",
+  inputSchema: InvalidateFilesParamsSchema,
+  mutates: true,
+});
 
-    return formatToolResponse(response, responseFormat, "skein_invalidate_files");
-  },
-);
+registerWorkerTool("rebuild_index", {
+  title: "Rebuild Full Dependency Index",
+  inputSchema: z.object({}),
+  mutates: true,
+});
 
-// Tool: skein_rebuild_index
-server.registerTool(
-  "skein_rebuild_index",
-  {
-    title: "Rebuild Full Dependency Index",
-    description: mcpToolDescription("rebuild_index"),
-    inputSchema: z.object({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ response_format }) => {
-    const responseFormat = response_format;
-    const rateLimitError = checkRateLimit("rebuild_index");
-    if (rateLimitError) {
-      return formatToolResponse(
-        createErrorResponse<RebuildIndexResult>(rateLimitError, 0, getWorkspaceRoot()),
-        responseFormat,
-        "skein_rebuild_index",
-      );
-    }
+registerWorkerTool("get_symbol_graph", {
+  title: "Get Symbol-Level Dependency Graph",
+  inputSchema: GetSymbolGraphParamsSchema,
+});
 
-    const workerCheck = await ensureWorkerReady();
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_rebuild_index");
+registerWorkerTool("find_unused_symbols", {
+  title: "Find Dead Code (Unused Exports)",
+  inputSchema: FindUnusedSymbolsParamsSchema,
+});
 
-    const response = await invokeToolWithResponse<RebuildIndexResult>(
-      "rebuild_index",
-      {},
-    );
+registerWorkerTool("trace_function_execution", {
+  title: "Trace Function Execution Chain",
+  inputSchema: TraceFunctionExecutionParamsSchema,
+});
 
-    return formatToolResponse(response, responseFormat, "skein_rebuild_index");
-  },
-);
+registerWorkerTool("analyze_breaking_changes", {
+  title: "Analyze Breaking Changes in Signature",
+  inputSchema: AnalyzeBreakingChangesParamsSchema,
+});
 
-// Tool: skein_get_symbol_graph
-server.registerTool(
-  "skein_get_symbol_graph",
-  {
-    title: "Get Symbol-Level Dependency Graph",
-    description: mcpToolDescription("get_symbol_graph"),
-    inputSchema: GetSymbolGraphParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ filePath, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_get_symbol_graph");
+registerWorkerTool("get_impact_analysis", {
+  title: "Get Comprehensive Impact Analysis",
+  inputSchema: GetImpactAnalysisParamsSchema,
+});
 
-    const response = await invokeToolWithResponse<GetSymbolGraphResult>(
-      "get_symbol_graph",
-      { filePath },
-    );
+registerWorkerTool("generate_codemap", {
+  title: "Generate File Codemap",
+  inputSchema: GenerateCodemapParamsSchema,
+});
 
-    return formatToolResponse(response, responseFormat, "skein_get_symbol_graph");
-  },
-);
+registerWorkerTool("query_call_graph", {
+  title: "Query Cross-File Call Graph",
+  inputSchema: QueryCallGraphParamsSchema,
+});
 
-// Tool: skein_find_unused_symbols
-server.registerTool(
-  "skein_find_unused_symbols",
-  {
-    title: "Find Dead Code (Unused Exports)",
-    description: mcpToolDescription("find_unused_symbols"),
-    inputSchema: FindUnusedSymbolsParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ filePath, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_find_unused_symbols");
+registerWorkerTool("scan_dead_code", {
+  title: "Scan Workspace for Dead Code",
+  inputSchema: ScanDeadCodeParamsSchema,
+});
 
-    const response = await invokeToolWithResponse<FindUnusedSymbolsResult>(
-      "find_unused_symbols",
-      { filePath },
-    );
+registerWorkerTool("graph_context", {
+  title: "Retrieve Unified Graph Context",
+  inputSchema: GraphContextParamsSchema,
+  detail: (params) => params.detail as Parameters<typeof formatToolResponse>[3],
+});
 
-    return formatToolResponse(response, responseFormat, "skein_find_unused_symbols");
-  },
-);
+registerWorkerTool("explore_architecture", {
+  title: "Explore Grouped Architecture",
+  inputSchema: ExploreArchitectureParamsSchema,
+});
 
-// Tool: skein_trace_function_execution
-server.registerTool(
-  "skein_trace_function_execution",
-  {
-    title: "Trace Function Execution Chain",
-    description: mcpToolDescription("trace_function_execution"),
-    inputSchema: TraceFunctionExecutionParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ filePath, symbolName, maxDepth, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_trace_function_execution");
+registerWorkerTool("check_architecture", {
+  title: "Check Architecture Rules",
+  inputSchema: CheckArchitectureParamsSchema,
+});
 
-    const response = await invokeToolWithResponse<TraceFunctionExecutionResult>(
-      "trace_function_execution",
-      {
-        filePath,
-        symbolName,
-        maxDepth,
-      },
-    );
+registerWorkerTool("diagnose_structure", {
+  title: "Diagnose Structure",
+  inputSchema: DiagnoseStructureParamsSchema,
+});
 
-    return formatToolResponse(response, responseFormat, "skein_trace_function_execution");
-  },
-);
-
-// Tool: skein_analyze_breaking_changes
-server.registerTool(
-  "skein_analyze_breaking_changes",
-  {
-    title: "Analyze Breaking Changes in Signature",
-    description: mcpToolDescription("analyze_breaking_changes"),
-    inputSchema: AnalyzeBreakingChangesParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ filePath, symbolName, oldContent, newContent, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_analyze_breaking_changes");
-
-    const response = await invokeToolWithResponse<AnalyzeBreakingChangesResult>(
-      "analyze_breaking_changes",
-      {
-        filePath,
-        symbolName,
-        oldContent,
-        newContent,
-      },
-    );
-
-    return formatToolResponse(response, responseFormat, "skein_analyze_breaking_changes");
-  },
-);
-
-// Tool: skein_get_impact_analysis
-server.registerTool(
-  "skein_get_impact_analysis",
-  {
-    title: "Get Comprehensive Impact Analysis",
-    description: mcpToolDescription("get_impact_analysis"),
-    inputSchema: GetImpactAnalysisParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (Token-Oriented Object Notation for reduced token usage) (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({
-    filePath,
-    symbolName,
-    includeTransitive,
-    maxDepth,
-    response_format,
-  }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_get_impact_analysis");
-
-    const response = await invokeToolWithResponse<GetImpactAnalysisResult>(
-      "get_impact_analysis",
-      {
-        filePath,
-        symbolName,
-        includeTransitive,
-        maxDepth,
-      },
-    );
-
-    return formatToolResponse(response, responseFormat, "skein_get_impact_analysis");
-  },
-);
-
-// Tool: skein_generate_codemap
-server.registerTool(
-  "skein_generate_codemap",
-  {
-    title: "Generate File Codemap",
-    description: mcpToolDescription("generate_codemap"),
-    inputSchema: z.object({
-      filePath: z.string().describe("Absolute path to the file to generate a codemap for"),
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ filePath, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_generate_codemap");
-
-    const response = await invokeToolWithResponse("generate_codemap", {
-      filePath,
-    });
-
-    return formatToolResponse(response, responseFormat, "skein_generate_codemap");
-  },
-);
-
-// Tool: skein_query_call_graph
-server.registerTool(
-  "skein_query_call_graph",
-  {
-    title: "Query Cross-File Call Graph",
-    description: mcpToolDescription("query_call_graph"),
-    inputSchema: QueryCallGraphParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ filePath, symbolName, symbolId, startLine, direction, depth, relationTypes, includeTypeOnly, offset, tokenBudget, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_query_call_graph");
-
-    const response = await invokeToolWithResponse(
-      "query_call_graph",
-      { filePath, symbolName, symbolId, startLine, direction, depth, relationTypes, includeTypeOnly, offset, tokenBudget },
-    );
-
-    return formatToolResponse(response, responseFormat, "skein_query_call_graph");
-  },
-);
-
-// Tool: skein_scan_dead_code
-server.registerTool(
-  "skein_scan_dead_code",
-  {
-    title: "Scan Workspace for Dead Code",
-    description: mcpToolDescription("scan_dead_code"),
-    inputSchema: ScanDeadCodeParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (default: toon)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ scopePath, maxFiles, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_scan_dead_code");
-
-    const response = await invokeToolWithResponse(
-      "scan_dead_code",
-      { scopePath, maxFiles },
-    );
-
-    return formatToolResponse(response, responseFormat, "skein_scan_dead_code");
-  },
-);
-
-// Tool: skein_graph_context
-server.registerTool(
-  "skein_graph_context",
-  {
-    title: "Retrieve Unified Graph Context",
-    description: mcpToolDescription("graph_context"),
-    inputSchema: GraphContextParamsSchema,
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ response_format, ...params }) => {
-    const responseFormat = response_format ?? "toon";
-    const workerCheck = await ensureWorkerReady();
-    if (workerCheck.error) {
-      return formatToolResponse(
-        workerCheck.response,
-        responseFormat,
-        "skein_graph_context",
-      );
-    }
-
-    const response = await invokeToolWithResponse<GraphContextResponse>(
-      "graph_context",
-      params,
-    );
-    return formatToolResponse(response, responseFormat, "skein_graph_context", params.detail);
-  },
-);
-
-// Tool: skein_explore_architecture
-server.registerTool(
-  "skein_explore_architecture",
-  {
-    title: "Explore Grouped Architecture",
-    description: mcpToolDescription("explore_architecture"),
-    inputSchema: ExploreArchitectureParamsSchema,
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ response_format, ...params }) => {
-    const responseFormat = response_format ?? "toon";
-    const workerCheck = await ensureWorkerReady();
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_explore_architecture");
-
-    const response = await invokeToolWithResponse("explore_architecture", params);
-    return formatToolResponse(response, responseFormat, "skein_explore_architecture");
-  },
-);
-
-// Tool: skein_check_architecture
-server.registerTool(
-  "skein_check_architecture",
-  {
-    title: "Check Architecture Rules",
-    description: mcpToolDescription("check_architecture"),
-    inputSchema: CheckArchitectureParamsSchema,
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ response_format, ...params }) => {
-    const responseFormat = response_format ?? "toon";
-    const workerCheck = await ensureWorkerReady();
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_check_architecture");
-
-    const response = await invokeToolWithResponse("check_architecture", params);
-    return formatToolResponse(response, responseFormat, "skein_check_architecture");
-  },
-);
-
-// Tool: skein_diagnose_structure
-server.registerTool(
-  "skein_diagnose_structure",
-  {
-    title: "Diagnose Structure",
-    description: mcpToolDescription("diagnose_structure"),
-    inputSchema: DiagnoseStructureParamsSchema,
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ response_format, ...params }) => {
-    const responseFormat = response_format ?? "toon";
-    const workerCheck = await ensureWorkerReady();
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_diagnose_structure");
-
-    const response = await invokeToolWithResponse("diagnose_structure", params);
-    return formatToolResponse(response, responseFormat, "skein_diagnose_structure");
-  },
-);
-
-// Tool: skein_query_natural_language
-server.registerTool(
-  "skein_query_natural_language",
-  {
-    title: "Query Codebase with Natural Language",
-    description: mcpToolDescription("query_natural_language"),
-    inputSchema: QueryNaturalLanguageParamsSchema.extend({
-      response_format: ResponseFormatSchema.describe(
-        "Output format: 'json', 'markdown' (readable lists and tables), or 'toon' (default: toon - RECOMMENDED for 30-60% token savings)",
-      ),
-    }),
-    outputSchema: McpToolResponseSchema,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ question, depth, tokenBudget, fileFilter, outputFormat, response_format }) => {
-    const workerCheck = await ensureWorkerReady();
-    const responseFormat = response_format;
-    if (workerCheck.error)
-      return formatToolResponse(workerCheck.response, responseFormat, "skein_query_natural_language");
-
-    const response = await invokeToolWithResponse(
-      "query_natural_language",
-      { question, depth, tokenBudget, fileFilter, outputFormat },
-    );
-
-    return formatToolResponse(response, responseFormat, "skein_query_natural_language");
-  },
-);
+registerWorkerTool("query_natural_language", {
+  title: "Query Codebase with Natural Language",
+  inputSchema: QueryNaturalLanguageParamsSchema,
+});
 
 // Tool: skein_get_view_state
 // Runs in the server process: reads the state file the VS Code extension writes.
