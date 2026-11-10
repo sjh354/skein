@@ -1,6 +1,6 @@
 import { getRelativePath } from "../shared/helpers";
 import { validateFileExists } from "../../shared/pathSecurity";
-import { workerState } from "../shared/state";
+import { workerState, type ToolContext } from "../shared/state";
 import type {
     CallChainEntry,
     TraceFunctionExecutionParams,
@@ -12,10 +12,11 @@ import type {
  */
 export async function executeTraceFunctionExecution(
   params: TraceFunctionExecutionParams,
+  ctx: ToolContext = workerState,
 ): Promise<TraceFunctionExecutionResult> {
   const { filePath, symbolName, maxDepth } = params;
-  const spider = workerState.getSpider();
-  const config = workerState.getConfig();
+  const spider = ctx.getSpider();
+  const config = ctx.getConfig();
   await validateFileExists(filePath);
 
   const result = await spider.traceFunctionExecution(

@@ -69,12 +69,21 @@ export async function activate(context: vscode.ExtensionContext) {
         provider,
         ui: vscode.window,
     });
+    // Call Graph panel — T019: register showCallGraph command
+    const callGraphViewService = new CallGraphViewService(context);
+    provider.setCallGraphViewService(callGraphViewService);
     const commandService = new CommandRegistrationService({
         provider,
+        callGraphViewService,
         commandCoordinator,
         logger: log,
     });
-    const lmToolsService = new LmToolsService({ provider, logger: log });
+    const lmToolsService = new LmToolsService({
+        spider: () => provider.spider,
+        callGraphViewService: () => callGraphViewService,
+        maxDepth: () => vscode.workspace.getConfiguration('skein').get<number>('maxDepth', 50),
+        logger: log,
+    });
     
     // Get the fileChangeScheduler from provider (it's created during provider construction)
     const fileChangeScheduler = provider.fileChangeScheduler;
@@ -86,10 +95,6 @@ export async function activate(context: vscode.ExtensionContext) {
         logger: log,
         fileChangeScheduler,
     }) : undefined;
-
-    // Call Graph panel — T019: register showCallGraph command
-    const callGraphViewService = new CallGraphViewService(context);
-    provider.setCallGraphViewService(callGraphViewService);
 
     const disposables: vscode.Disposable[] = [
       // Output channel disposal
@@ -180,12 +185,12 @@ export async function activate(context: vscode.ExtensionContext) {
                 architectureGuard: createArchitectureChangeGuard({
                     root: workspaceFolder.uri.fsPath,
                     analyzeFile: async (filePath) => {
-                        const spider = provider.getSpiderForLmTools();
+                        const spider = provider.spider;
                         if (!spider) throw new Error('The analyzer is not ready.');
                         return spider.analyzeFromIndex(filePath);
                     },
                     invalidate: (files) => {
-                        provider.getSpiderForLmTools()?.invalidateFiles([...files]);
+                        provider.spider?.invalidateFiles([...files]);
                     },
                     logger: log,
                 }),

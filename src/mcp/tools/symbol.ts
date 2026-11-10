@@ -1,6 +1,6 @@
 import { getRelativePath } from "../shared/helpers";
 import { validateFileExists } from "../../shared/pathSecurity";
-import { workerState } from "../shared/state";
+import { workerState, type ToolContext } from "../shared/state";
 import type {
     FindUnusedSymbolsParams,
     FindUnusedSymbolsResult,
@@ -14,10 +14,11 @@ import type {
  */
 export async function executeGetSymbolGraph(
   params: GetSymbolGraphParams,
+  ctx: ToolContext = workerState,
 ): Promise<GetSymbolGraphResult> {
   const { filePath } = params;
-  const spider = workerState.getSpider();
-  const config = workerState.getConfig();
+  const spider = ctx.getSpider();
+  const config = ctx.getConfig();
   await validateFileExists(filePath);
 
   const { symbols, dependencies } = await spider.getSymbolGraph(filePath);
@@ -50,10 +51,11 @@ export async function executeGetSymbolGraph(
  */
 export async function executeFindUnusedSymbols(
   params: FindUnusedSymbolsParams,
+  ctx: ToolContext = workerState,
 ): Promise<FindUnusedSymbolsResult> {
   const { filePath } = params;
-  const spider = workerState.getSpider();
-  const config = workerState.getConfig();
+  const spider = ctx.getSpider();
+  const config = ctx.getConfig();
   await validateFileExists(filePath);
 
   const unusedSymbols = await spider.findUnusedSymbols(filePath);

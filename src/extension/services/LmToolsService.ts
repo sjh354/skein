@@ -10,30 +10,36 @@
  */
 
 import { IndexCache } from '@/analyzer/cache/IndexCache';
-import { LspCallHierarchyAnalyzer } from '@/analyzer/LspCallHierarchyAnalyzer';
 import { QueryEngine } from '@/analyzer/QueryEngine';
 import { reportOutOfRootImports } from '@/analyzer/utils/workspaceBoundary';
-import { scanDeadCode } from '@/analyzer/deadcode/DeadCodeScanner';
+import type { McpWorkerConfig } from '@/mcp/types';
 import {
   QueryNaturalLanguageParamsSchema,
   type GraphContextParams,
   type QueryNaturalLanguageParams,
 } from '@/mcp/types';
-import type { Dependency, SymbolDependency } from '@/analyzer/types';
+import type { ToolContext } from '@/mcp/shared/state';
+import { executeAnalyzeDependencies, executeVerifyDependencyUsage } from '@/mcp/tools/analysis';
+import { executeGenerateCodemap } from '@/mcp/tools/codemap';
+import { executeScanDeadCode } from '@/mcp/tools/deadcode';
+import { executeTraceFunctionExecution } from '@/mcp/tools/execution';
+import { executeCrawlDependencyGraph, executeFindReferencingFiles } from '@/mcp/tools/graph';
+import { executeAnalyzeFileLogic } from '@/mcp/tools/logic';
+import { executeFindUnusedSymbols, executeGetSymbolGraph } from '@/mcp/tools/symbol';
+import type { SymbolDependency } from '@/analyzer/types';
 import { checkSymbolInFile, symbolNotFoundMessage } from '@/analyzer/utils/SymbolLookup';
 import { mapWithConcurrency } from '@/shared/concurrency';
-import { convertSpiderToLspFormat } from '@/shared/converters';
 import { lookupCallGraphSymbol } from '@/analyzer/callgraph/CallGraphSymbolLookup';
 import { normalizePath } from '@/shared/path';
 import {
   toWorkspaceRelativePath,
   validateWorkspacePath,
 } from '@/shared/pathSecurity';
-import { detectLanguageFromExtension } from '@/shared/utils/languageDetection';
 import * as fs from 'node:fs/promises';
 import * as nodePath from 'node:path';
 import * as vscode from 'vscode';
-import type { GraphProvider } from '../GraphProvider';
+import type { Spider } from '@/analyzer/Spider';
+import type { CallGraphViewService } from './CallGraphViewService';
 import type { VsCodeLogger } from '../extensionLogger';
 
 // ─── Input types for each tool ────────────────────────────────────────────────
@@ -142,7 +148,11 @@ interface ScanDeadCodeInput {
 // ─── Service options ──────────────────────────────────────────────────────────
 
 interface LmToolsServiceOptions {
-  provider: GraphProvider;
+  /** This window's analyzer; undefined until a workspace folder is open. */
+  spider: () => Spider | undefined;
+  callGraphViewService: () => CallGraphViewService | null;
+  /** The configured crawl depth, reported by crawl results. */
+  maxDepth?: () => number;
   logger: VsCodeLogger;
 }
 
@@ -154,11 +164,6 @@ function toRelativePath(absolutePath: string, workspaceRoot: string): string {
     return absolutePath;
   }
   return rel.replaceAll('\\', '/');
-}
-
-function stripFilePrefix(symbolId: string): string {
-  const idx = symbolId.lastIndexOf(':');
-  return idx >= 0 ? symbolId.slice(idx + 1) : symbolId;
 }
 
 const FILE_SCOPE_SUFFIX = ':(file)';
@@ -179,11 +184,9 @@ interface LmCallerInfo {
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export class LmToolsService {
-  private readonly provider: GraphProvider;
   private readonly logger: VsCodeLogger;
 
-  constructor(options: LmToolsServiceOptions) {
-    this.provider = options.provider;
+  constructor(private readonly options: LmToolsServiceOptions) {
     this.logger = options.logger;
   }
 
@@ -282,6 +285,38 @@ export class LmToolsService {
     );
   }
 
+  private jsonResult(value: unknown): vscode.LanguageModelToolResult {
+    return new vscode.LanguageModelToolResult([
+      new vscode.LanguageModelTextPart(JSON.stringify(value)),
+    ]);
+  }
+
+  /**
+   * Runs an MCP tool executor against this window's analyzer, so Copilot's
+   * native tools and the MCP tools share one implementation and one answer.
+   */
+  private async runWithSpider(
+    execute: (ctx: ToolContext) => Promise<unknown>,
+  ): Promise<vscode.LanguageModelToolResult> {
+    const spider = this.options.spider();
+    const rootDir = this.getWorkspaceRoot();
+    if (!spider || !rootDir) {
+      return this.errorResult('No workspace open or dependency index not initialized.');
+    }
+    const config: McpWorkerConfig = {
+      rootDir,
+      excludeNodeModules: true,
+      maxDepth: this.options.maxDepth?.() ?? 50,
+    };
+    const ctx: ToolContext = { getSpider: () => spider, getConfig: () => config };
+    try {
+      return this.jsonResult(await execute(ctx));
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw new vscode.CancellationError();
+      return this.errorResult(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   private getWorkspaceRoot(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   }
@@ -306,229 +341,69 @@ export class LmToolsService {
   // ─── Tool: find_referencing_files ─────────────────────────────────────────
 
   private registerFindReferencingFiles(): vscode.Disposable {
-    return this.registerTool<FindReferencingFilesInput>(
-      'skein_find_referencing_files',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<FindReferencingFilesInput>,
-          _token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          if (!spider) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          const targetPath = this.resolveWorkspacePath(options.input.targetPath);
-          const rootDir = this.getWorkspaceRoot();
-          try {
-            const references = await spider.findReferencingFilesThroughBarrels(targetPath);
-            const relative = (p: string) => (rootDir ? toRelativePath(p, rootDir) : p);
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify({
-                  targetPath,
-                  referencingFileCount: references.length,
-                  referencingFiles: references.map((ref) => ({
-                    path: ref.path,
-                    relativePath: relative(ref.path),
-                    type: ref.type,
-                    line: ref.line,
-                    module: ref.module,
-                    ...(ref.via ? { via: relative(ref.via) } : {}),
-                  })),
-                }),
-              ),
-            ]);
-          } catch (error) {
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          }
-        },
+    return this.registerTool<FindReferencingFilesInput>('skein_find_referencing_files', {
+      invoke: async (options) => {
+        const targetPath = this.resolveWorkspacePath(options.input.targetPath);
+        return this.runWithSpider((ctx) => executeFindReferencingFiles({ targetPath }, ctx));
       },
-    );
+    });
   }
 
   // ─── Tool: analyze_dependencies ──────────────────────────────────────────
 
   private registerAnalyzeDependencies(): vscode.Disposable {
-    return this.registerTool<AnalyzeDependenciesInput>(
-      'skein_analyze_dependencies',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<AnalyzeDependenciesInput>,
-          _token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          if (!spider) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          const filePath = this.resolveWorkspacePath(options.input.filePath);
-          const rootDir = this.getWorkspaceRoot();
-          try {
-            const dependencies = await spider.analyze(filePath);
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify({
-                  filePath,
-                  dependencyCount: dependencies.length,
-                  dependencies: dependencies.map((dep) => ({
-                    module: dep.module,
-                    path: dep.path,
-                    relativePath: dep.path && rootDir ? toRelativePath(dep.path, rootDir) : null,
-                    type: dep.type,
-                    line: dep.line,
-                  })),
-                }),
-              ),
-            ]);
-          } catch (error) {
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          }
-        },
+    return this.registerTool<AnalyzeDependenciesInput>('skein_analyze_dependencies', {
+      invoke: async (options) => {
+        const filePath = this.resolveWorkspacePath(options.input.filePath);
+        return this.runWithSpider((ctx) => executeAnalyzeDependencies({ filePath }, ctx));
       },
-    );
+    });
   }
 
   // ─── Tool: crawl_dependency_graph ────────────────────────────────────────
 
   private registerCrawlDependencyGraph(): vscode.Disposable {
-    return this.registerTool<CrawlDependencyGraphInput>(
-      'skein_crawl_dependency_graph',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<CrawlDependencyGraphInput>,
-          token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          if (!spider) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          const { maxDepth } = options.input;
-          const entryFile = this.resolveWorkspacePath(options.input.entryFile);
-          const rootDir = this.getWorkspaceRoot();
-          const controller = new AbortController();
-          const cancellation = token.onCancellationRequested(() => controller.abort());
-          try {
-            const graph = await spider.crawl(entryFile, {
-              maxDepth,
-              signal: controller.signal,
-            });
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify({
-                  entryFile,
-                  nodeCount: graph.nodes.length,
-                  edgeCount: graph.edges.length,
-                  nodes: graph.nodes.map((n) => ({
-                    path: n,
-                    relativePath: rootDir ? toRelativePath(n, rootDir) : n,
-                  })),
-                  edges: graph.edges.map((e) => ({
-                    source: e.source,
-                    target: e.target,
-                    sourceRelative: rootDir ? toRelativePath(e.source, rootDir) : e.source,
-                    targetRelative: rootDir ? toRelativePath(e.target, rootDir) : e.target,
-                  })),
-                }),
-              ),
-            ]);
-          } catch (error) {
-            if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
-              throw new vscode.CancellationError();
-            }
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          } finally {
-            cancellation.dispose();
-          }
-        },
+    return this.registerTool<CrawlDependencyGraphInput>('skein_crawl_dependency_graph', {
+      invoke: async (options, token) => {
+        const entryFile = this.resolveWorkspacePath(options.input.entryFile);
+        const { maxDepth } = options.input;
+        const controller = new AbortController();
+        const cancellation = token.onCancellationRequested(() => controller.abort());
+        try {
+          return await this.runWithSpider((ctx) =>
+            executeCrawlDependencyGraph(
+              { entryFile, ...(maxDepth === undefined ? {} : { maxDepth }) },
+              controller.signal,
+              ctx,
+            ),
+          );
+        } finally {
+          cancellation.dispose();
+        }
       },
-    );
+    });
   }
 
   // ─── Tool: get_symbol_graph ───────────────────────────────────────────────
 
   private registerGetSymbolGraph(): vscode.Disposable {
-    return this.registerTool<GetSymbolGraphInput>(
-      'skein_get_symbol_graph',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<GetSymbolGraphInput>,
-          _token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          if (!spider) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          const filePath = this.resolveWorkspacePath(options.input.filePath);
-          const rootDir = this.getWorkspaceRoot();
-          try {
-            const { symbols, dependencies } = await spider.getSymbolGraph(filePath);
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify({
-                  filePath,
-                  relativePath: rootDir ? toRelativePath(filePath, rootDir) : filePath,
-                  symbolCount: symbols.length,
-                  dependencyCount: dependencies.length,
-                  symbols,
-                  dependencies: dependencies.map((dep) => ({
-                    ...dep,
-                    targetRelativePath: rootDir
-                      ? toRelativePath(dep.targetFilePath, rootDir)
-                      : dep.targetFilePath,
-                  })),
-                }),
-              ),
-            ]);
-          } catch (error) {
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          }
-        },
+    return this.registerTool<GetSymbolGraphInput>('skein_get_symbol_graph', {
+      invoke: async (options) => {
+        const filePath = this.resolveWorkspacePath(options.input.filePath);
+        return this.runWithSpider((ctx) => executeGetSymbolGraph({ filePath }, ctx));
       },
-    );
+    });
   }
 
   // ─── Tool: find_unused_symbols ───────────────────────────────────────────
 
   private registerFindUnusedSymbols(): vscode.Disposable {
-    return this.registerTool<FindUnusedSymbolsInput>(
-      'skein_find_unused_symbols',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<FindUnusedSymbolsInput>,
-          _token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          if (!spider) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          const filePath = this.resolveWorkspacePath(options.input.filePath);
-          const rootDir = this.getWorkspaceRoot();
-          try {
-            const [unusedSymbols, { symbols }] = await Promise.all([
-              spider.findUnusedSymbols(filePath),
-              spider.getSymbolGraph(filePath),
-            ]);
-            const exportedCount = symbols.filter((s) => s.isExported).length;
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify({
-                  filePath,
-                  relativePath: rootDir ? toRelativePath(filePath, rootDir) : filePath,
-                  unusedCount: unusedSymbols.length,
-                  totalExportedSymbols: exportedCount,
-                  unusedPercentage:
-                    exportedCount > 0
-                      ? Math.round((unusedSymbols.length / exportedCount) * 100)
-                      : 0,
-                  unusedSymbols,
-                }),
-              ),
-            ]);
-          } catch (error) {
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          }
-        },
+    return this.registerTool<FindUnusedSymbolsInput>('skein_find_unused_symbols', {
+      invoke: async (options) => {
+        const filePath = this.resolveWorkspacePath(options.input.filePath);
+        return this.runWithSpider((ctx) => executeFindUnusedSymbols({ filePath }, ctx));
       },
-    );
+    });
   }
 
   // ─── Tool: get_symbol_callers ─────────────────────────────────────────────
@@ -541,7 +416,7 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<GetSymbolCallersInput>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
+          const spider = this.options.spider();
           if (!spider) {
             return this.errorResult('No workspace open or dependency index not initialized.');
           }
@@ -585,7 +460,7 @@ export class LmToolsService {
     includeTypeOnly: boolean,
     rootDir: string | undefined,
   ): Promise<LmCallerInfo[] | null> {
-    const indexer = this.provider.getCallGraphViewServiceForLmTools()?.getCallGraphIndexerForLmTools();
+    const indexer = this.options.callGraphViewService()?.getCallGraphIndexerForLmTools();
     if (!indexer) return null;
 
     const db = indexer.getDb();
@@ -696,7 +571,7 @@ export class LmToolsService {
 
   private async collectTransitiveDependents(
     directDependents: Array<{ sourceSymbolId: string; targetFilePath: string; isTypeOnly?: boolean }>,
-    spider: ReturnType<GraphProvider['getSpiderForLmTools']> & object,
+    spider: Spider,
     maxDepth: number,
     rootDir: string | undefined,
     targetSymbolId: string,
@@ -724,7 +599,7 @@ export class LmToolsService {
 
   /** Dependents of a `file:symbol` id; none for a malformed id or a symbol that fails to analyze. */
   private async symbolDependentsOf(
-    spider: ReturnType<GraphProvider['getSpiderForLmTools']> & object,
+    spider: Spider,
     symbolId: string,
   ): Promise<SymbolDependency[]> {
     const colonIdx = symbolId.lastIndexOf(':');
@@ -744,7 +619,7 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<GetImpactAnalysisInput>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
+          const spider = this.options.spider();
           if (!spider) {
             return this.errorResult('No workspace open or dependency index not initialized.');
           }
@@ -805,7 +680,7 @@ export class LmToolsService {
           _options: vscode.LanguageModelToolInvocationOptions<Record<string, never>>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
+          const spider = this.options.spider();
           if (!spider) {
             return new vscode.LanguageModelToolResult([
               new vscode.LanguageModelTextPart(
@@ -855,7 +730,7 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<ParseImportsInput>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
+          const spider = this.options.spider();
           if (!spider) {
             return this.errorResult('No workspace open or dependency index not initialized.');
           }
@@ -887,110 +762,12 @@ export class LmToolsService {
   // ─── Tool: generate_codemap ───────────────────────────────────────────────
 
   private registerGenerateCodemap(): vscode.Disposable {
-    return this.registerTool<GenerateCodemapInput>(
-      'skein_generate_codemap',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<GenerateCodemapInput>,
-          _token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          if (!spider) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          const filePath = this.resolveWorkspacePath(options.input.filePath);
-          const rootDir = this.getWorkspaceRoot();
-          const startTime = Date.now();
-          try {
-            const ext = nodePath.extname(filePath).toLowerCase();
-            const language = detectLanguageFromExtension(ext);
-            const relativePath = rootDir ? toRelativePath(filePath, rootDir) : filePath;
-
-            const content = await fs.readFile(filePath, 'utf-8');
-            const lineCount = content.split('\n').length;
-
-            const [{ symbols, dependencies: symbolDeps }, deps] = await Promise.all([
-              spider.getSymbolGraph(filePath),
-              spider.analyze(filePath),
-            ]);
-
-            let refs: Dependency[] = [];
-            try {
-              refs = await spider.findReferencingFiles(filePath);
-            } catch {
-              // reverse index may not be ready yet — non-fatal
-            }
-
-            let callFlow: Array<{ caller: string; callee: string; line: number }> = [];
-            let hasCycle = false;
-            let cycleSymbols: string[] = [];
-            try {
-              const lspData = convertSpiderToLspFormat(
-                { symbols, dependencies: symbolDeps },
-                filePath,
-              );
-              const analyzer = new LspCallHierarchyAnalyzer();
-              const graph = analyzer.buildIntraFileGraph(filePath, lspData);
-              callFlow = graph.edges.map((e) => ({
-                caller: stripFilePrefix(e.source),
-                callee: stripFilePrefix(e.target),
-                line: e.line,
-              }));
-              hasCycle = graph.hasCycle;
-              cycleSymbols = (graph.cycleNodes ?? []).map(stripFilePrefix);
-            } catch {
-              // call hierarchy analysis failed — non-fatal, return partial result
-            }
-
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify({
-                  filePath,
-                  relativePath,
-                  language,
-                  lineCount,
-                  exports: symbols
-                    .filter((s) => s.isExported)
-                    .map((s) => ({
-                      name: s.name,
-                      kind: s.kind,
-                      line: s.line,
-                      category: s.category,
-                    })),
-                  internals: symbols
-                    .filter((s) => !s.isExported)
-                    .map((s) => ({
-                      name: s.name,
-                      kind: s.kind,
-                      line: s.line,
-                      category: s.category,
-                    })),
-                  dependencies: deps.map((d) => ({
-                    module: d.module,
-                    resolvedPath: d.path,
-                    relativePath: d.path && rootDir ? toRelativePath(d.path, rootDir) : null,
-                    type: d.type,
-                    line: d.line,
-                  })),
-                  dependents: refs.map((r) => ({
-                    path: r.path,
-                    relativePath: rootDir ? toRelativePath(r.path, rootDir) : r.path,
-                    type: r.type,
-                    line: r.line,
-                  })),
-                  callFlow,
-                  hasCycle,
-                  cycleSymbols,
-                  analysisTimeMs: Date.now() - startTime,
-                }),
-              ),
-            ]);
-          } catch (error) {
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          }
-        },
+    return this.registerTool<GenerateCodemapInput>('skein_generate_codemap', {
+      invoke: async (options) => {
+        const filePath = this.resolveWorkspacePath(options.input.filePath);
+        return this.runWithSpider((ctx) => executeGenerateCodemap({ filePath }, ctx));
       },
-    );
+    });
   }
 
   // ─── Tool: expand_node ─────────────────────────────────────────────────────
@@ -1003,7 +780,7 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<ExpandNodeInput>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
+          const spider = this.options.spider();
           if (!spider) {
             return this.errorResult('No workspace open or dependency index not initialized.');
           }
@@ -1052,32 +829,13 @@ export class LmToolsService {
   // ─── Tool: verify_dependency_usage ─────────────────────────────────────────
 
   private registerVerifyDependencyUsage(): vscode.Disposable {
-    return this.registerTool<VerifyDependencyUsageInput>(
-      'skein_verify_dependency_usage',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<VerifyDependencyUsageInput>,
-          _token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          if (!spider) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          const sourceFile = this.resolveWorkspacePath(options.input.sourceFile);
-          const targetFile = this.resolveWorkspacePath(options.input.targetFile);
-          try {
-            const isUsed = await spider.verifyDependencyUsage(sourceFile, targetFile);
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify({ sourceFile, targetFile, isUsed }),
-              ),
-            ]);
-          } catch (error) {
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          }
-        },
+    return this.registerTool<VerifyDependencyUsageInput>('skein_verify_dependency_usage', {
+      invoke: async (options) => {
+        const sourceFile = this.resolveWorkspacePath(options.input.sourceFile);
+        const targetFile = this.resolveWorkspacePath(options.input.targetFile);
+        return this.runWithSpider((ctx) => executeVerifyDependencyUsage({ sourceFile, targetFile }, ctx));
       },
-    );
+    });
   }
 
   // ─── Tool: invalidate_files ────────────────────────────────────────────────
@@ -1090,7 +848,7 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<InvalidateFilesInput>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
+          const spider = this.options.spider();
           if (!spider) {
             return this.errorResult('No workspace open or dependency index not initialized.');
           }
@@ -1138,7 +896,7 @@ export class LmToolsService {
           _options: vscode.LanguageModelToolInvocationOptions<Record<string, never>>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
+          const spider = this.options.spider();
           if (!spider) {
             return this.errorResult('No workspace open or dependency index not initialized.');
           }
@@ -1174,7 +932,7 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<GetSymbolDependentsInput>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
+          const spider = this.options.spider();
           if (!spider) {
             return this.errorResult('No workspace open or dependency index not initialized.');
           }
@@ -1212,101 +970,29 @@ export class LmToolsService {
   // ─── Tool: trace_function_execution ───────────────────────────────────────
 
   private registerTraceFunctionExecution(): vscode.Disposable {
-    return this.registerTool<TraceFunctionExecutionInput>(
-      'skein_trace_function_execution',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<TraceFunctionExecutionInput>,
-          _token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          if (!spider) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          const { symbolName, maxDepth = 10 } = options.input;
-          const filePath = this.resolveWorkspacePath(options.input.filePath);
-          const rootDir = this.getWorkspaceRoot();
-          try {
-            const result = await spider.traceFunctionExecution(filePath, symbolName, maxDepth);
-            const relativePath = rootDir ? toRelativePath(filePath, rootDir) : filePath;
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify({
-                  rootSymbol: {
-                    id: result.rootSymbol.id,
-                    filePath: result.rootSymbol.filePath,
-                    relativePath,
-                    symbolName: result.rootSymbol.symbolName,
-                  },
-                  maxDepth,
-                  callCount: result.callChain.length,
-                  uniqueSymbolCount: result.visitedSymbols.length,
-                  maxDepthReached: result.maxDepthReached,
-                  callChain: result.callChain.map((entry) => ({
-                    depth: entry.depth,
-                    callerSymbolId: entry.callerSymbolId,
-                    calledSymbolId: entry.calledSymbolId,
-                    calledFilePath: entry.calledFilePath,
-                    resolvedFilePath: entry.resolvedFilePath,
-                    resolvedRelativePath: entry.resolvedFilePath && rootDir
-                      ? toRelativePath(entry.resolvedFilePath, rootDir)
-                      : null,
-                  })),
-                  visitedSymbols: result.visitedSymbols,
-                }),
-              ),
-            ]);
-          } catch (error) {
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          }
-        },
+    return this.registerTool<TraceFunctionExecutionInput>('skein_trace_function_execution', {
+      invoke: async (options) => {
+        const { symbolName, maxDepth } = options.input;
+        const filePath = this.resolveWorkspacePath(options.input.filePath);
+        return this.runWithSpider((ctx) =>
+          executeTraceFunctionExecution(
+            { filePath, symbolName, ...(maxDepth === undefined ? {} : { maxDepth }) },
+            ctx,
+          ),
+        );
       },
-    );
+    });
   }
 
   // ─── Tool: analyze_file_logic ──────────────────────────────────────────────
 
   private registerAnalyzeFileLogic(): vscode.Disposable {
-    return this.registerTool<AnalyzeFileLogicInput>(
-      'skein_analyze_file_logic',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<AnalyzeFileLogicInput>,
-          _token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          if (!spider) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          const filePath = this.resolveWorkspacePath(options.input.filePath);
-          const startTime = Date.now();
-          try {
-            const symbolGraphData = await spider.getSymbolGraph(filePath);
-            const lspData = convertSpiderToLspFormat(symbolGraphData, filePath);
-            const analyzer = new LspCallHierarchyAnalyzer();
-            const graph = analyzer.buildIntraFileGraph(filePath, lspData);
-            const analysisTimeMs = Date.now() - startTime;
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify({
-                  filePath,
-                  graph: {
-                    nodes: graph.nodes,
-                    edges: graph.edges,
-                    hasCycle: graph.hasCycle,
-                    cycleNodes: graph.cycleNodes ?? [],
-                    cycleType: graph.cycleType,
-                  },
-                  analysisTimeMs,
-                }),
-              ),
-            ]);
-          } catch (error) {
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          }
-        },
+    return this.registerTool<AnalyzeFileLogicInput>('skein_analyze_file_logic', {
+      invoke: async (options) => {
+        const filePath = this.resolveWorkspacePath(options.input.filePath);
+        return this.runWithSpider((ctx) => executeAnalyzeFileLogic({ filePath }, ctx));
       },
-    );
+    });
   }
 
   // ─── Tool: resolve_module_path ─────────────────────────────────────────────
@@ -1319,7 +1005,7 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<ResolveModulePathInput>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
+          const spider = this.options.spider();
           if (!spider) {
             return this.errorResult('No workspace open or dependency index not initialized.');
           }
@@ -1405,8 +1091,8 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<GraphContextInput>,
           token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const spider = this.provider.getSpiderForLmTools();
-          const callGraphService = this.provider.getCallGraphViewServiceForLmTools();
+          const spider = this.options.spider();
+          const callGraphService = this.options.callGraphViewService();
           const indexer = callGraphService?.getCallGraphIndexerForLmTools();
           const rootDir = this.getWorkspaceRoot();
           if (!spider || !indexer || !rootDir) {
@@ -1448,7 +1134,7 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<QueryCallGraphInput>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const callGraphService = this.provider.getCallGraphViewServiceForLmTools();
+          const callGraphService = this.options.callGraphViewService();
           const indexer = callGraphService?.getCallGraphIndexerForLmTools();
           if (!indexer) {
             return this.errorResult(
@@ -1550,33 +1236,21 @@ export class LmToolsService {
   // ─── Tool: scan_dead_code ─────────────────────────────────────────────────
 
   private registerScanDeadCode(): vscode.Disposable {
-    return this.registerTool<ScanDeadCodeInput>(
-      'skein_scan_dead_code',
-      {
-        invoke: async (
-          options: vscode.LanguageModelToolInvocationOptions<ScanDeadCodeInput>,
-          _token: vscode.CancellationToken,
-        ): Promise<vscode.LanguageModelToolResult> => {
-          const { maxFiles } = options.input;
-          const scopePath = options.input.scopePath
-            ? this.resolveWorkspacePath(options.input.scopePath)
-            : undefined;
-          const spider = this.provider.getSpiderForLmTools();
-          const rootDir = this.getWorkspaceRoot();
-          if (!spider || !rootDir) {
-            return this.errorResult('No workspace open or dependency index not initialized.');
-          }
-          try {
-            const result = await scanDeadCode(spider, rootDir, { scopePath, maxFiles });
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(JSON.stringify(result)),
-            ]);
-          } catch (error) {
-            return this.errorResult(error instanceof Error ? error.message : String(error));
-          }
-        },
+    return this.registerTool<ScanDeadCodeInput>('skein_scan_dead_code', {
+      invoke: async (options) => {
+        const { maxFiles } = options.input;
+        const scopePath = options.input.scopePath
+          ? this.resolveWorkspacePath(options.input.scopePath)
+          : undefined;
+        return this.runWithSpider((ctx) =>
+          executeScanDeadCode(
+            { ...(scopePath ? { scopePath } : {}), ...(maxFiles === undefined ? {} : { maxFiles }) },
+            undefined,
+            ctx,
+          ),
+        );
       },
-    );
+    });
   }
 
   // ─── Tool: query_natural_language ─────────────────────────────────────────
@@ -1589,7 +1263,7 @@ export class LmToolsService {
           options: vscode.LanguageModelToolInvocationOptions<QueryNaturalLanguageParams>,
           _token: vscode.CancellationToken,
         ): Promise<vscode.LanguageModelToolResult> => {
-          const indexer = this.provider.getCallGraphViewServiceForLmTools()?.getCallGraphIndexerForLmTools();
+          const indexer = this.options.callGraphViewService()?.getCallGraphIndexerForLmTools();
           const rootDir = this.getWorkspaceRoot();
           if (!indexer || !rootDir) {
             return this.errorResult(

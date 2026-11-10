@@ -33,9 +33,19 @@ export interface WarmupInfo {
 }
 
 /**
+ * What a tool executor needs. The MCP worker passes its `WorkerState`; the
+ * extension builds one around its own analyzer so Copilot's native tools run
+ * the same code as the MCP tools.
+ */
+export interface ToolContext {
+  getSpider(): Spider;
+  getConfig(): McpWorkerConfig;
+}
+
+/**
  * Core worker state container
  */
-export class WorkerState {
+export class WorkerState implements ToolContext {
   spider: Spider | null = null;
   parser: Parser | null = null;
   resolver: PathResolver | null = null;
