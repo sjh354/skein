@@ -511,10 +511,20 @@ export class VSCodeChangeHost implements ChangeEditorHost {
       const after = applyTextEdits(file.beforeContent, file.edits);
       if (after === null) return { ok: false, reason: "invalid-edit" };
       if (created) await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(file.path)));
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(after, "utf8"));
+      // The plan was computed on LF text; a CRLF file keeps its line endings.
+      const text = (await this.usesCrlf(uri)) ? after.replace(/\n/g, "\r\n") : after;
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(text, "utf8"));
     }
     /* eslint-enable no-await-in-loop */
     return { ok: true };
+  }
+
+  private async usesCrlf(uri: vscode.Uri): Promise<boolean> {
+    try {
+      return Buffer.from(await vscode.workspace.fs.readFile(uri)).includes("\r\n");
+    } catch {
+      return false; // a file the plan creates has no line endings to keep
+    }
   }
 
   diagnostics(path: string): ChangeDiagnosticSample {

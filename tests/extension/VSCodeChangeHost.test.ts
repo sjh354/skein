@@ -390,6 +390,19 @@ describe("VSCodeChangeHost", () => {
     expect(state.saved).toEqual([]);
   });
 
+  it("keeps CRLF line endings when the plan was computed on LF text", async () => {
+    state.docs.set(APP, "export function alpha() {}\r\nalpha();\r\n");
+    const result = await host().applyEdits([
+      {
+        path: APP,
+        beforeContent: "export function alpha() {}\nalpha();\n",
+        edits: [{ startLine: 0, startCharacter: 16, endLine: 0, endCharacter: 21, newText: "beta" }],
+      },
+    ]);
+    expect(result).toEqual({ ok: true });
+    expect(state.docs.get(APP)).toBe("export function beta() {}\r\nalpha();\r\n");
+  });
+
   it("refuses an edit that does not fit the planned content", async () => {
     const edit = {
       path: APP,
