@@ -20,7 +20,9 @@ import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { normalizePath } from "./path";
 import { isPathWithinRoot } from "./pathSecurity";
-import { ensureSkeinWorkspace, writeJsonAtomic } from "./viewState";
+import { writeJsonAtomic } from "./atomicWrite";
+import { isFiniteNumber, isRecord } from "./utils/typeGuards";
+import { ensureSkeinWorkspace } from "./viewState";
 
 export const SKEIN_CHANGE_SCHEMA_VERSION = 1;
 /** A language service may still be loading its project on the first request. */
@@ -350,14 +352,6 @@ function lastLineLength(content: string): number {
 // ---------------------------------------------------------------------------
 // Task/index validation
 // ---------------------------------------------------------------------------
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
 
 const TASK_STATUSES: ReadonlySet<string> = new Set<ChangeTaskStatus>([
   "planning",
@@ -975,29 +969,6 @@ export async function writeChangeRequest(
 ): Promise<void> {
   await ensureSkeinWorkspace(root);
   await writeJsonAtomic(changeRequestPath(root, request.id), request);
-}
-
-/** Change requests queued by MCP, oldest first. Other request kinds are ignored. */
-export async function listChangeRequests(root: string): Promise<SkeinChangeRequest[]> {
-  let names: string[];
-  try {
-    names = await fs.readdir(commandDir(root));
-  } catch {
-    return [];
-  }
-  const requests: SkeinChangeRequest[] = [];
-  /* eslint-disable no-await-in-loop -- one small file per queued command */
-  for (const name of names) {
-    if (!name.endsWith(".request.json")) continue;
-    try {
-      const request = parseChangeRequest(await fs.readFile(path.join(commandDir(root), name), "utf8"));
-      if (request) requests.push(request);
-    } catch {
-      // Removed between readdir and read — ignore.
-    }
-  }
-  /* eslint-enable no-await-in-loop */
-  return requests.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 }
 
 export async function readChangeResult(

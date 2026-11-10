@@ -8,11 +8,37 @@ import {
   type ControlViewParams,
 } from '../../../src/mcp/tools/viewState';
 import {
-  listCommandRequests,
+  parseCommandRequest,
   SKEIN_STATE_SCHEMA_VERSION,
+  viewStatePath,
   writeCommandResult,
-  writeViewState,
+  type SkeinCommandRequest,
+  type SkeinViewState,
 } from '../../../src/shared/viewState';
+import { writeJsonAtomic } from '../../../src/shared/atomicWrite';
+import { readdir, readFile } from 'node:fs/promises';
+
+/** Requests the MCP side queued, oldest first (what the extension's bridge reads). */
+async function listRequests(dir: string): Promise<SkeinCommandRequest[]> {
+  const commands = path.join(dir, '.skein', 'commands');
+  let names: string[] = [];
+  try {
+    names = await readdir(commands);
+  } catch {
+    return [];
+  }
+  const requests: SkeinCommandRequest[] = [];
+  for (const name of names.filter((n) => n.endsWith('.request.json')).sort()) {
+    const request = parseCommandRequest(await readFile(path.join(commands, name), 'utf8'));
+    if (request) requests.push(request);
+  }
+  return requests.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** Plays the extension's publisher for a seeded state file. */
+function writeState(dir: string, state: SkeinViewState): Promise<void> {
+  return writeJsonAtomic(viewStatePath(dir), state);
+}
 
 let root: string;
 
@@ -47,7 +73,7 @@ const appliedState = (graphVersion = 7) => {
 function answerNextRequest(status: 'applied' | 'rejected' = 'applied'): Promise<void> {
   return (async () => {
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      const [request] = await listCommandRequests(root);
+      const [request] = await listRequests(root);
       if (request) {
         await writeCommandResult(root, {
           id: request.id,
@@ -80,7 +106,7 @@ describe('skein_get_view_state', () => {
   });
 
   it('returns the published view', async () => {
-    await writeViewState(root, appliedState());
+    await writeState(root, appliedState());
     const result = await executeGetViewState(root);
     expect(result.available).toBe(true);
     expect(result.state?.graphVersion).toBe(7);
@@ -94,7 +120,7 @@ describe('skein_get_view_state', () => {
     const state = appliedState();
     const window = state.windows.w1 as Record<string, unknown>;
     window.layout = { positions: { n1: { x: 1, y: 2 }, n2: { x: 3, y: 4 } }, zoom: 1.5 };
-    await writeViewState(root, state);
+    await writeState(root, state);
     const result = await executeGetViewState(root);
     expect(result.state?.layout).toEqual({ zoom: 1.5, positionCount: 2 });
   });
@@ -131,10 +157,10 @@ describe('skein_control_view', () => {
   });
 
   it('targets the active window and rejects an unknown window id', async () => {
-    await writeViewState(root, appliedState());
+    await writeState(root, appliedState());
     const answer = (async () => {
       for (let attempt = 0; attempt < 100; attempt += 1) {
-        const [request] = await listCommandRequests(root);
+        const [request] = await listRequests(root);
         if (request) {
           expect(request.targetWindowId).toBe('w1');
           await writeCommandResult(root, {
@@ -163,7 +189,7 @@ describe('skein_control_view', () => {
     });
     expect(unknown.applied).toBe(false);
     expect(unknown.reason).toBe('window-not-found');
-    expect(await listCommandRequests(root)).toEqual([]);
+    expect(await listRequests(root)).toEqual([]);
   });
 
   it('refuses to open a file outside the workspace', async () => {
@@ -171,12 +197,12 @@ describe('skein_control_view', () => {
     const result = await executeControlView(root, { action: 'open_file', path: outside });
     expect(result.status).toBe('error');
     expect(result.reason).toBe('path-outside-workspace');
-    expect(await listCommandRequests(root)).toEqual([]);
+    expect(await listRequests(root)).toEqual([]);
   });
 
   it('accepts a file from another published workspace folder', async () => {
     const otherRoot = await mkdtemp(path.join(tmpdir(), 'skein-mcp-other-'));
-    await writeViewState(root, { ...appliedState(), workspaceRoots: [root, otherRoot] });
+    await writeState(root, { ...appliedState(), workspaceRoots: [root, otherRoot] });
     const answer = answerNextRequest();
     const result = await executeControlView(root, {
       action: 'open_file',
@@ -188,7 +214,7 @@ describe('skein_control_view', () => {
   });
 
   it('queues a view mode change', async () => {
-    await writeViewState(root, appliedState());
+    await writeState(root, appliedState());
     const answer = answerNextRequest();
     const result = await executeControlView(root, { action: 'set_view_mode', viewMode: 'architecture' });
     await answer;
@@ -205,7 +231,7 @@ describe('skein_control_view', () => {
   ])('rejects invalid params: %s', async (_name, params) => {
     const result = await executeControlView(root, params);
     expect(result.status).toBe('error');
-    expect(await listCommandRequests(root)).toEqual([]);
+    expect(await listRequests(root)).toEqual([]);
   });
 });
 
@@ -215,7 +241,7 @@ describe('extended view commands', () => {
     { action: 'set_expanded', nodeId: 'group-1', expanded: false },
     { action: 'set_architecture', view: 'matrix', minImports: 2 },
   ])('queues $action through the window-targeted bridge', async params => {
-    await writeViewState(root, appliedState());
+    await writeState(root, appliedState());
     const answer = answerNextRequest();
     const result = await executeControlView(root, params);
     await answer;
@@ -225,6 +251,6 @@ describe('extended view commands', () => {
   it('does not enqueue incomplete expansion or search commands', async () => {
     expect((await executeControlView(root, { action: 'search' })).applied).toBe(false);
     expect((await executeControlView(root, { action: 'set_expanded', nodeId: 'n' })).applied).toBe(false);
-    expect(await listCommandRequests(root)).toEqual([]);
+    expect(await listRequests(root)).toEqual([]);
   });
 });

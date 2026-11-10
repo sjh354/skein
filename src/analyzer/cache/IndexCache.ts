@@ -18,6 +18,7 @@ import * as path from "node:path";
 import { SourceFileCollector } from "../SourceFileCollector";
 import type { Spider } from "../Spider";
 import { getLogger } from "../../shared/logger";
+import { writeFileAtomicSync } from "../../shared/atomicWrite";
 import { normalizePath } from "../../shared/path";
 import { configFingerprint } from "./configFingerprint";
 
@@ -72,16 +73,6 @@ export type ReleaseLock = () => void;
 const heldLocks = new Map<string, number>();
 
 const NO_LOCK: ReleaseLock = () => undefined;
-
-/**
- * Write a file atomically: temp file in the same directory, then rename.
- * The pid suffix keeps concurrent processes from colliding on the temp name.
- */
-function writeFileAtomic(filePath: string, data: string | Uint8Array): void {
-  const tmpPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.tmp`);
-  fs.writeFileSync(tmpPath, data);
-  fs.renameSync(tmpPath, filePath);
-}
 
 function isProcessAlive(pid: number): boolean {
   try {
@@ -203,10 +194,10 @@ export class IndexCache {
       const keepOthers = this.matches(previous, fingerprint);
 
       const reverseIndexPath = path.join(this.dir, REVERSE_INDEX_FILE);
-      if (payload.reverseIndex) writeFileAtomic(reverseIndexPath, payload.reverseIndex.data);
+      if (payload.reverseIndex) writeFileAtomicSync(reverseIndexPath, payload.reverseIndex.data);
       else if (!keepOthers) fs.rmSync(reverseIndexPath, { force: true });
 
-      if (payload.callGraph) writeFileAtomic(this.callGraphPath, payload.callGraph);
+      if (payload.callGraph) writeFileAtomicSync(this.callGraphPath, payload.callGraph);
       else if (!keepOthers) fs.rmSync(this.callGraphPath, { force: true });
 
       const meta: IndexCacheMeta = {
@@ -217,7 +208,7 @@ export class IndexCache {
         configFingerprint: fingerprint,
         reverseIndexOptions: payload.reverseIndex?.options ?? (keepOthers ? previous?.reverseIndexOptions : undefined),
       };
-      writeFileAtomic(path.join(this.dir, META_FILE), JSON.stringify(meta, null, 2));
+      writeFileAtomicSync(path.join(this.dir, META_FILE), JSON.stringify(meta, null, 2));
       const sizes = IndexCache.fileSizes(this.dir);
       log.info(`Saved index cache: ${REVERSE_INDEX_FILE} ${sizes.reverseIndexBytes} B, ${CALLGRAPH_FILE} ${sizes.callGraphBytes} B`);
       return true;

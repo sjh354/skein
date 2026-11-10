@@ -18,8 +18,10 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
+import { writeJsonAtomic } from "./atomicWrite";
 import { withFileLock } from "./lock";
 import { normalizePath } from "./path";
+import { isFiniteNumber, isRecord } from "./utils/typeGuards";
 
 export const SKEIN_DIR_NAME = ".skein";
 export const SKEIN_STATE_FILE = "state.json";
@@ -274,10 +276,6 @@ function commandResultPath(root: string, id: string): string {
 // Validation
 // ---------------------------------------------------------------------------
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isViewMode(value: unknown): value is SkeinViewMode {
   return (
     value === "file" ||
@@ -290,10 +288,6 @@ function isViewMode(value: unknown): value is SkeinViewMode {
 
 function isFilterType(value: unknown): value is SkeinFilterType {
   return value === "nodeType" || value === "folder" || value === "edgeType";
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
 }
 
 function parseSelection(value: unknown): SkeinSelection | undefined {
@@ -627,24 +621,6 @@ export function parseCommandResult(raw: string): SkeinCommandResult | null {
 // File helpers
 // ---------------------------------------------------------------------------
 
-let temporaryFileCounter = 0;
-
-/** Writes through a temporary file in the same directory, then renames. */
-export async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const temporaryPath = path.join(
-    path.dirname(filePath),
-    `.${path.basename(filePath)}.${process.pid}.${++temporaryFileCounter}.tmp`,
-  );
-  await fs.writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-  try {
-    await fs.rename(temporaryPath, filePath);
-  } catch (err) {
-    await fs.rm(temporaryPath, { force: true });
-    throw err;
-  }
-}
-
 /**
  * Creates `.skein/` with a local `.gitignore` (`*`) so the folder never shows up
  * in the user's repository without touching a shared exclude file.
@@ -675,11 +651,6 @@ export async function readViewState(root: string): Promise<SkeinViewState | null
   } catch {
     return null;
   }
-}
-
-/** Direct write. Prefer `mergeViewState` in the extension. */
-export async function writeViewState(root: string, state: SkeinViewState): Promise<void> {
-  await writeJsonAtomic(viewStatePath(root), state);
 }
 
 export interface WindowStateWrite {
@@ -804,31 +775,6 @@ export async function writeCommandRequest(
   request: SkeinCommandRequest,
 ): Promise<void> {
   await writeJsonAtomic(commandRequestPath(root, request.id), request);
-}
-
-/** Requests written by the MCP server, oldest first. Malformed files are ignored. */
-export async function listCommandRequests(root: string): Promise<SkeinCommandRequest[]> {
-  let names: string[];
-  try {
-    names = await fs.readdir(commandDir(root));
-  } catch {
-    return [];
-  }
-  const requests: SkeinCommandRequest[] = [];
-  /* eslint-disable no-await-in-loop -- one small file per queued command */
-  for (const name of names) {
-    if (!name.endsWith(".request.json")) continue;
-    try {
-      const request = parseCommandRequest(
-        await fs.readFile(path.join(commandDir(root), name), "utf8"),
-      );
-      if (request) requests.push(request);
-    } catch {
-      // Removed between readdir and read — ignore.
-    }
-  }
-  /* eslint-enable no-await-in-loop */
-  return requests.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 }
 
 export async function readCommandResult(

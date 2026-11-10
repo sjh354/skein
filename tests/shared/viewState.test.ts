@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -7,7 +7,6 @@ import {
   deleteCommandFiles,
   isCommandStale,
   isCommandSupersededByUser,
-  listCommandRequests,
   mergeViewState,
   parseCommandRequest,
   parseCommandResult,
@@ -18,10 +17,10 @@ import {
   viewStatePath,
   writeCommandRequest,
   writeCommandResult,
-  writeViewState,
   type SkeinCommandRequest,
   type SkeinViewState,
 } from '../../src/shared/viewState';
+import { writeJsonAtomic } from '../../src/shared/atomicWrite';
 
 const roots: string[] = [];
 
@@ -56,7 +55,7 @@ afterEach(async () => {
 describe('view state file', () => {
   it('round-trips through .skein/state.json', async () => {
     const root = await tempRoot();
-    await writeViewState(root, state());
+    await writeJsonAtomic(viewStatePath(root), state());
 
     const raw = await readFile(viewStatePath(root), 'utf8');
     expect(raw.endsWith('\n')).toBe(true);
@@ -138,7 +137,7 @@ describe('view state file', () => {
     const root = await tempRoot();
     expect(await readViewState(root)).toBeNull();
 
-    await writeViewState(root, state());
+    await writeJsonAtomic(viewStatePath(root), state());
     await writeFile(viewStatePath(root), '{not json', 'utf8');
     expect(await readViewState(root)).toBeNull();
 
@@ -163,18 +162,6 @@ describe('view command queue', () => {
     ...overrides,
   });
 
-  it('lists requests oldest first and ignores malformed entries', async () => {
-    const root = await tempRoot();
-    const older = request({ createdAt: 10 });
-    const newer = request({ createdAt: 20 });
-    await writeCommandRequest(root, newer);
-    await writeCommandRequest(root, older);
-    await writeFile(path.join(root, '.skein', 'commands', 'broken.request.json'), '{}', 'utf8');
-
-    const listed = await listCommandRequests(root);
-    expect(listed.map((item) => item.id)).toEqual([older.id, newer.id]);
-  });
-
   it('round-trips a result and deletes both files', async () => {
     const root = await tempRoot();
     const pending = request();
@@ -194,7 +181,7 @@ describe('view command queue', () => {
 
     await deleteCommandFiles(root, pending.id);
     expect(await readCommandResult(root, pending.id)).toBeNull();
-    expect(await listCommandRequests(root)).toEqual([]);
+    expect(await readdir(path.join(root, '.skein', 'commands'))).toEqual([]);
   });
 
   it('ignores commands with unknown actions', () => {
