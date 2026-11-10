@@ -9,6 +9,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    // 워커 상한: WSL 메모리(약 20GB)를 세션 여러 개가 나눠 쓴다
+    maxWorkers: 4,
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     exclude: ["tests/vscode-e2e/**", "tests/e2e/**"],
     coverage: {
