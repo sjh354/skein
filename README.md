@@ -12,7 +12,7 @@ Skein analyzes imports, symbols, calls, cycles, unused exports, and change impac
 - [AI integrations](#ai-integrations)
 - [Configuration](#configuration)
 - [Supported languages](#supported-languages)
-- [Documentation](#documentation)
+- [Design](#design)
 - [Development](#development)
 - [License](#license)
 
@@ -32,7 +32,9 @@ Use the same graph data to navigate code, review refactors, generate codemaps, a
 
 ### VS Code extension
 
-**Requirements:** VS Code 1.96 or later. Not yet published to the Marketplace: run `npm install && npm run build`, then press **F5** to launch the Extension Development Host, or run `npm run package` and install the generated VSIX.
+**Requirements:** VS Code 1.96 or later.
+
+Install **Skein** (`sjh354.skein`) from the VS Code Marketplace, or from a VSIX with `code --install-extension skein-<version>.vsix`. To run from source, see [Development](#development).
 
 1. Open a project.
 2. Click the graph icon in the editor title, or run **Skein: Show Dependency Graph** from the Command Palette. The editor-title action opens the graph in a tab beside the code; the Command Palette keeps the panel view.
@@ -72,7 +74,7 @@ Drill into TypeScript, JavaScript, Python, Rust, or Dart files to see functions,
 The Live Call Graph shows cross-file symbol relationships in a Cytoscape.js panel.
 
 - Expand callers and callees with a depth from 1 to 5. A view shows at most 500 symbols, nearest hops first; a notice counts the hidden ones.
-- Group symbols by folder.
+- Group symbols by file and folder. The layout is a physics simulation: dragging a symbol makes the symbols it calls (or is called by) follow, and the file and folder groups keep their shape. Re-layout rebuilds it; positions are restored after a restart.
 - Number calls in invocation order.
 - Highlight self-recursion and mutual recursion.
 - Filter by symbol type or folder.
@@ -83,7 +85,7 @@ The Live Call Graph shows cross-file symbol relationships in a Cytoscape.js pane
 Select a symbol in the call graph and run **Skein: Rename Selected Symbol**, **Skein: Move Selected Symbol to File** or **Skein: Inline Function**. In the editor, select code and run **Skein: Extract Selection as Function**. Skein lists the changed files in a confirmation dialog, applies the change only after you confirm, then opens the changed files.
 
 - Rename asks the language service (the built-in TypeScript support or the installed Dart extension).
-- Move uses a rule engine: helpers used only by the moved code travel with it, public symbols and helpers used elsewhere stay, imports are rewritten, a destination file is created when needed, and entry points, private Dart helpers, unresolved imports, name collisions and circular imports block the plan with a reason.
+- Move uses a rule engine: helpers used only by the moved code travel with it, public symbols and helpers used elsewhere stay, imports are rewritten, a destination file is created when needed, a source file the move empties is deleted when no file, config or script still refers to it (undo restores it), and entry points, private Dart helpers, unresolved imports, name collisions and circular imports block the plan with a reason.
 - Extract derives parameters from the enclosing function and supports expression or statement selections; code that uses `this` or awaits inside a synchronous function is refused.
 - Inline supports non-exported, non-async, single-expression top-level functions and replaces every call site (or a chosen call through MCP). Exported or external use is refused instead of guessed.
 - The plan is recorded against the exact saved content it was built from; if the file changed first, applying is refused.
@@ -92,11 +94,11 @@ Select a symbol in the call graph and run **Skein: Rename Selected Symbol**, **S
 - **Undo** and **Re-apply** use a three-way merge, so edits made after the change survive. A conflict is reported with the path and first conflicting hunk, and no file is overwritten.
 - Agents can use `skein_plan_change` (`kind`: `rename`, `move`, `extract`, `inline`), `skein_apply_change`, `skein_get_change_plan`, `skein_list_change_history`, `skein_undo_change` and `skein_redo_change`; they go through the same queue and checks as the UI.
 
-The Live Call Graph supports TypeScript, JavaScript, Vue, Svelte, Python, Rust, C#, Go, Java, Dart, and GraphQL. C#, Go, Java, and GraphQL are supported in the file graph and Live Call Graph; Symbol View support is currently limited to TypeScript, JavaScript, Python, Rust, and Dart. Dart analysis is syntactic: imports resolve through package_config.json or the owning pubspec, and a cross-file call is linked only when its symbol name is unique in the workspace. In GraphQL, operations and fragments call the fragments they spread; an operation's default root type (`Query`, `Mutation`, `Subscription`), type conditions, field, argument and variable types, and union members are type-only references (`USES`, shown with `includeTypeOnly`); `implements` is an `IMPLEMENTS` edge.
+The Live Call Graph supports TypeScript, JavaScript, Vue, Svelte, Python, Rust, C#, Go, Java, Dart, and GraphQL. C#, Go, Java, and GraphQL are supported in the file graph and Live Call Graph; Symbol View support is currently limited to TypeScript, JavaScript, Python, Rust, and Dart. Dart analysis is syntactic: imports resolve through package_config.json or the owning pubspec, and a cross-file call is linked only when its symbol name is unique in the workspace. Dart rename and move are covered by tests with fixtures and have not been exercised against a live Dart extension. In GraphQL, operations and fragments call the fragments they spread; an operation's default root type (`Query`, `Mutation`, `Subscription`), type conditions, field, argument and variable types, and union members are type-only references (`USES`, shown with `includeTypeOnly`); `implements` is an `IMPLEMENTS` edge.
 
 ### Architecture view
 
-The Architecture view draws the whole workspace as **units** (packages, else top-level folders) in layers, with the import edges between them, their roles and their cycles. It answers three questions: what are my layers, who depends on this, and does the code follow my rules. The [architecture guide](docs/architecture.md) defines every term, explains the marks of each view and how to fix what they raise: cycles, rule violations, unmatched files.
+The Architecture view draws the whole workspace as **units** (packages, else top-level folders) in layers, with the import edges between them, their roles and their cycles. It answers three questions: what are my layers, who depends on this, and does the code follow my rules.
 
 Quick start:
 
@@ -110,7 +112,7 @@ The Architecture view and the MCP tool `skein_explore_architecture` report the s
 
 ### Architecture rules
 
-Declare your intended architecture in `skein.architecture.json` at the workspace root: `elements` name sets of files, `rules` say what each may import, and `roles` declare what each unit is. `profiles`/`areas` add per-area layer directions and `exceptions` record known cases with a reason. The view lists each rule with its violations and the five structure diagnostics; the `skein_check_architecture` MCP tool reports new `error` violations, supports a baseline for existing code, and can gate CI, while `skein_diagnose_structure` reports confirmed rule breaks and review candidates. See [the config file](docs/architecture.md#the-config-file) for a complete example.
+Declare your intended architecture in `skein.architecture.json` at the workspace root: `elements` name sets of files, `rules` say what each may import, and `roles` declare what each unit is. `profiles`/`areas` add per-area layer directions and `exceptions` record known cases with a reason. The view lists each rule with its violations and the five structure diagnostics; the `skein_check_architecture` MCP tool reports new `error` violations, supports a baseline for existing code, and can gate CI, while `skein_diagnose_structure` reports confirmed rule breaks and review candidates. This repository's own [`skein.architecture.json`](skein.architecture.json) is a complete example, and [`schemas/architecture.schema.json`](schemas/architecture.schema.json) describes every field.
 
 ### Unused dependencies and impact analysis
 
@@ -226,12 +228,9 @@ Workspace indexing (extension and MCP) skips paths listed in the root `.gitignor
 | Dart | Yes | Yes | Yes |
 | GraphQL | Yes | No | Yes |
 
-## Documentation
+## Design
 
-- [Design decisions](docs/DESIGN.md) — product scope, responsibilities, and why
-- [Development guide](docs/DEVELOPMENT.md) — setup, builds, tests, and WASM architecture
-- [Architecture guide](docs/architecture.md) — Architecture view, `skein.architecture.json` rules, and `check-architecture`
-- [Handoff](docs/HANDOFF.md) — Marketplace·npm 등록과 GitHub 계정 쪽 남은 작업
+Product scope, responsibilities and the reasons behind the main decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Development
 
@@ -260,7 +259,9 @@ Press F5 in VS Code to launch the Extension Development Host.
 | `npm run package` | Build the VSIX package |
 | `npm run package:verify` | Verify package contents |
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full project structure, test strategy, WASM details, and troubleshooting.
+`npm run bench:graph-context` measures the `skein_graph_context` search ranking against the labelled queries in `tests/benchmarks/` (build first).
+
+On Linux the VS Code E2E tests need the Electron system libraries and a display, for example `xvfb-run -a npm run test:vscode` after installing `libasound2`, `libgbm1`, `libnss3`, `libgtk-3-0` and `xvfb`.
 
 ## License
 

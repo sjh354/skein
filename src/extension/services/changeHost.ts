@@ -55,6 +55,12 @@ export interface ChangeEditorHost {
   findReferences(path: string, symbol: ChangeSymbolInfo): Promise<ChangeReferenceLookup>;
   /** Saved (not editor-buffer) content, or null when the file is missing. */
   readSavedContent(path: string): Promise<string | null>;
+  /**
+   * Workspace files (any type) whose saved text mentions the module at `path`, so an emptied source
+   * is deleted only when nothing outside the import graph still names it. Optional: absent means
+   * the search is unavailable and the file is kept.
+   */
+  findPathMentions?(path: string): Promise<string[] | { error: string }>;
   /** True when the saved file exists, so an unreadable file is not treated as new. */
   exists(path: string): Promise<boolean>;
   /** True when the file has unsaved editor changes. */

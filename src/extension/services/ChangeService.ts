@@ -595,6 +595,9 @@ export class ChangeService {
       },
       findReferences: (symbol, filePath) => this.options.host.findReferences(filePath, symbol),
       readFile: (filePath) => this.options.host.readSavedContent(filePath),
+      ...(this.options.host.findPathMentions
+        ? { findPathMentions: (filePath: string) => this.options.host.findPathMentions!(filePath) }
+        : {}),
     };
   }
 
