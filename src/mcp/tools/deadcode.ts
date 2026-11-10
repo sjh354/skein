@@ -1,6 +1,6 @@
 import { scanDeadCode } from "../../analyzer/deadcode/DeadCodeScanner";
 import { validateScopePath } from "../shared/helpers";
-import { workerState } from "../shared/state";
+import { workerState, type ToolContext } from "../shared/state";
 import type {
     ScanDeadCodeParams,
     ScanDeadCodeResult,
@@ -16,9 +16,10 @@ import type {
 export async function executeScanDeadCode(
   params: ScanDeadCodeParams,
   signal?: AbortSignal,
+  ctx: ToolContext = workerState,
 ): Promise<ScanDeadCodeResult> {
-  const spider = workerState.getSpider();
-  const config = workerState.getConfig();
+  const spider = ctx.getSpider();
+  const config = ctx.getConfig();
   validateScopePath(params.scopePath ?? config.rootDir, config.rootDir);
   return scanDeadCode(spider, config.rootDir, params, signal);
 }

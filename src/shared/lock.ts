@@ -42,9 +42,17 @@ export async function withFileLock<T>(
   for (;;) {
     try {
       const handle = await fs.open(lockPath, "wx");
+      // A live holder keeps the lock's mtime fresh, so only a dead holder's
+      // lock ever looks stale: a change apply legitimately outlives staleAfterMs.
+      const heartbeat = setInterval(() => {
+        const now = new Date();
+        void fs.utimes(lockPath, now, now).catch(() => undefined);
+      }, Math.max(50, Math.floor(staleAfterMs / 2)));
+      heartbeat.unref?.();
       try {
         return await action();
       } finally {
+        clearInterval(heartbeat);
         await handle.close();
         await fs.rm(lockPath, { force: true });
       }

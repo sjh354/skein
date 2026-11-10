@@ -1,10 +1,7 @@
 /**
- * MCP Worker State Management
- *
- * Centralized state container for worker thread lifecycle,
- * configuration, and core analysis components.
- *
- * Extracted from McpWorker.ts to reduce complexity and improve testability.
+ * MCP worker state: the analysis components of this worker thread and the
+ * call-graph refresh marks. Plain fields; the `get*()` methods are the checked
+ * accessors tool executors use.
  */
 
 import type { FSWatcher } from "chokidar";
@@ -36,99 +33,36 @@ export interface WarmupInfo {
 }
 
 /**
+ * What a tool executor needs. The MCP worker passes its `WorkerState`; the
+ * extension builds one around its own analyzer so Copilot's native tools run
+ * the same code as the MCP tools.
+ */
+export interface ToolContext {
+  getSpider(): Spider;
+  getConfig(): McpWorkerConfig;
+}
+
+/**
  * Core worker state container
  */
-export class WorkerState {
-  private _spider: Spider | null = null;
-  private _parser: Parser | null = null;
-  private _resolver: PathResolver | null = null;
-  private _astWorkerHost: AstWorkerHost | null = null;
-  private _symbolReverseIndex: SymbolReverseIndex | null = null;
-  private _config: McpWorkerConfig | null = null;
-  private _isReady = false;
-  private _warmupInfo: WarmupInfo = {
-    completed: false,
-  };
-  private _fileWatcher: FSWatcher | null = null;
-    private readonly _pendingInvalidations = new Map<string, NodeJS.Timeout>();
-  private _callGraphIndexer: CallGraphIndexer | null = null;
-  private _graphExtractor: GraphExtractor | null = null;
-  private _callGraphIndexedRoot: string | null = null;
-  private _indexCache: IndexCache | null = null;
+export class WorkerState implements ToolContext {
+  spider: Spider | null = null;
+  parser: Parser | null = null;
+  resolver: PathResolver | null = null;
+  astWorkerHost: AstWorkerHost | null = null;
+  symbolReverseIndex: SymbolReverseIndex | null = null;
+  config: McpWorkerConfig | null = null;
+  isReady = false;
+  warmupInfo: WarmupInfo = { completed: false };
+  fileWatcher: FSWatcher | null = null;
+  readonly pendingInvalidations = new Map<string, NodeJS.Timeout>();
+  callGraphIndexer: CallGraphIndexer | null = null;
+  graphExtractor: GraphExtractor | null = null;
+  callGraphIndexedRoot: string | null = null;
+  /** Shared `.skein/cache/`; null when this process runs without a cache. */
+  indexCache: IndexCache | null = null;
   private readonly _callGraphPendingFiles = new Set<string>();
   private _callGraphFullRebuild = false;
-
-  // ============================================================================
-  // Core Components
-  // ============================================================================
-
-  get spider(): Spider | null {
-    return this._spider;
-  }
-
-  set spider(value: Spider | null) {
-    this._spider = value;
-  }
-
-  get parser(): Parser | null {
-    return this._parser;
-  }
-
-  set parser(value: Parser | null) {
-    this._parser = value;
-  }
-
-  get resolver(): PathResolver | null {
-    return this._resolver;
-  }
-
-  set resolver(value: PathResolver | null) {
-    this._resolver = value;
-  }
-
-  get astWorkerHost(): AstWorkerHost | null {
-    return this._astWorkerHost;
-  }
-
-  set astWorkerHost(value: AstWorkerHost | null) {
-    this._astWorkerHost = value;
-  }
-
-  get symbolReverseIndex(): SymbolReverseIndex | null {
-    return this._symbolReverseIndex;
-  }
-
-  set symbolReverseIndex(value: SymbolReverseIndex | null) {
-    this._symbolReverseIndex = value;
-  }
-
-  // ============================================================================
-  // Call Graph Components
-  // ============================================================================
-
-  get callGraphIndexer(): CallGraphIndexer | null {
-    return this._callGraphIndexer;
-  }
-
-  set callGraphIndexer(value: CallGraphIndexer | null) {
-    this._callGraphIndexer = value;
-  }
-
-  get graphExtractor(): GraphExtractor | null {
-    return this._graphExtractor;
-  }
-
-  set graphExtractor(value: GraphExtractor | null) {
-    this._graphExtractor = value;
-  }
-
-  get callGraphIndexedRoot(): string | null {
-    return this._callGraphIndexedRoot;
-  }
-
-  set callGraphIndexedRoot(value: string | null) {
-    this._callGraphIndexedRoot = value;
-  }
 
   /** Files the next call graph refresh must re-extract, whatever their mtime. */
   get callGraphPendingFiles(): ReadonlySet<string> {
@@ -150,7 +84,7 @@ export class WorkerState {
     } else {
       for (const filePath of filePaths) this._callGraphPendingFiles.add(normalizePath(filePath));
     }
-    this._callGraphIndexedRoot = null;
+    this.callGraphIndexedRoot = null;
   }
 
   /**
@@ -161,61 +95,8 @@ export class WorkerState {
     for (const filePath of refreshed) this._callGraphPendingFiles.delete(filePath);
     if (fullRebuild) this._callGraphFullRebuild = false;
     if (this._callGraphPendingFiles.size > 0 || this._callGraphFullRebuild) {
-      this._callGraphIndexedRoot = null;
+      this.callGraphIndexedRoot = null;
     }
-  }
-
-  /** Shared `.skein/cache/`; null when this process runs without a cache. */
-  get indexCache(): IndexCache | null {
-    return this._indexCache;
-  }
-
-  set indexCache(value: IndexCache | null) {
-    this._indexCache = value;
-  }
-
-  // ============================================================================
-  // Configuration & Status
-  // ============================================================================
-
-  get config(): McpWorkerConfig | null {
-    return this._config;
-  }
-
-  set config(value: McpWorkerConfig | null) {
-    this._config = value;
-  }
-
-  get isReady(): boolean {
-    return this._isReady;
-  }
-
-  set isReady(value: boolean) {
-    this._isReady = value;
-  }
-
-  get warmupInfo(): WarmupInfo {
-    return this._warmupInfo;
-  }
-
-  set warmupInfo(value: WarmupInfo) {
-    this._warmupInfo = value;
-  }
-
-  // ============================================================================
-  // File Watching
-  // ============================================================================
-
-  get fileWatcher(): FSWatcher | null {
-    return this._fileWatcher;
-  }
-
-  set fileWatcher(value: FSWatcher | null) {
-    this._fileWatcher = value;
-  }
-
-  get pendingInvalidations(): Map<string, NodeJS.Timeout> {
-    return this._pendingInvalidations;
   }
 
   // ============================================================================
@@ -227,15 +108,15 @@ export class WorkerState {
    * @throws Error if components not ready
    */
   requireReady(): void {
-      if (!this._isReady || !this._spider || !this._parser || !this._resolver || !this._config) {
+    if (!this.isReady || !this.spider || !this.parser || !this.resolver || !this.config) {
       throw new Error(
         "Worker not initialized. Call init() first. Missing: " +
           [
-            !this._spider && "spider",
-            !this._parser && "parser",
-            !this._resolver && "resolver",
-              !this._config && "config",
-            !this._isReady && "ready flag",
+            !this.spider && "spider",
+            !this.parser && "parser",
+            !this.resolver && "resolver",
+            !this.config && "config",
+            !this.isReady && "ready flag",
           ]
             .filter(Boolean)
             .join(", ")
@@ -249,7 +130,7 @@ export class WorkerState {
   getSpider(): Spider {
     this.requireReady();
     // requireReady() guarantees non-null; local alias helps TS narrow
-    const spider = this._spider;
+    const spider = this.spider;
     if (!spider) throw new Error("Spider not available after requireReady()");
     return spider;
   }
@@ -259,7 +140,7 @@ export class WorkerState {
    */
   getParser(): Parser {
     this.requireReady();
-    const parser = this._parser;
+    const parser = this.parser;
     if (!parser) throw new Error("Parser not available after requireReady()");
     return parser;
   }
@@ -269,7 +150,7 @@ export class WorkerState {
    */
   getResolver(): PathResolver {
     this.requireReady();
-    const resolver = this._resolver;
+    const resolver = this.resolver;
     if (!resolver) throw new Error("Resolver not available after requireReady()");
     return resolver;
   }
@@ -278,20 +159,20 @@ export class WorkerState {
    * Get AST worker host instance (throws if not initialized)
    */
   getAstWorkerHost(): AstWorkerHost {
-    if (!this._astWorkerHost) {
+    if (!this.astWorkerHost) {
       throw new Error("AstWorkerHost not initialized");
     }
-    return this._astWorkerHost;
+    return this.astWorkerHost;
   }
 
   /**
    * Get config (throws if not initialized)
    */
   getConfig(): McpWorkerConfig {
-    if (!this._config) {
+    if (!this.config) {
       throw new Error("Config not set. Call init() first.");
     }
-    return this._config;
+    return this.config;
   }
 
   // ============================================================================
@@ -302,80 +183,42 @@ export class WorkerState {
    * Reset all state (for shutdown or re-initialization)
    */
   reset(): void {
-    // Clear pending invalidations
-    for (const timeout of this._pendingInvalidations.values()) {
+    for (const timeout of this.pendingInvalidations.values()) {
       clearTimeout(timeout);
     }
-    this._pendingInvalidations.clear();
+    this.pendingInvalidations.clear();
 
-    // Stop file watcher
-    if (this._fileWatcher) {
-      void this._fileWatcher.close();
-      this._fileWatcher = null;
+    if (this.fileWatcher) {
+      void this.fileWatcher.close();
+      this.fileWatcher = null;
     }
 
-    // Terminate AST worker
-    if (this._astWorkerHost) {
-      void this._astWorkerHost.stop();
-      this._astWorkerHost = null;
+    if (this.astWorkerHost) {
+      void this.astWorkerHost.stop();
+      this.astWorkerHost = null;
     }
 
-    this._symbolReverseIndex = null;
+    this.symbolReverseIndex = null;
 
-    // Dispose call graph resources
-    if (this._graphExtractor) {
-      this._graphExtractor.dispose();
-      this._graphExtractor = null;
+    if (this.graphExtractor) {
+      this.graphExtractor.dispose();
+      this.graphExtractor = null;
     }
-    if (this._callGraphIndexer) {
-      this._callGraphIndexer.dispose();
-      this._callGraphIndexer = null;
+    if (this.callGraphIndexer) {
+      this.callGraphIndexer.dispose();
+      this.callGraphIndexer = null;
     }
-    this._callGraphIndexedRoot = null;
+    this.callGraphIndexedRoot = null;
     this._callGraphPendingFiles.clear();
     this._callGraphFullRebuild = false;
-    this._indexCache = null;
+    this.indexCache = null;
 
-    // Clear components
-    this._spider = null;
-    this._parser = null;
-    this._resolver = null;
-    this._config = null;
-    this._isReady = false;
-    this._warmupInfo = { completed: false };
-  }
-
-  /**
-   * Get current state summary (for debugging/logging)
-   */
-  getStateSummary(): {
-    isReady: boolean;
-    hasSpider: boolean;
-    hasParser: boolean;
-    hasResolver: boolean;
-    hasAstWorkerHost: boolean;
-    hasSymbolReverseIndex: boolean;
-    hasConfig: boolean;
-    warmupCompleted: boolean;
-    hasFileWatcher: boolean;
-    pendingInvalidationCount: number;
-    hasCallGraphIndexer: boolean;
-    callGraphIndexedRoot: string | null;
-  } {
-    return {
-      isReady: this._isReady,
-      hasSpider: this._spider !== null,
-      hasParser: this._parser !== null,
-      hasResolver: this._resolver !== null,
-      hasAstWorkerHost: this._astWorkerHost !== null,
-      hasSymbolReverseIndex: this._symbolReverseIndex !== null,
-      hasConfig: this._config !== null,
-      warmupCompleted: this._warmupInfo.completed,
-      hasFileWatcher: this._fileWatcher !== null,
-      pendingInvalidationCount: this._pendingInvalidations.size,
-      hasCallGraphIndexer: this._callGraphIndexer !== null,
-      callGraphIndexedRoot: this._callGraphIndexedRoot,
-    };
+    this.spider = null;
+    this.parser = null;
+    this.resolver = null;
+    this.config = null;
+    this.isReady = false;
+    this.warmupInfo = { completed: false };
   }
 }
 

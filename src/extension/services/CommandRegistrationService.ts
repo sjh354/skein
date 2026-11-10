@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
 import type { GraphProvider } from '../GraphProvider';
 import type { VsCodeLogger } from '../extensionLogger';
+import type { CallGraphViewService } from './CallGraphViewService';
 import type { CommandCoordinator } from './CommandCoordinator';
 
 interface CommandRegistrationServiceOptions {
   provider: GraphProvider;
+  /** Read directly for the E2E observability counts. */
+  callGraphViewService: CallGraphViewService;
   commandCoordinator: CommandCoordinator;
   logger: VsCodeLogger;
 }
@@ -15,11 +18,13 @@ interface CommandRegistrationServiceOptions {
  */
 export class CommandRegistrationService {
   private readonly provider: GraphProvider;
+  private readonly callGraphViewService: CallGraphViewService;
   private readonly commandCoordinator: CommandCoordinator;
   private readonly logger: VsCodeLogger;
 
   constructor(options: CommandRegistrationServiceOptions) {
     this.provider = options.provider;
+    this.callGraphViewService = options.callGraphViewService;
     this.commandCoordinator = options.commandCoordinator;
     this.logger = options.logger;
   }
@@ -188,10 +193,10 @@ export class CommandRegistrationService {
     const getters = new Map<string, () => unknown>([
       ['skein.viewMode', () => this.provider.getViewMode()],
       ['skein.reverseDependenciesVisible', () => this.provider.getReverseDependenciesVisible()],
-      ['skein.callGraphRenderCount', () => this.provider.getCallGraphRenderCount()],
-      ['skein.callGraphNodeCount', () => this.provider.getCallGraphNodeCount()],
-      ['skein.callGraphEdgeCount', () => this.provider.getCallGraphEdgeCount()],
-      ['skein.callGraphCycleCount', () => this.provider.getCallGraphCycleCount()],
+      ['skein.callGraphRenderCount', () => this.callGraphViewService.getCallGraphRenderCount()],
+      ['skein.callGraphNodeCount', () => this.callGraphViewService.getCallGraphNodeCount()],
+      ['skein.callGraphEdgeCount', () => this.callGraphViewService.getCallGraphEdgeCount()],
+      ['skein.callGraphCycleCount', () => this.callGraphViewService.getCallGraphCycleCount()],
       ['skein.fileGraphNodeMetadata', () => this.provider.getFileGraphNodeMetadata()],
       ['skein.fileGraphRoot', () => this.provider.getFileGraphRoot()],
       ['skein.architectureRenderCount', () => architecture()?.renderCount ?? 0],

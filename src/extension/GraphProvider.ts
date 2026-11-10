@@ -3,8 +3,7 @@ import type { IndexerStatusSnapshot } from "../analyzer/IndexerStatus";
 import { Spider } from "../analyzer/Spider";
 import { SUPPORTED_SOURCE_FILE_REGEX } from "../shared/constants";
 import type { CallGraphWebviewCommand } from "../shared/callgraph-types";
-import { randomUUID } from "node:crypto";
-import type { SkeinViewAction, SkeinViewMode, SkeinViewSnapshot, SkeinSurfaceState, SkeinViewSelections } from "../shared/viewState";
+import type { SkeinViewAction, SkeinViewMode, SkeinViewSnapshot } from "../shared/viewState";
 import type {
   ExtensionToWebviewMessage,
   GraphData,
@@ -22,6 +21,7 @@ import {
   graphProviderServiceTokens,
 } from "./services/graphProviderServiceContainer";
 import { SharedWebviewHub } from "./services/SharedWebviewHub";
+import { SurfaceStateService } from "./services/SurfaceStateService";
 import { GraphState } from "./services/GraphState";
 import type { GraphViewService } from "./services/GraphViewService";
 import { MessageDispatcher } from "./services/MessageDispatcher";
@@ -110,10 +110,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   private _disposePromise: Promise<void> | null = null;
   private _isDisposing = false;
   private readonly webviews = new SharedWebviewHub();
-  private surfaceStates: Partial<Record<SkeinViewSnapshot["mode"], SkeinSurfaceState>> = {};
-  private surfaceSelections: SkeinViewSelections = {};
-  private surfaceUserActionObserver?: () => void;
-  private surfacePending = new Map<string, (result: true | string) => void>();
+  private readonly surfaces = new SurfaceStateService();
 
   private sharedWebviewHost(): Pick<vscode.WebviewView, "webview"> | undefined {
     const view = this._view;
@@ -131,18 +128,16 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     return this.webviews.post(message);
   };
 
-  public setSurfaceUserActionObserver(observer: () => void): void { this.surfaceUserActionObserver = observer; }
+  public setSurfaceUserActionObserver(observer: () => void): void { this.surfaces.setUserActionObserver(observer); }
 
   public async controlSurface(action: SkeinViewAction): Promise<true | string> {
-    if (!this._view) return "view-not-available";
-    const id = randomUUID();
-    const outcome = await new Promise<true | string>((resolve) => {
-      const timer = setTimeout(() => { this.surfacePending.delete(id); resolve("view-not-responding"); }, 2000);
-      this.surfacePending.set(id, result => { clearTimeout(timer); this.surfacePending.delete(id); resolve(result); });
-      void this._view!.webview.postMessage({ command: "surfaceCommand", mode: this._stateManager.viewMode, id, action }).then(delivered => {
-        if (!delivered) this.surfacePending.get(id)?.("view-not-available");
-      }, () => this.surfacePending.get(id)?.("view-not-available"));
-    });
+    const view = this._view;
+    if (!view) return "view-not-available";
+    const outcome = await this.surfaces.control(
+      (message) => view.webview.postMessage(message),
+      this._stateManager.viewMode,
+      action,
+    );
     // Persist the target only after the renderer confirmed it. Otherwise a
     // rejected/timed-out command would still change the next updateGraph.
     if (outcome === true && action.action === "set_expand_all") {
@@ -173,14 +168,14 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   /** What the graph tab currently shows, published to `.skein/state.json`. */
   public getViewStateSnapshot(): { snapshot: SkeinViewSnapshot; graphVersion: number } {
     const mode = this._stateManager.viewMode;
-    const views: NonNullable<SkeinViewSnapshot["views"]> = { ...this.surfaceSelections };
+    const views = this.surfaces.views();
     const selectedSymbolId = this._stateManager.selectedSymbolId;
-    if (selectedSymbolId && !views.symbol && !this.surfaceStates.symbol) views.symbol = { nodeId: selectedSymbolId };
+    if (selectedSymbolId && !views.symbol && !this.surfaces.state("symbol")) views.symbol = { nodeId: selectedSymbolId };
     const snapshot: SkeinViewSnapshot = {
       mode,
       hiddenFilters: [],
       expandAll: this._graphState.getExpandAll(),
-      surface: this.surfaceStates[mode],
+      surface: this.surfaces.state(mode),
       ...(Object.keys(views).length > 0 ? { views } : {}),
     };
     if (mode === "callgraph" && this._callGraphViewService) {
@@ -211,8 +206,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     if (snapshot.filePath !== undefined) {
       void this._stateManager.setCurrentFilePath(snapshot.filePath);
     }
-    this.surfaceSelections = { ...snapshot.views };
-    if (snapshot.surface) this.surfaceStates[snapshot.mode] = snapshot.surface;
+    this.surfaces.restore(snapshot);
     const symbolId = snapshot.views?.symbol?.nodeId;
     if (symbolId) this._stateManager.selectedSymbolId = symbolId;
   }
@@ -243,23 +237,13 @@ export class GraphProvider implements vscode.WebviewViewProvider {
     return true;
   }
 
-  private get spider(): Spider | undefined {
+  /** This window's analyzer; undefined when no workspace folder is open. */
+  public get spider(): Spider | undefined {
     return this._container.has(graphProviderServiceTokens.spider)
       ? this._container.get(graphProviderServiceTokens.spider)
       : undefined;
   }
 
-  /**
-   * Expose the Spider instance for use by LmToolsService.
-   * Returns undefined when no workspace folder is open.
-   */
-  public getSpiderForLmTools(): Spider | undefined {
-    return this.spider;
-  }
-
-  public getCallGraphViewServiceForLmTools(): import('./services/CallGraphViewService').CallGraphViewService | null {
-    return this._callGraphViewService;
-  }
 
   private get webviewManager(): WebviewManager {
     return this._container.get(graphProviderServiceTokens.webviewManager);
@@ -341,7 +325,7 @@ export class GraphProvider implements vscode.WebviewViewProvider {
 
   private async disposeServices(): Promise<void> {
     this._isDisposing = true;
-    for (const settle of this.surfacePending.values()) settle("view-not-available");
+    this.surfaces.dispose();
     this._editorPanel?.dispose();
     this._drillDownSeq++;
     this._graphState.abortAndClearExpansionControllers();
@@ -1074,15 +1058,10 @@ export class GraphProvider implements vscode.WebviewViewProvider {
           "architectureMatrixRendered", "architectureDependentsRendered",
         ].includes(message.command)) return;
         if (message.command === "surfaceState") {
-          this.surfaceStates[message.mode] = message.state;
+          this.surfaces.record(message);
           if (message.mode === "callgraph" && message.state.hiddenFilters) {
             this._callGraphViewService?.setHiddenFilters(message.state.hiddenFilters);
           }
-          if (message.mode !== "callgraph") {
-            if (message.selection) this.surfaceSelections[message.mode] = message.selection;
-            else delete this.surfaceSelections[message.mode];
-          }
-          if (message.userInitiated) this.surfaceUserActionObserver?.();
           // Async expansion pages arrive after the click. Mirror their committed state too.
           // Passive reports were excluded above, so this cannot echo between surfaces.
           if (message.mode !== "callgraph") await this.webviews.mirror(webviewView.webview, { ...message, command: "surfaceSync" });
@@ -1091,11 +1070,11 @@ export class GraphProvider implements vscode.WebviewViewProvider {
         if (message.command === "surfaceResult") {
           if (!message.reason) {
             const mode = this._stateManager.viewMode;
-            const state = this.surfaceStates[mode];
-            if (state && mode !== "callgraph") await this.webviews.mirror(webviewView.webview, { command: "surfaceSync", updatedAt: Date.now(), mode, state, selection: this.surfaceSelections[mode] });
+            const state = this.surfaces.state(mode);
+            if (state && mode !== "callgraph") await this.webviews.mirror(webviewView.webview, { command: "surfaceSync", updatedAt: Date.now(), mode, state, selection: this.surfaces.selection(mode) });
             if (mode === "callgraph") await this.webviews.mirror(webviewView.webview, { type: "callGraphSelectNode", nodeId: this._callGraphViewService?.getSelectedNode()?.nodeId ?? "" });
           }
-          this.surfacePending.get(message.id)?.(message.reason ?? true);
+          this.surfaces.settle(message.id, message.reason);
           return;
         }
         if (message.command === "ready") await this.webviews.restore(webviewView.webview);
@@ -1484,20 +1463,6 @@ export class GraphProvider implements vscode.WebviewViewProvider {
   /** E2E driver pass-through to ArchitectureViewService */
   public setArchitectureControls(controls: Parameters<ArchitectureViewService["setControls"]>[0]): void {
     this.architectureViewService?.setControls(controls);
-  }
-
-  /** E2E observability pass-throughs to CallGraphViewService */
-  public getCallGraphRenderCount(): number {
-    return this._callGraphViewService?.getCallGraphRenderCount() ?? 0;
-  }
-  public getCallGraphNodeCount(): number {
-    return this._callGraphViewService?.getCallGraphNodeCount() ?? 0;
-  }
-  public getCallGraphEdgeCount(): number {
-    return this._callGraphViewService?.getCallGraphEdgeCount() ?? 0;
-  }
-  public getCallGraphCycleCount(): number {
-    return this._callGraphViewService?.getCallGraphCycleCount() ?? 0;
   }
 
   /**

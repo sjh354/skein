@@ -3,7 +3,7 @@ import { LspCallHierarchyAnalyzer } from "../../analyzer/LspCallHierarchyAnalyze
 import { detectLanguageFromExtension } from "../../shared/utils/languageDetection";
 import { convertSpiderToLspFormat, getRelativePath } from "../shared/helpers";
 import { validateFileExists } from "../../shared/pathSecurity";
-import { workerState } from "../shared/state";
+import { workerState, type ToolContext } from "../shared/state";
 import type { GenerateCodemapParams } from "../types";
 
 // ============================================================================
@@ -71,10 +71,11 @@ interface CodemapCallEdge {
 
 export async function executeGenerateCodemap(
   params: GenerateCodemapParams,
+  ctx: ToolContext = workerState,
 ): Promise<GenerateCodemapResult> {
   const { filePath } = params;
-  const spider = workerState.getSpider();
-  const config = workerState.getConfig();
+  const spider = ctx.getSpider();
+  const config = ctx.getConfig();
   const startTime = Date.now();
 
   await validateFileExists(filePath);

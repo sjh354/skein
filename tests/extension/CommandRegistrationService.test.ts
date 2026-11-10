@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GraphProvider } from '../../src/extension/GraphProvider';
 import type { VsCodeLogger } from '../../src/extension/extensionLogger';
+import type { CallGraphViewService } from '../../src/extension/services/CallGraphViewService';
 import type { CommandCoordinator } from '../../src/extension/services/CommandCoordinator';
 import { CommandRegistrationService } from '../../src/extension/services/CommandRegistrationService';
 
@@ -56,10 +57,6 @@ function createProviderMock(): GraphProvider {
     getViewMode: vi.fn().mockReturnValue('file'), // E2E test helper
     getReverseDependenciesVisible: vi.fn().mockReturnValue(false),
     showEditorGraph: vi.fn(),
-    getCallGraphRenderCount: vi.fn().mockReturnValue(1),
-    getCallGraphNodeCount: vi.fn().mockReturnValue(2),
-    getCallGraphEdgeCount: vi.fn().mockReturnValue(3),
-    getCallGraphCycleCount: vi.fn().mockReturnValue(4),
     getFileGraphNodeMetadata: vi.fn().mockReturnValue({}),
     getFileGraphRoot: vi.fn().mockReturnValue(undefined),
     getArchitectureE2EState: vi.fn().mockReturnValue({
@@ -69,6 +66,15 @@ function createProviderMock(): GraphProvider {
     }),
     setArchitectureControls: vi.fn(),
   } as unknown as GraphProvider;
+}
+
+function createCallGraphViewServiceMock(): CallGraphViewService {
+  return {
+    getCallGraphRenderCount: vi.fn().mockReturnValue(1),
+    getCallGraphNodeCount: vi.fn().mockReturnValue(2),
+    getCallGraphEdgeCount: vi.fn().mockReturnValue(3),
+    getCallGraphCycleCount: vi.fn().mockReturnValue(4),
+  } as unknown as CallGraphViewService;
 }
 
 function createCommandCoordinatorMock(): CommandCoordinator {
@@ -112,7 +118,7 @@ describe('CommandRegistrationService', () => {
     const provider = createProviderMock();
     const commandCoordinator = createCommandCoordinatorMock();
     const logger = createLoggerMock();
-    const service = new CommandRegistrationService({ provider, commandCoordinator, logger });
+    const service = new CommandRegistrationService({ callGraphViewService: createCallGraphViewServiceMock(), provider, commandCoordinator, logger });
 
     const disposables = service.registerAll();
 
@@ -138,7 +144,7 @@ describe('CommandRegistrationService', () => {
   it('switches to the architecture view and exposes its E2E state through getContext', async () => {
     const provider = createProviderMock();
     const commandCoordinator = createCommandCoordinatorMock();
-    const service = new CommandRegistrationService({ provider, commandCoordinator, logger: createLoggerMock() });
+    const service = new CommandRegistrationService({ callGraphViewService: createCallGraphViewServiceMock(), provider, commandCoordinator, logger: createLoggerMock() });
     service.registerAll();
 
     await registeredHandlers.get('skein.setViewModeArchitecture')?.();
@@ -208,7 +214,7 @@ describe('CommandRegistrationService', () => {
     ['skein.showIndexStatus', 'handleShowIndexStatus'],
   ] as const)('%s runs CommandCoordinator.%s', async (commandId, handler) => {
     const commandCoordinator = createCommandCoordinatorMock();
-    new CommandRegistrationService({ provider: createProviderMock(), commandCoordinator, logger: createLoggerMock() }).registerAll();
+    new CommandRegistrationService({ callGraphViewService: createCallGraphViewServiceMock(), provider: createProviderMock(), commandCoordinator, logger: createLoggerMock() }).registerAll();
 
     await registeredHandlers.get(commandId)?.();
 
@@ -219,7 +225,7 @@ describe('CommandRegistrationService', () => {
     const provider = createProviderMock();
     const commandCoordinator = createCommandCoordinatorMock();
     const logger = createLoggerMock();
-    const service = new CommandRegistrationService({ provider, commandCoordinator, logger });
+    const service = new CommandRegistrationService({ callGraphViewService: createCallGraphViewServiceMock(), provider, commandCoordinator, logger });
 
     service.registerAll();
     const handler = registeredHandlers.get('skein.showGraph');
@@ -231,7 +237,7 @@ describe('CommandRegistrationService', () => {
 
   it('opens the graph in an editor tab on the file the title button came from', async () => {
     const provider = createProviderMock();
-    new CommandRegistrationService({ provider, commandCoordinator: createCommandCoordinatorMock(), logger: createLoggerMock() }).registerAll();
+    new CommandRegistrationService({ callGraphViewService: createCallGraphViewServiceMock(), provider, commandCoordinator: createCommandCoordinatorMock(), logger: createLoggerMock() }).registerAll();
     const handler = registeredHandlers.get('skein.showGraph');
     const resource = { scheme: 'file', fsPath: '/workspace/src/api.ts' };
 
@@ -245,7 +251,7 @@ describe('CommandRegistrationService', () => {
     const provider = createProviderMock();
     const commandCoordinator = createCommandCoordinatorMock();
     const logger = createLoggerMock();
-    const service = new CommandRegistrationService({ provider, commandCoordinator, logger });
+    const service = new CommandRegistrationService({ callGraphViewService: createCallGraphViewServiceMock(), provider, commandCoordinator, logger });
 
     service.registerAll();
     const forceReindexHandler = registeredHandlers.get('skein.forceReindex');
@@ -260,7 +266,7 @@ describe('CommandRegistrationService', () => {
     const commandCoordinator = createCommandCoordinatorMock();
     (commandCoordinator.handleRefreshGraph as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('fail'));
     const logger = createLoggerMock();
-    const service = new CommandRegistrationService({ provider, commandCoordinator, logger });
+    const service = new CommandRegistrationService({ callGraphViewService: createCallGraphViewServiceMock(), provider, commandCoordinator, logger });
 
     service.registerAll();
     const refreshHandler = registeredHandlers.get('skein.refreshGraph');
@@ -278,7 +284,7 @@ describe('CommandRegistrationService', () => {
     const provider = createProviderMock();
     const commandCoordinator = createCommandCoordinatorMock();
     const logger = createLoggerMock();
-    const service = new CommandRegistrationService({ provider, commandCoordinator, logger });
+    const service = new CommandRegistrationService({ callGraphViewService: createCallGraphViewServiceMock(), provider, commandCoordinator, logger });
 
     service.registerAll();
     const handler = registeredHandlers.get('skein.showIndexStatus');

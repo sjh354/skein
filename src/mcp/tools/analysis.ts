@@ -1,5 +1,5 @@
 import { validateFileExists } from "../../shared/pathSecurity";
-import { workerState } from "../shared/state";
+import { workerState, type ToolContext } from "../shared/state";
 import type {
     AnalyzeDependenciesParams,
     AnalyzeDependenciesResult,
@@ -13,10 +13,11 @@ import { enrichDependency } from "../types";
  */
 export async function executeAnalyzeDependencies(
   params: AnalyzeDependenciesParams,
+  ctx: ToolContext = workerState,
 ): Promise<AnalyzeDependenciesResult> {
   const { filePath } = params;
-  const spider = workerState.getSpider();
-  const config = workerState.getConfig();
+  const spider = ctx.getSpider();
+  const config = ctx.getConfig();
 
   // Validate file exists
   await validateFileExists(filePath);
@@ -37,9 +38,10 @@ export async function executeAnalyzeDependencies(
  */
 export async function executeVerifyDependencyUsage(
   params: VerifyDependencyUsageParams,
+  ctx: ToolContext = workerState,
 ): Promise<VerifyDependencyUsageResult> {
   const { sourceFile, targetFile } = params;
-  const spider = workerState.getSpider();
+  const spider = ctx.getSpider();
 
   // Validate file exists
   await validateFileExists(sourceFile);

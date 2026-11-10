@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { normalizePath } from '@/shared/path';
+import { isRecord } from '@/shared/utils/typeGuards';
 import type {
   GraphContextMode,
   GraphContextRequest,
@@ -187,10 +188,6 @@ function normalizeWorkspaceRoot(workspaceRoot: string): string {
 
 function normalizeScope(scope: string): string {
   return normalizePath(scope);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isNonEmptyString(value: unknown): value is string {

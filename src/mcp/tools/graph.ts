@@ -3,6 +3,7 @@ import { getLogger } from "../../shared/logger";
 import { normalizePath } from "../../shared/path";
 import { computeNodeMetadata } from "../../analyzer/NodeMetadataBuilder";
 import type { GraphData } from "../../shared/graph-types";
+import type { Spider } from "../../analyzer/Spider";
 import {
     buildEdgeCounts,
     buildEdgeInfo,
@@ -14,7 +15,7 @@ import {
     updateNodeCounts,
 } from "../shared/helpers";
 import { validateFileExists } from "../../shared/pathSecurity";
-import { workerState } from "../shared/state";
+import { workerState, type ToolContext } from "../shared/state";
 import type {
     CrawlDependencyGraphParams,
     CrawlDependencyGraphResult,
@@ -30,10 +31,10 @@ const MAX_USAGE_VERIFICATIONS = 5_000;
  * Parallelized for better performance on large graphs
  */
 async function filterEdgesByUsage(
+  spider: Spider,
   edges: EdgeInfo[],
   signal?: AbortSignal,
 ): Promise<EdgeInfo[]> {
-  const spider = workerState.getSpider();
   const log = getLogger("McpWorker");
   const verificationResults = await mapWithConcurrency(edges, 8, async (edge) => {
     if (signal?.aborted) throw createAbortError();
@@ -60,10 +61,11 @@ async function filterEdgesByUsage(
 export async function executeCrawlDependencyGraph(
   params: CrawlDependencyGraphParams,
   signal?: AbortSignal,
+  ctx: ToolContext = workerState,
 ): Promise<CrawlDependencyGraphResult> {
   const { entryFile, maxDepth, limit, offset, onlyUsed, tokenBudget, communityMode } = params;
-  const spider = workerState.getSpider();
-  const config = workerState.getConfig();
+  const spider = ctx.getSpider();
+  const config = ctx.getConfig();
 
   await validateFileExists(entryFile);
   const configuredMaxDepth = config.maxDepth;
@@ -98,7 +100,7 @@ export async function executeCrawlDependencyGraph(
           `onlyUsed supports at most ${MAX_USAGE_VERIFICATIONS} edges per request`,
         );
       }
-      edges = await filterEdgesByUsage(edges, signal);
+      edges = await filterEdgesByUsage(spider, edges, signal);
       updateNodeCounts(nodes, edges);
     }
 
@@ -147,10 +149,11 @@ function createAbortError(): Error {
  */
 export async function executeFindReferencingFiles(
   params: FindReferencingFilesParams,
+  ctx: ToolContext = workerState,
 ): Promise<FindReferencingFilesResult> {
   const { targetPath } = params;
-  const spider = workerState.getSpider();
-  const config = workerState.getConfig();
+  const spider = ctx.getSpider();
+  const config = ctx.getConfig();
 
   await validateFileExists(targetPath);
 

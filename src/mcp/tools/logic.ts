@@ -2,7 +2,7 @@ import { LspCallHierarchyAnalyzer } from "../../analyzer/LspCallHierarchyAnalyze
 import { getLogger } from "../../shared/logger";
 import type { IntraFileGraph } from "../../shared/types";
 import { convertSpiderToLspFormat, validateAnalysisInput } from "../shared/helpers";
-import { workerState } from "../shared/state";
+import { workerState, type ToolContext } from "../shared/state";
 import type { AnalyzeFileLogicParams } from "../types";
 
 const log = getLogger("McpWorker");
@@ -12,6 +12,7 @@ const log = getLogger("McpWorker");
  */
 export async function executeAnalyzeFileLogic(
   params: AnalyzeFileLogicParams,
+  ctx: ToolContext = workerState,
 ): Promise<{
   filePath: string;
   graph: IntraFileGraph;
@@ -21,7 +22,7 @@ export async function executeAnalyzeFileLogic(
   warnings?: string[];
 }> {
   const { filePath } = params;
-  const spider = workerState.getSpider();
+  const spider = ctx.getSpider();
   // Note: includeExternal will be used in T066 when integrating LSP call hierarchy
 
   // Validate input parameters

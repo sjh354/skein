@@ -69,6 +69,8 @@ export class ViewStateService implements vscode.Disposable {
     private workspaceRoot: string;
     private readonly windowId = randomUUID();
     private lastPublished = "";
+    /** Node positions changed since the last publish; they are left out of the signature. */
+    private layoutDirty = false;
     private timer: ReturnType<typeof setInterval> | null = null;
     private writing = false;
     private disposed = false;
@@ -180,6 +182,7 @@ export class ViewStateService implements vscode.Disposable {
                 break;
             case "callGraphLayoutChanged":
                 this.window.layout = command.layout;
+                this.layoutDirty = true;
                 if (command.userInitiated) this.markUserAction();
                 else this.publishOnce().catch((err: unknown) => this.logError("layout publish", err));
                 break;
@@ -411,14 +414,19 @@ export class ViewStateService implements vscode.Disposable {
     private async publishOnce(): Promise<void> {
         if (this.disposed) return;
         this.refreshFromHost();
+        // The positions are most of a large snapshot and only change through
+        // callGraphLayoutChanged, so the idle tick compares everything but them.
+        const { layout, ...snapshot } = this.toSnapshot(this.window);
         const signature = JSON.stringify({
-            snapshot: this.toSnapshot(this.window),
+            snapshot,
+            layout: layout ? { ...layout, positions: undefined } : undefined,
             graphVersion: this.window.graphVersion,
             lastUserActionAt: this.window.lastUserActionAt,
         });
-        if (signature === this.lastPublished) return;
+        if (signature === this.lastPublished && !this.layoutDirty) return;
         await this.persistState();
         this.lastPublished = signature;
+        this.layoutDirty = false;
     }
 
     private async persistState(): Promise<void> {

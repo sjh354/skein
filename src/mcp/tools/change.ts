@@ -335,16 +335,17 @@ export async function executeUndoChange(
   params: UndoChangeParams,
 ): Promise<ChangeToolResult> {
   if (!rootDir) return { applied: false, status: "error", reason: "workspace-not-configured" };
-  if (params.historyId) {
-    const index = await readChangeHistory(rootDir);
-    const entry = index.entries.find((item) => item.id === params.historyId);
-    if (!entry || !canUndo(entry, index)) {
-      return { applied: false, status: "rejected", reason: "not-undoable" };
-    }
+  const index = await readChangeHistory(rootDir);
+  // Always name the entry: a retry after a timed-out call must not undo the next entry as well.
+  const entry = params.historyId
+    ? index.entries.find((item) => item.id === params.historyId)
+    : findUndoCandidate(index);
+  if (!entry || !canUndo(entry, index)) {
+    return { applied: false, status: "rejected", reason: params.historyId ? "not-undoable" : "nothing-to-undo" };
   }
-  const action: SkeinChangeAction = { action: "change_undo" };
-  if (params.historyId) action.historyId = params.historyId;
-  return toToolResult(await queueChange(rootDir, action, params.timeoutMs));
+  return toToolResult(
+    await queueChange(rootDir, { action: "change_undo", historyId: entry.id }, params.timeoutMs),
+  );
 }
 
 export async function executeRedoChange(
@@ -352,14 +353,14 @@ export async function executeRedoChange(
   params: RedoChangeParams,
 ): Promise<ChangeToolResult> {
   if (!rootDir) return { applied: false, status: "error", reason: "workspace-not-configured" };
-  if (params.historyId) {
-    const index = await readChangeHistory(rootDir);
-    const entry = index.entries.find((item) => item.id === params.historyId);
-    if (!entry || !canRedo(entry, index)) {
-      return { applied: false, status: "rejected", reason: "not-redoable" };
-    }
+  const index = await readChangeHistory(rootDir);
+  const entry = params.historyId
+    ? index.entries.find((item) => item.id === params.historyId)
+    : findRedoCandidate(index);
+  if (!entry || !canRedo(entry, index)) {
+    return { applied: false, status: "rejected", reason: params.historyId ? "not-redoable" : "nothing-to-redo" };
   }
-  const action: SkeinChangeAction = { action: "change_redo" };
-  if (params.historyId) action.historyId = params.historyId;
-  return toToolResult(await queueChange(rootDir, action, params.timeoutMs));
+  return toToolResult(
+    await queueChange(rootDir, { action: "change_redo", historyId: entry.id }, params.timeoutMs),
+  );
 }

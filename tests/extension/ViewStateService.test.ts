@@ -8,14 +8,40 @@ import {
   createCommandId,
   normalizeAreaKey,
   deleteCommandRequest,
-  listCommandRequests,
   readCommandResult,
   readViewState,
   SKEIN_STATE_SCHEMA_VERSION,
+  parseCommandRequest,
+  viewStatePath,
   writeCommandRequest,
-  writeViewState,
+  type SkeinCommandRequest,
   type SkeinViewSnapshot,
+  type SkeinViewState,
 } from '../../src/shared/viewState';
+import { writeJsonAtomic } from '../../src/shared/atomicWrite';
+import { readdir, readFile } from 'node:fs/promises';
+
+/** Requests still queued for the extension, oldest first. */
+async function listRequests(dir: string): Promise<SkeinCommandRequest[]> {
+  const commands = path.join(dir, '.skein', 'commands');
+  let names: string[] = [];
+  try {
+    names = await readdir(commands);
+  } catch {
+    return [];
+  }
+  const requests: SkeinCommandRequest[] = [];
+  for (const name of names.filter((n) => n.endsWith('.request.json')).sort()) {
+    const request = parseCommandRequest(await readFile(path.join(commands, name), 'utf8'));
+    if (request) requests.push(request);
+  }
+  return requests.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** Seeds the state file the way a previous session's extension left it. */
+function writeState(dir: string, state: SkeinViewState): Promise<void> {
+  return writeJsonAtomic(viewStatePath(dir), state);
+}
 
 vi.mock('vscode', () => ({}));
 
@@ -181,7 +207,7 @@ describe('ViewStateService', () => {
   it('keeps the restored call-graph snapshot while another view mode is showing', async () => {
     service.dispose();
     await new Promise((resolve) => setTimeout(resolve, 25));
-    await writeViewState(root, {
+    await writeState(root, {
       schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
       workspaceRoot: normalizeAreaKey(root),
       updatedAt: 1,
@@ -213,7 +239,7 @@ describe('ViewStateService', () => {
   it('restores the previous session view once', async () => {
     service.dispose();
     await new Promise((resolve) => setTimeout(resolve, 25));
-    await writeViewState(root, {
+    await writeState(root, {
       schemaVersion: SKEIN_STATE_SCHEMA_VERSION,
       workspaceRoot: normalizeAreaKey(root),
       updatedAt: 1,
@@ -274,7 +300,7 @@ describe('ViewStateService', () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(await readCommandResult(root, request.id)).toBeNull();
     expect(host.select).not.toHaveBeenCalled();
-    expect((await listCommandRequests(root)).map((item) => item.id)).toContain(request.id);
+    expect((await listRequests(root)).map((item) => item.id)).toContain(request.id);
     expect(published.activeWindowId).not.toBe('another-window');
     await deleteCommandRequest(root, request.id);
   });
@@ -284,7 +310,7 @@ describe('ViewStateService', () => {
     await writeFile(path.join(root, '.skein', 'commands', 'broken.request.json'), '{}', 'utf8');
     const state = await waitFor(() => readViewState(root), 'state after malformed request');
     expect(state.graphVersion).toBe(4);
-    expect(await listCommandRequests(root)).toEqual([]);
+    expect(await listRequests(root)).toEqual([]);
   });
   it('routes non-callgraph selection to the renderer and preserves the last callgraph selection', async () => {
     host.read.mockReturnValue({ snapshot: snapshot({ mode: 'file', views: { file: { nodeId: 'file-node' } } }), graphVersion: 4 });

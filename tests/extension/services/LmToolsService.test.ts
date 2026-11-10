@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { GraphProvider } from '../../../src/extension/GraphProvider';
 import type { VsCodeLogger } from '../../../src/extension/extensionLogger';
 import { LmToolsService } from '../../../src/extension/services/LmToolsService';
 
@@ -92,6 +91,12 @@ vi.mock('@/shared/path', async (importOriginal) => ({
 
 vi.mock('../../../src/mcp/tools/graphContext.js', () => ({ executeGraphContextWithIndexes }));
 
+// The MCP executors reused here check that the file exists; these tests describe files that are not on disk.
+vi.mock('@/shared/pathSecurity', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/shared/pathSecurity')>(),
+  validateFileExists: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn().mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' })),
 }));
@@ -113,10 +118,12 @@ function createLogger(): VsCodeLogger {
   } as unknown as VsCodeLogger;
 }
 
-function createProvider(overrides: Partial<{
+type LmToolsDeps = Pick<ConstructorParameters<typeof LmToolsService>[0], 'spider' | 'callGraphViewService'>;
+
+function createDeps(overrides: Partial<{
   spider: unknown;
   callGraphService: unknown;
-}> = {}): GraphProvider {
+}> = {}): LmToolsDeps {
   const spider = overrides.spider ?? {
     resolveModuleSpecifier: vi.fn().mockResolvedValue(null),
     findReferencingFiles: vi.fn().mockResolvedValue([]),
@@ -140,9 +147,9 @@ function createProvider(overrides: Partial<{
   };
 
   return {
-    getSpiderForLmTools: vi.fn().mockReturnValue(spider),
-    getCallGraphViewServiceForLmTools: vi.fn().mockReturnValue(overrides.callGraphService ?? null),
-  } as unknown as GraphProvider;
+    spider: () => spider as LmToolsDeps['spider'] extends () => infer R ? R : never,
+    callGraphViewService: () => (overrides.callGraphService ?? null) as ReturnType<LmToolsDeps['callGraphViewService']>,
+  };
 }
 
 function makeOptions<T>(input: T): vscode.LanguageModelToolInvocationOptions<T> {
@@ -184,8 +191,8 @@ describe('LmToolsService', () => {
 
   describe('registerAll', () => {
     it('registers 23 tools and returns 23 disposables', () => {
-      const provider = createProvider();
-      const service = new LmToolsService({ provider, logger });
+      const deps = createDeps();
+      const service = new LmToolsService({ ...deps, logger });
       const disposables = service.registerAll();
 
       expect(disposables).toHaveLength(23);
@@ -197,8 +204,8 @@ describe('LmToolsService', () => {
       const origRegisterTool = (vscode.lm as Record<string, unknown>).registerTool;
       delete (vscode.lm as Record<string, unknown>).registerTool;
 
-      const provider = createProvider();
-      const service = new LmToolsService({ provider, logger });
+      const deps = createDeps();
+      const service = new LmToolsService({ ...deps, logger });
       const disposables = service.registerAll();
 
       expect(disposables).toHaveLength(0);
@@ -216,15 +223,15 @@ describe('LmToolsService', () => {
       'skein_graph_context',
       'skein_query_natural_language',
     ])('registers %s', (toolName) => {
-      const provider = createProvider();
-      const service = new LmToolsService({ provider, logger });
+      const deps = createDeps();
+      const service = new LmToolsService({ ...deps, logger });
       service.registerAll();
       expect(registeredTools.has(toolName)).toBe(true);
     });
 
     it('rejects a pre-cancelled invocation before running the tool', async () => {
-      const provider = createProvider();
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps();
+      new LmToolsService({ ...deps, logger }).registerAll();
       const handler = registeredTools.get('skein_get_index_status');
       const cancelledToken = {
         isCancellationRequested: true,
@@ -246,7 +253,7 @@ describe('LmToolsService', () => {
       getOutOfRootImports: vi.fn().mockReturnValue({ count: 2, examples: ['@core/x', '../../core/y'] }),
       workspaceRoot: '/no-such-dir/graph-it-264/apps/worker',
     };
-    new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+    new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
     const result = await invokeTool('skein_get_index_status', {});
 
@@ -271,7 +278,7 @@ describe('LmToolsService', () => {
         getOutOfRootImports: vi.fn().mockReturnValue({ count: 0, examples: [] }),
         workspaceRoot,
       };
-      new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
       const result = await invokeTool('skein_get_index_status', {});
 
@@ -289,7 +296,7 @@ describe('LmToolsService', () => {
       getOutOfRootImports: vi.fn().mockReturnValue(null),
       workspaceRoot: '/no-such-dir/graph-it-264',
     };
-    new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+    new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
     const result = await invokeTool('skein_get_index_status', {});
 
@@ -299,10 +306,10 @@ describe('LmToolsService', () => {
 
   it('registers graph context against the live graph index', async () => {
     executeGraphContextWithIndexes.mockResolvedValueOnce({ mode: 'search', nodes: [], edges: [] });
-    const spider = createProvider().getSpiderForLmTools();
+    const spider = createDeps().spider();
     const callGraphService = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue({ getDb: vi.fn() }) };
-    const provider = createProvider({ spider, callGraphService });
-    new LmToolsService({ provider, logger }).registerAll();
+    const deps = createDeps({ spider, callGraphService });
+    new LmToolsService({ ...deps, logger }).registerAll();
     const result = await invokeTool('skein_graph_context', { question: 'where is auth?' });
     expect(result).toEqual({ mode: 'search', nodes: [], edges: [] });
     expect(executeGraphContextWithIndexes).toHaveBeenCalledWith(
@@ -333,7 +340,7 @@ describe('LmToolsService', () => {
       getCallGraphIndexerForLmTools: vi.fn().mockReturnValue({ getDb: vi.fn() }),
     };
     new LmToolsService({
-      provider: createProvider({ callGraphService }),
+      ...createDeps({ callGraphService }),
       logger,
     }).registerAll();
     const handler = registeredTools.get('skein_graph_context');
@@ -414,7 +421,7 @@ describe('LmToolsService', () => {
         nodes: [{ id: 'n1', name: 'login', type: 'function', path: '/workspace/src/auth.ts' }],
         edges: [], meta: { truncated: false }, json: 'unused',
       });
-      new LmToolsService({ provider: createProvider({ callGraphService }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ callGraphService }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { question: 'where is auth?', fileFilter: 'src/**' });
 
@@ -431,7 +438,7 @@ describe('LmToolsService', () => {
     });
 
     it('rejects an out-of-range depth', async () => {
-      new LmToolsService({ provider: createProvider({ callGraphService }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ callGraphService }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { question: 'auth', depth: 50 }) as { error: string };
 
@@ -440,7 +447,7 @@ describe('LmToolsService', () => {
     });
 
     it('returns an error until the call graph index exists', async () => {
-      new LmToolsService({ provider: createProvider(), logger }).registerAll();
+      new LmToolsService({ ...createDeps(), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { question: 'auth' }) as { error: string };
 
@@ -449,7 +456,7 @@ describe('LmToolsService', () => {
 
     it('returns the query error as a tool error', async () => {
       queryEngineQuery.mockRejectedValueOnce(new Error('no such table: nodes_fts'));
-      new LmToolsService({ provider: createProvider({ callGraphService }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ callGraphService }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { question: 'auth' }) as { error: string };
 
@@ -463,17 +470,17 @@ describe('LmToolsService', () => {
     const TOOL = 'skein_resolve_module_path';
 
     beforeEach(() => {
-      const provider = createProvider();
-      const service = new LmToolsService({ provider, logger });
+      const deps = createDeps();
+      const service = new LmToolsService({ ...deps, logger });
       service.registerAll();
     });
 
     it('returns error when spider is unavailable', async () => {
       // Re-register with no-spider provider
       registeredTools.clear();
-      const provider = createProvider();
-      (provider.getSpiderForLmTools as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps();
+      deps.spider = () => undefined;
+      new LmToolsService({ ...deps, logger }).registerAll();
 
       const result = await invokeTool(TOOL, { fromFile: '/workspace/src/a.ts', moduleSpecifier: './b' });
       expect(result).toMatchObject({ error: expect.stringContaining('No workspace') });
@@ -482,8 +489,8 @@ describe('LmToolsService', () => {
     it('returns resolved: false when specifier does not resolve', async () => {
       registeredTools.clear();
       const spider = { resolveModuleSpecifier: vi.fn().mockResolvedValue(null) };
-      const provider = createProvider({ spider });
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps({ spider });
+      new LmToolsService({ ...deps, logger }).registerAll();
 
       const result = await invokeTool(TOOL, {
         fromFile: '/workspace/src/a.ts',
@@ -510,8 +517,8 @@ describe('LmToolsService', () => {
       const spider = {
         resolveModuleSpecifier: vi.fn().mockResolvedValue('/workspace/src/b.ts'),
       };
-      const provider = createProvider({ spider });
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps({ spider });
+      new LmToolsService({ ...deps, logger }).registerAll();
 
       const result = await invokeTool(TOOL, {
         fromFile: '/workspace/src/a.ts',
@@ -528,8 +535,8 @@ describe('LmToolsService', () => {
       const spider = {
         resolveModuleSpecifier: vi.fn().mockRejectedValue(new Error('parse error')),
       };
-      const provider = createProvider({ spider });
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps({ spider });
+      new LmToolsService({ ...deps, logger }).registerAll();
 
       const result = await invokeTool(TOOL, {
         fromFile: '/workspace/src/a.ts',
@@ -546,8 +553,8 @@ describe('LmToolsService', () => {
     const TOOL = 'skein_analyze_breaking_changes';
 
     beforeEach(() => {
-      const provider = createProvider();
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps();
+      new LmToolsService({ ...deps, logger }).registerAll();
     });
 
     it('returns breaking changes when both oldContent and newContent provided', async () => {
@@ -653,7 +660,7 @@ describe('LmToolsService', () => {
         edgeRow('CALLS', 4, 'runC', '/workspace/src/c.ts'),
       ]);
       const spider = { getSymbolDependents: vi.fn() };
-      new LmToolsService({ provider: createProvider({ spider, callGraphService: service }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider, callGraphService: service }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helper' }) as Record<string, unknown>;
 
@@ -673,7 +680,7 @@ describe('LmToolsService', () => {
         edgeRow('CALLS', 9, 'runB', '/workspace/src/b.ts'),
         edgeRow('USES', 3, 'Shape', '/workspace/src/types.ts'),
       ]);
-      new LmToolsService({ provider: createProvider({ callGraphService: service }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ callGraphService: service }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helper', includeTypeOnly: true }) as Record<string, unknown>;
 
@@ -688,7 +695,7 @@ describe('LmToolsService', () => {
     it('returns no callers when the symbol is not in the call graph', async () => {
       const exec = vi.fn().mockReturnValue([]);
       const service = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue({ getDb: () => ({ exec }) }) };
-      new LmToolsService({ provider: createProvider({ callGraphService: service }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ callGraphService: service }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helper' }) as Record<string, unknown>;
 
@@ -700,7 +707,7 @@ describe('LmToolsService', () => {
     });
     const fallbackCallers = async (dependents: unknown[], input: Record<string, unknown> = {}) => {
       const spider = { getSymbolDependents: vi.fn().mockResolvedValue(dependents) };
-      new LmToolsService({ provider: createProvider({ spider, callGraphService: null }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider, callGraphService: null }), logger }).registerAll();
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helper', ...input }) as Record<string, unknown>;
       // Ids are raw on POSIX and redacted to [external:<basename>] on Windows: compare `basename:symbol` either way.
       return (result.callers as Array<Record<string, unknown>>).map((c) => [
@@ -756,7 +763,7 @@ describe('LmToolsService', () => {
           { sourceSymbolId: '/workspace/src/b.ts:runB', targetSymbolId: '/workspace/src/a.ts:helper', targetFilePath: '/workspace/src/a.ts' },
         ]),
       };
-      new LmToolsService({ provider: createProvider({ spider, callGraphService: null }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider, callGraphService: null }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helper', includeTypeOnly: true }) as Record<string, unknown>;
 
@@ -779,7 +786,7 @@ describe('LmToolsService', () => {
           { sourceSymbolId: '/workspace/lib/c.ts:(file)', ...target },
         ]),
       };
-      new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helper' }) as Record<string, unknown>;
 
@@ -796,7 +803,7 @@ describe('LmToolsService', () => {
           { sourceSymbolId: String.raw`C:\ws\src\b.ts:runB`, ...target },
         ]),
       };
-      new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helper' }) as Record<string, unknown>;
 
@@ -808,7 +815,7 @@ describe('LmToolsService', () => {
     });
 
     it('returns an empty list when nothing depends on the symbol', async () => {
-      new LmToolsService({ provider: createProvider({ spider: { getSymbolDependents: vi.fn().mockResolvedValue([]) } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { getSymbolDependents: vi.fn().mockResolvedValue([]) } }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helper' }) as Record<string, unknown>;
 
@@ -833,7 +840,7 @@ describe('LmToolsService', () => {
         }
         return [];
       });
-      new LmToolsService({ provider: createProvider({ spider: { getSymbolDependents } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { getSymbolDependents } }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, {
         filePath: '/workspace/src/a.ts', symbolName: 'helper', includeTransitive: true, maxDepth: 3,
@@ -859,7 +866,7 @@ describe('LmToolsService', () => {
         }
         return [{ sourceSymbolId: `${targetFile}:isEven`, targetSymbolId: `${file}:isOdd`, targetFilePath: file }];
       });
-      new LmToolsService({ provider: createProvider({ spider: { getSymbolDependents } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { getSymbolDependents } }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, {
         filePath: '/workspace/src/a.ts', symbolName: 'isEven', includeTransitive: true, maxDepth: 3,
@@ -876,7 +883,7 @@ describe('LmToolsService', () => {
         symbols: [{ name: 'helper', kind: 'Function', line: 1, isExported: true, id: 'helper', category: 'function' }],
         dependencies: [],
       });
-      new LmToolsService({ provider: createProvider({ spider: { getSymbolDependents, getSymbolGraph } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { getSymbolDependents, getSymbolGraph } }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helpr' }) as Record<string, unknown>;
 
@@ -888,7 +895,7 @@ describe('LmToolsService', () => {
       const getSymbolDependents = vi.fn().mockResolvedValue([
         { sourceSymbolId: 'C:/repo/src/caller.ts:run', targetSymbolId: '/workspace/src/a.ts:helper', targetFilePath: '/workspace/src/a.ts' },
       ]);
-      new LmToolsService({ provider: createProvider({ spider: { getSymbolDependents } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { getSymbolDependents } }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'helper' }) as Record<string, unknown>;
 
@@ -904,8 +911,8 @@ describe('LmToolsService', () => {
     const TOOL = 'skein_query_call_graph';
 
     it('returns error when call graph index is not available', async () => {
-      const provider = createProvider({ callGraphService: null });
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps({ callGraphService: null });
+      new LmToolsService({ ...deps, logger }).registerAll();
 
       const result = await invokeTool(TOOL, {
         filePath: '/workspace/src/a.ts',
@@ -920,8 +927,8 @@ describe('LmToolsService', () => {
       const mockIndexer = { getDb: vi.fn().mockReturnValue(mockDb) };
       const mockCallGraphService = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue(mockIndexer) };
 
-      const provider = createProvider({ callGraphService: mockCallGraphService });
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps({ callGraphService: mockCallGraphService });
+      new LmToolsService({ ...deps, logger }).registerAll();
 
       const result = await invokeTool(TOOL, {
         filePath: '/workspace/src/a.ts',
@@ -941,7 +948,7 @@ describe('LmToolsService', () => {
       function setup(exec: ReturnType<typeof vi.fn>) {
         const mockIndexer = { getDb: vi.fn().mockReturnValue({ exec }) };
         const mockCallGraphService = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue(mockIndexer) };
-        new LmToolsService({ provider: createProvider({ callGraphService: mockCallGraphService }), logger }).registerAll();
+        new LmToolsService({ ...createDeps({ callGraphService: mockCallGraphService }), logger }).registerAll();
       }
 
       it('reports ambiguity with candidates for a shared bare name', async () => {
@@ -1000,8 +1007,8 @@ describe('LmToolsService', () => {
       const mockIndexer = { getDb: vi.fn().mockReturnValue(mockDb) };
       const mockCallGraphService = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue(mockIndexer) };
 
-      const provider = createProvider({ callGraphService: mockCallGraphService });
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps({ callGraphService: mockCallGraphService });
+      new LmToolsService({ ...deps, logger }).registerAll();
 
       const result = await invokeTool(TOOL, {
         filePath: '/workspace/src/a.ts',
@@ -1033,8 +1040,8 @@ describe('LmToolsService', () => {
       const mockIndexer = { getDb: vi.fn().mockReturnValue(mockDb) };
       const mockCallGraphService = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue(mockIndexer) };
 
-      const provider = createProvider({ callGraphService: mockCallGraphService });
-      new LmToolsService({ provider, logger }).registerAll();
+      const deps = createDeps({ callGraphService: mockCallGraphService });
+      new LmToolsService({ ...deps, logger }).registerAll();
 
       const result = await invokeTool(TOOL, {
         filePath: '/workspace/src/a.ts',
@@ -1049,7 +1056,7 @@ describe('LmToolsService', () => {
     it('returns the database error as a tool error', async () => {
       const exec = vi.fn().mockImplementation(() => { throw new Error('db closed'); });
       const service = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue({ getDb: () => ({ exec }) }) };
-      new LmToolsService({ provider: createProvider({ callGraphService: service }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ callGraphService: service }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePath: '/workspace/src/a.ts', symbolName: 'myFn' });
 
@@ -1085,9 +1092,9 @@ describe('LmToolsService', () => {
   ];
 
   it.each(spiderTools)('%s returns an error when the dependency index is not initialized', async (tool, input) => {
-    const provider = createProvider();
-    vi.mocked(provider.getSpiderForLmTools).mockReturnValue(undefined);
-    new LmToolsService({ provider, logger }).registerAll();
+    const deps = createDeps();
+    deps.spider = () => undefined;
+    new LmToolsService({ ...deps, logger }).registerAll();
 
     const result = await invokeTool(tool, input);
 
@@ -1106,23 +1113,24 @@ describe('LmToolsService', () => {
     vi.mocked(fsPromises.readFile).mockResolvedValue(
       'x' as unknown as Awaited<ReturnType<typeof fsPromises.readFile>>,
     );
-    new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+    new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
     const result = await invokeTool(tool, input);
 
-    expect(result).toEqual({ error: 'analyzer failed' });
+    // analyze_file_logic prefixes its error with the MCP error code.
+    expect(result).toEqual({ error: expect.stringContaining('analyzer failed') });
   });
 
   it('stringifies a non-Error rejection', async () => {
     const spider = { findReferencingFilesThroughBarrels: vi.fn().mockRejectedValue('plain failure') };
-    new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+    new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
     expect(await invokeTool('skein_find_referencing_files', { targetPath: A })).toEqual({ error: 'plain failure' });
   });
 
   it('rejects a relative input path before calling the analyzer', async () => {
     const spider = { analyze: vi.fn() };
-    new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+    new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
     const handler = registeredTools.get('skein_analyze_dependencies');
 
     await expect(handler?.invoke(makeOptions({ filePath: 'src/a.ts' }), fakeToken)).rejects.toThrow('absolute path');
@@ -1130,22 +1138,22 @@ describe('LmToolsService', () => {
   });
 
   it('reports an uninitialized index status without a spider', async () => {
-    const provider = createProvider();
-    vi.mocked(provider.getSpiderForLmTools).mockReturnValue(undefined);
-    new LmToolsService({ provider, logger }).registerAll();
+    const deps = createDeps();
+    deps.spider = () => undefined;
+    new LmToolsService({ ...deps, logger }).registerAll();
 
     expect(await invokeTool('skein_get_index_status', {})).toMatchObject({ state: 'uninitialized', isReady: false });
   });
 
   it('returns the index status failure as a tool error', async () => {
     const spider = { getIndexStatus: () => { throw new Error('status failed'); } };
-    new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+    new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
     expect(await invokeTool('skein_get_index_status', {})).toEqual({ error: 'status failed' });
   });
 
   it('returns an error from graph_context when no call graph index exists', async () => {
-    new LmToolsService({ provider: createProvider(), logger }).registerAll();
+    new LmToolsService({ ...createDeps(), logger }).registerAll();
 
     expect(await invokeTool('skein_graph_context', { question: 'auth' })).toEqual({
       error: 'No workspace or graph index is available.',
@@ -1155,7 +1163,7 @@ describe('LmToolsService', () => {
   it('returns a non-abort graph_context failure as a tool error', async () => {
     executeGraphContextWithIndexes.mockRejectedValueOnce(new Error('bad seed'));
     const callGraphService = { getCallGraphIndexerForLmTools: vi.fn().mockReturnValue({ getDb: vi.fn() }) };
-    new LmToolsService({ provider: createProvider({ callGraphService }), logger }).registerAll();
+    new LmToolsService({ ...createDeps({ callGraphService }), logger }).registerAll();
 
     expect(await invokeTool('skein_graph_context', { question: 'auth' })).toEqual({ error: 'bad seed' });
   });
@@ -1171,7 +1179,7 @@ describe('LmToolsService', () => {
           { path: C, type: 'import', line: 2, module: './b', via: B },
         ]),
       };
-      new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
       const result = await invokeTool('skein_find_referencing_files', { targetPath: A });
 
@@ -1190,11 +1198,11 @@ describe('LmToolsService', () => {
   describe('analyze_dependencies and parse_imports', () => {
     const deps = [
       { module: './b', path: B, type: 'import', line: 1 },
-      { module: 'lodash', path: undefined, type: 'import', line: 2 },
+      { module: 'lodash', path: '/elsewhere/node_modules/lodash/lodash.js', type: 'import', line: 2 },
     ];
 
-    it('analyze_dependencies maps resolved and unresolved imports', async () => {
-      new LmToolsService({ provider: createProvider({ spider: { analyze: vi.fn().mockResolvedValue(deps) } }), logger }).registerAll();
+    it('analyze_dependencies maps workspace and external imports like the MCP tool', async () => {
+      new LmToolsService({ ...createDeps({ spider: { analyze: vi.fn().mockResolvedValue(deps) } }), logger }).registerAll();
 
       const result = await invokeTool('skein_analyze_dependencies', { filePath: A });
 
@@ -1202,14 +1210,14 @@ describe('LmToolsService', () => {
         filePath: 'src/a.ts',
         dependencyCount: 2,
         dependencies: [
-          { module: './b', path: 'src/b.ts', relativePath: 'src/b.ts', type: 'import', line: 1 },
-          { module: 'lodash', relativePath: null, type: 'import', line: 2 },
+          { module: './b', path: 'src/b.ts', relativePath: 'src/b.ts', type: 'import', line: 1, extension: 'ts' },
+          { module: 'lodash', path: '[external:lodash.js]', relativePath: '[external:lodash.js]', type: 'import', line: 2, extension: 'js' },
         ],
       });
     });
 
     it('parse_imports returns raw module specifiers only', async () => {
-      new LmToolsService({ provider: createProvider({ spider: { analyze: vi.fn().mockResolvedValue(deps) } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { analyze: vi.fn().mockResolvedValue(deps) } }), logger }).registerAll();
 
       const result = await invokeTool('skein_parse_imports', { filePath: A });
 
@@ -1229,23 +1237,28 @@ describe('LmToolsService', () => {
 
     it('returns nodes and edges with relative paths and forwards maxDepth', async () => {
       const crawl = vi.fn().mockResolvedValue({ nodes: [A, B], edges: [{ source: A, target: B }] });
-      new LmToolsService({ provider: createProvider({ spider: { crawl } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { crawl } }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { entryFile: A, maxDepth: 2 });
 
       expect(crawl).toHaveBeenCalledWith(path.resolve(A), { maxDepth: 2, signal: expect.any(AbortSignal) });
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         entryFile: 'src/a.ts',
+        maxDepth: 2,
         nodeCount: 2,
         edgeCount: 1,
-        nodes: [{ path: 'src/a.ts', relativePath: 'src/a.ts' }, { path: 'src/b.ts', relativePath: 'src/b.ts' }],
+        nodes: [
+          expect.objectContaining({ path: 'src/a.ts', relativePath: 'src/a.ts', dependencyCount: 1, dependentCount: 0 }),
+          expect.objectContaining({ path: 'src/b.ts', relativePath: 'src/b.ts', dependencyCount: 0, dependentCount: 1 }),
+        ],
         edges: [{ source: 'src/a.ts', target: 'src/b.ts', sourceRelative: 'src/a.ts', targetRelative: 'src/b.ts' }],
+        circularDependencies: [],
       });
     });
 
     it('turns an aborted crawl into a cancellation', async () => {
       const crawl = vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
-      new LmToolsService({ provider: createProvider({ spider: { crawl } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { crawl } }), logger }).registerAll();
 
       await expect(registeredTools.get(TOOL)?.invoke(makeOptions({ entryFile: A }), fakeToken))
         .rejects.toBeInstanceOf(vscode.CancellationError);
@@ -1260,7 +1273,7 @@ describe('LmToolsService', () => {
         nodes: [a, b, c],
         edges: [{ source: a, target: b }, { source: b, target: c }, { source: a, target: a }],
       });
-      new LmToolsService({ provider: createProvider({ spider: { crawl } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { crawl } }), logger }).registerAll();
 
       const result = await invokeTool('skein_expand_node', { filePath: A, knownPaths: [A] });
 
@@ -1287,7 +1300,7 @@ describe('LmToolsService', () => {
         symbols,
         dependencies: [{ sourceSymbolId: `${A}:used`, targetSymbolId: `${B}:run`, targetFilePath: B }],
       });
-      new LmToolsService({ provider: createProvider({ spider: { getSymbolGraph } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { getSymbolGraph } }), logger }).registerAll();
 
       const result = await invokeTool('skein_get_symbol_graph', { filePath: A }) as Record<string, unknown>;
 
@@ -1305,7 +1318,7 @@ describe('LmToolsService', () => {
         findUnusedSymbols: vi.fn().mockResolvedValue([{ name: 'unused', kind: 'function', line: 5 }]),
         getSymbolGraph: vi.fn().mockResolvedValue({ symbols: fileSymbols, dependencies: [] }),
       };
-      new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
       const result = await invokeTool('skein_find_unused_symbols', { filePath: A });
 
@@ -1342,7 +1355,7 @@ describe('LmToolsService', () => {
         analyze: vi.fn().mockResolvedValue([{ module: './b', path: B, type: 'import', line: 1 }]),
         findReferencingFiles: vi.fn().mockResolvedValue([{ path: C, type: 'import', line: 4 }]),
       };
-      new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
       const result = await invokeTool('skein_generate_codemap', { filePath: A }) as Record<string, unknown>;
 
@@ -1372,7 +1385,7 @@ describe('LmToolsService', () => {
         analyze: vi.fn().mockResolvedValue([]),
         findReferencingFiles: vi.fn().mockRejectedValue(new Error('index not ready')),
       };
-      new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
       const result = await invokeTool('skein_generate_codemap', { filePath: A });
 
@@ -1381,7 +1394,7 @@ describe('LmToolsService', () => {
 
     it('analyze_file_logic returns the intra-file call graph with its cycle', async () => {
       new LmToolsService({
-        provider: createProvider({ spider: { getSymbolGraph: vi.fn().mockResolvedValue(graphData) } }),
+        ...createDeps({ spider: { getSymbolGraph: vi.fn().mockResolvedValue(graphData) } }),
         logger,
       }).registerAll();
 
@@ -1400,11 +1413,11 @@ describe('LmToolsService', () => {
   describe('verify_dependency_usage', () => {
     it.each([true, false])('reports isUsed = %s', async (isUsed) => {
       const verifyDependencyUsage = vi.fn().mockResolvedValue(isUsed);
-      new LmToolsService({ provider: createProvider({ spider: { verifyDependencyUsage } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { verifyDependencyUsage } }), logger }).registerAll();
 
       const result = await invokeTool('skein_verify_dependency_usage', { sourceFile: A, targetFile: B });
 
-      expect(result).toEqual({ sourceFile: 'src/a.ts', targetFile: 'src/b.ts', isUsed });
+      expect(result).toMatchObject({ sourceFile: 'src/a.ts', targetFile: 'src/b.ts', isUsed });
     });
   });
 
@@ -1413,7 +1426,7 @@ describe('LmToolsService', () => {
 
     it('splits invalidated files from files that were not cached', async () => {
       const invalidateFile = vi.fn((file: string) => file.endsWith('a.ts'));
-      new LmToolsService({ provider: createProvider({ spider: { invalidateFile } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { invalidateFile } }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePaths: [A, B] });
 
@@ -1422,7 +1435,7 @@ describe('LmToolsService', () => {
 
     it('rejects more than 10000 files per invocation', async () => {
       const invalidateFile = vi.fn();
-      new LmToolsService({ provider: createProvider({ spider: { invalidateFile } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { invalidateFile } }), logger }).registerAll();
 
       const result = await invokeTool(TOOL, { filePaths: Array.from({ length: 10_001 }, () => A) });
 
@@ -1439,7 +1452,7 @@ describe('LmToolsService', () => {
         buildFullIndex: vi.fn(async () => { calls.push('build'); }),
         getCacheStatsAsync: vi.fn().mockResolvedValue({ dependencyCache: { size: 7 } }),
       };
-      new LmToolsService({ provider: createProvider({ spider }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider }), logger }).registerAll();
 
       const result = await invokeTool('skein_rebuild_index', {}) as Record<string, unknown>;
 
@@ -1460,7 +1473,7 @@ describe('LmToolsService', () => {
         visitedSymbols: [`${A}:main`, `${B}:run`],
         maxDepthReached: false,
       });
-      new LmToolsService({ provider: createProvider({ spider: { traceFunctionExecution } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { traceFunctionExecution } }), logger }).registerAll();
 
       const result = await invokeTool('skein_trace_function_execution', { filePath: A, symbolName: 'main' }) as Record<string, unknown>;
 
@@ -1485,7 +1498,7 @@ describe('LmToolsService', () => {
         skippedFiles: [],
         filesBeyondLimit: 0,
       });
-      new LmToolsService({ provider: createProvider({ spider: { scanDeadCode } }), logger }).registerAll();
+      new LmToolsService({ ...createDeps({ spider: { scanDeadCode } }), logger }).registerAll();
 
       const result = await invokeTool('skein_scan_dead_code', { scopePath: '/workspace/src', maxFiles: 50 });
 
