@@ -1,5 +1,6 @@
 import fc from 'fast-check';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type Parser from 'web-tree-sitter';
@@ -18,29 +19,10 @@ import { normalizePath } from '../../src/shared/path';
 
 // Mock extension path for testing
 const mockExtensionPath = path.resolve(process.cwd());
-const fixturesDir = path.resolve(__dirname, '../fixtures/python-project');
-
-/**
- * Crash-safe sweep of temp_sym_*.py fixtures left behind by interrupted runs.
- * Per-test `finally`/unlink handles the happy path; this catches orphans
- * when the process dies between writeFile and unlink. Cross-OS: uses
- * fs.readdir + path.join + unlink (no shell/glob).
- * Only this file's own prefix is swept: other test files write temp_*.py
- * into the same fixture directory and run in parallel workers.
- */
-async function sweepTempFixtures(): Promise<void> {
-  let entries: string[];
-  try {
-    entries = await fs.readdir(fixturesDir);
-  } catch {
-    return; // dir missing → nothing to sweep
-  }
-  await Promise.all(
-    entries
-      .filter((name) => name.startsWith('temp_sym_') && name.endsWith('.py'))
-      .map((name) => fs.unlink(path.join(fixturesDir, name)).catch(() => {})),
-  );
-}
+// Each run writes its temporary .py files to its own directory. Other test files
+// read the shared python-project fixture in parallel workers, so writing there
+// changed what they saw mid-run.
+let fixturesDir: string;
 
 // Create a mock parser instance that will be reused
 let mockParserInstance: any = null;
@@ -334,10 +316,12 @@ vi.mock('../../src/analyzer/languages/WasmParserFactory', () => {
 describe('PythonSymbolAnalyzer Property-Based Tests', { timeout: 30_000 }, () => {
   let analyzer: PythonSymbolAnalyzer;
 
-  // Sweep orphans from any prior interrupted run before starting, and clean
-  // up after the suite regardless of per-test unlink outcome.
-  beforeAll(sweepTempFixtures);
-  afterAll(sweepTempFixtures);
+  beforeAll(async () => {
+    fixturesDir = await fs.mkdtemp(path.join(os.tmpdir(), 'skein-py-props-'));
+  });
+  afterAll(async () => {
+    await fs.rm(fixturesDir, { recursive: true, force: true });
+  });
 
   beforeEach(async () => {
     vi.clearAllMocks();
